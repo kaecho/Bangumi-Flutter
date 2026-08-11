@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
-import '../../core/api/api_endpoints.dart';
-import '../../core/utils/format.dart';
-import '../../shared/models/topic.dart';
+import '../../core/html/bgm_html_parser.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 
@@ -31,11 +29,34 @@ const kRakuenTypes = [
 
 /// 帖子列表数据
 class RakuenData {
-  final List<Topic> topics;
+  final List<RakuenTopicItem> topics;
   final int page;
   final bool hasMore;
 
   const RakuenData({this.topics = const [], this.page = 1, this.hasMore = true});
+}
+
+/// 超展开帖子 (HTML 解析结果)
+class RakuenTopicItem {
+  final String title;
+  final String userName;
+  final String userId;
+  final String topicId; // 如 group/350677
+  final String group;
+  final String groupHref;
+  final int replies;
+  final String time;
+
+  const RakuenTopicItem({
+    this.title = '',
+    this.userName = '',
+    this.userId = '',
+    this.topicId = '',
+    this.group = '',
+    this.groupHref = '',
+    this.replies = 0,
+    this.time = '',
+  });
 }
 
 final rakuenProvider = AsyncNotifierProvider.family<RakuenNotifier, RakuenData, String>(
@@ -49,17 +70,29 @@ class RakuenNotifier extends FamilyAsyncNotifier<RakuenData, String> {
   }
 
   Future<RakuenData> _fetch(int page, String key) async {
-    final client = ref.read(apiClientProvider);
+    // key 格式: '{type}|{scope}', 与原项目 fetchRakuen(scope, type) 一致
     final type = key.split('|').first;
-    final board = key.split('|').last;
-    final path = type.isEmpty
-        ? apiRakuenTopics(board: board.isEmpty ? null : int.tryParse(board), page: page)
-        : '${apiRakuenTopics(page: page)}&type=$type';
-    final data = await client.get(path);
-    final topics = (data as List)
-        .map((e) => Topic.fromJson(e as Map<String, dynamic>))
-        .toList();
-    return RakuenData(topics: topics, page: page, hasMore: topics.length >= 30);
+    final scope = key.split('|').last;
+    final client = ref.read(apiClientProvider);
+    final html = await client.fetchHtml(rakueHtmlUrl(scope, type));
+    final items = parseRakuenList(html);
+    return RakuenData(
+      topics: [
+        for (final item in items)
+          RakuenTopicItem(
+            title: item.title,
+            userName: item.userName,
+            userId: item.userId,
+            topicId: item.topicId,
+            group: item.group,
+            groupHref: item.groupHref,
+            replies: item.replyCount ?? 0,
+            time: item.time,
+          ),
+      ],
+      page: page,
+      hasMore: items.length >= 30,
+    );
   }
 
   Future<void> loadMore() async {
@@ -233,15 +266,13 @@ class _RakuenTopicListState extends ConsumerState<_RakuenTopicList> {
 }
 
 class _TopicRow extends StatelessWidget {
-  final Topic topic;
+  final RakuenTopicItem topic;
 
   const _TopicRow({required this.topic});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final group = topic.group;
-    final user = topic.user;
 
     return InkWell(
       onTap: () => context.push('/rakuen/topic/${topic.topicId}'),
@@ -250,7 +281,7 @@ class _TopicRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Avatar(url: user?.avatarUrl ?? '', size: 34, name: user?.displayName),
+            Avatar(url: '', size: 34, name: topic.userName),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -265,7 +296,7 @@ class _TopicRow extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      if (group != null)
+                      if (topic.group.isNotEmpty)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
@@ -273,21 +304,21 @@ class _TopicRow extends StatelessWidget {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            group.title.isEmpty ? group.name : group.title,
+                            topic.group,
                             style: TextStyle(fontSize: 10, color: theme.colorScheme.primary),
                           ),
                         ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          user?.displayName ?? '',
+                          topic.userName,
                           style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Text(
-                        friendlyTime(topic.displayTime),
+                        topic.time,
                         style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
                       ),
                     ],

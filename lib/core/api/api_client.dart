@@ -92,6 +92,24 @@ class ApiClient {
     final resp = await _dio.deleteUri<dynamic>(uri, data: data);
     return resp.data;
   }
+
+  /// 抓取原始 HTML (bgm.tv 页面, 浏览器 UA)
+  /// 供超展开等页面解析使用 (原项目 fetchHTML 等价)
+  Future<String> fetchHtml(String url) async {
+    final resp = await _dio.getUri<String>(
+      Uri.parse(url),
+      options: Options(
+        responseType: ResponseType.plain,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+          'Referer': kHost,
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+        },
+      ),
+    );
+    return resp.data ?? '';
+  }
 }
 
 final apiClientProvider = Provider<ApiClient>((ref) {

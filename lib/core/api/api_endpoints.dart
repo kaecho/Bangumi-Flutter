@@ -147,6 +147,15 @@ String apiPmSend() => '$kApiHost/pm/send';
 String apiBilibiliSync() => '$kApiHost/bilibili/sync';
 String apiDoubanSync() => '$kApiHost/douban/sync';
 
+/// 点赞 (站内 ajax 接口, 需 host: [kHost])
+/// type: LIKE_TYPE_TIMELINE=40 / LIKE_TYPE_SAY=50; main_id: 吐槽/条目 id
+String apiLike(int type, int mainId) => '/like?type=$type&main_id=$mainId&ajax=1';
+
+/// GitHub Releases (需 host: [kGithubApiHost])
+const String kGithubApiHost = 'https://api.github.com';
+const String kGithubRepo = 'kaecho/Bangumi-Flutter';
+String apiGithubReleasesLatest() => '/repos/$kGithubRepo/releases/latest';
+
 /// 小圣杯
 String apiTinygrailCharaList() => '$kTinygrailHost/api/chara/list';
 String apiTinygrailChara(int monoId) => '$kTinygrailHost/api/chara/$monoId';
@@ -199,6 +208,33 @@ String apiTinygrailAuction(int page, int limit) =>
     '$kTinygrailHost/api/auction/list/$page/$limit';
 String apiTinygrailAuctionBid(int auctionId, int price) =>
     '$kTinygrailHost/api/auction/bid/$auctionId/$price';
+
+/// 发现页: 目录 / 日志 / 小组 / 维基 / 系列
+String apiIndexList({int page = 1}) => '$kApiHost/index/list?page=$page';
+String apiIndex(int id, {String orderby = 'rank'}) => '$kApiHost/index/$id?orderby=$orderby';
+String apiBlogList({int page = 1}) => '$kApiHost/blog/list?page=$page';
+String apiGroupList({int page = 1}) => '$kApiHost/group/list?page=$page';
+String apiWikiTop() => '$kApiHost/wiki/top';
+String apiUserSeries(String userId) => '$kApiHost/user/$userId/series';
+String apiUserRecommend(String userId) => '$kApiHost/user/$userId/recommend';
+String apiUserCharacters(String userId) => '$kApiHost/user/$userId/characters';
+String apiUserCollectionsSmall(String userId, int limit, int offset) =>
+    '$kApiHost/user/$userId/collections?limit=$limit&offset=$offset&responseGroup=small';
+
+/// 发现页: 新番 (bgm.tv 主站 JSON 接口, 调用时传 host: kHost)
+String apiAnimeBrowser({int? year, int? month, String? sort, int? page, String? type}) {
+  final query = <String>[
+    if (year != null) 'year=$year',
+    if (month != null) 'month=$month',
+    if (sort != null && sort.isNotEmpty) 'sort=$sort',
+    if (page != null) 'page=$page',
+    if (type != null && type.isNotEmpty) 'type=$type',
+  ].join('&');
+  return '/anime/browser${query.isEmpty ? '' : '?$query'}';
+}
+
+/// 每日放送放送时间 (bangumi-data 开源数据, 与原项目 onAir 同源; 调用时传 host: 'https://bangumi-data.github.io')
+String apiBangumiData() => '/bangumi-data/data.json';
 
 /// 第三方
 String apiMosaicTile(String username, String type) =>
