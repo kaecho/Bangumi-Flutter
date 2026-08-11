@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -53,7 +54,7 @@ class SmbController extends Notifier<List<SmbFolder>> {
   }
 
   Future<void> _load() async {
-    final box = await Hive.openBox(_boxName);
+    final box = await Hive.openBox<dynamic>(_boxName);
     final raw = box.get(_key) as String?;
     if (raw == null) return;
     try {
@@ -65,7 +66,7 @@ class SmbController extends Notifier<List<SmbFolder>> {
   }
 
   Future<void> _save() async {
-    final box = await Hive.openBox(_boxName);
+    final box = await Hive.openBox<dynamic>(_boxName);
     await box.put(_key, jsonEncode([for (final f in state) f.toJson()]));
   }
 
@@ -158,9 +159,9 @@ class SmbScreen extends ConsumerWidget {
                     trailing: PopupMenuButton<String>(
                       onSelected: (action) {
                         if (action == 'rename') {
-                          _showFolderDialog(context, ref, folder: folder);
+                          unawaited(_showFolderDialog(context, ref, folder: folder));
                         } else if (action == 'delete') {
-                          ref.read(smbControllerProvider.notifier).removeFolder(folder.id);
+                          unawaited(ref.read(smbControllerProvider.notifier).removeFolder(folder.id));
                         }
                       },
                       itemBuilder: (context) => const [
@@ -169,7 +170,7 @@ class SmbScreen extends ConsumerWidget {
                       ],
                     ),
                     onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
+                      MaterialPageRoute<void>(
                         builder: (_) => _SmbFolderDetail(folder: folder),
                       ),
                     ),
@@ -270,7 +271,7 @@ class _SmbFolderDetailState extends ConsumerState<_SmbFolderDetail> {
       final client = ref.read(apiClientProvider);
       final data = await client.get(apiSubject(sid));
       final subject = Subject.fromJson(data as Map<String, dynamic>);
-      ref.read(smbControllerProvider.notifier).addSubject(widget.folder.id, {
+      await ref.read(smbControllerProvider.notifier).addSubject(widget.folder.id, {
         'id': subject.id,
         'name': subject.name,
         'nameCn': subject.nameCn,
@@ -332,13 +333,15 @@ class _SmbFolderDetailState extends ConsumerState<_SmbFolderDetail> {
                       trailing: IconButton(
                         icon: const Icon(Icons.close),
                         tooltip: '移除',
-                        onPressed: () => ref
-                            .read(smbControllerProvider.notifier)
-                            .removeSubject(folder.id, subject['id'] as int? ?? 0),
+                        onPressed: () => unawaited(
+                          ref
+                              .read(smbControllerProvider.notifier)
+                              .removeSubject(folder.id, subject['id'] as int? ?? 0),
+                        ),
                       ),
                     );
+                  },
                 ),
-              ),
     );
   }
 }

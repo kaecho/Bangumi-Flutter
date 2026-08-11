@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../shared/models/collection.dart';
+import '../../shared/widgets/score.dart';
 import 'subject_providers.dart';
 
 /// 收藏管理底部弹窗
@@ -23,7 +24,6 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
   late final TextEditingController _commentController;
   late final TextEditingController _tagsController;
   bool _submitting = false;
-  bool _loaded = false;
 
   @override
   void initState() {
@@ -33,7 +33,6 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
     _rate = (current?.rate ?? 0).toDouble();
     _commentController = TextEditingController(text: current?.comment ?? '');
     _tagsController = TextEditingController(text: current?.tags.join(' ') ?? '');
-    _loaded = true;
   }
 
   @override

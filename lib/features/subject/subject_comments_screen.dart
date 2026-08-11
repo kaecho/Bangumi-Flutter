@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api/api_client.dart';
 import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/score.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
 
@@ -32,13 +33,18 @@ class _SubjectCommentsScreenState extends ConsumerState<SubjectCommentsScreen> {
   }
 
   Future<void> _load() async {
-    final page = await ref.read(subjectCommentsProvider((id: widget.id, page: _page)).future);
-    if (!mounted) return;
-    setState(() {
-      _items.addAll(page.items);
-      _pageTotal = page.pageTotal;
-      _loaded = true;
-    });
+    try {
+      final page = await ref
+          .read(subjectCommentsProvider((id: widget.id, page: _page)).future);
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(page.items);
+        _pageTotal = page.pageTotal;
+        _loaded = true;
+      });
+    } catch (_) {
+      // 保持 _loaded=false, 由 watch 的 error 分支展示重试
+    }
   }
 
   Future<void> _loadMore() async {
@@ -51,7 +57,6 @@ class _SubjectCommentsScreenState extends ConsumerState<SubjectCommentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final async = ref.watch(subjectCommentsProvider((id: widget.id, page: _page)));
     return Scaffold(
       appBar: BgmAppBar(title: '吐槽箱', showBackButton: true),

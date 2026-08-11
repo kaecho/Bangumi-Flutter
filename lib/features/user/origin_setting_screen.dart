@@ -219,13 +219,13 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
                             ),
                             value: item.active,
                             onChanged: (v) => _toggle(type, item.uuid, v),
-                            secondary: IconButton(
-                              icon: const Icon(Icons.open_in_new, size: 18),
-                              onPressed: () => launchUrl(Uri.parse(item.url)),
-                            ),
-                            trailing: Row(
+                            secondary: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                IconButton(
+                                  icon: const Icon(Icons.open_in_new, size: 18),
+                                  onPressed: () => launchUrl(Uri.parse(item.url)),
+                                ),
                                 IconButton(
                                   icon: const Icon(Icons.edit_outlined, size: 18),
                                   onPressed: () => _edit(type, item),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -62,7 +64,7 @@ class UserTimelineScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(title: const Text('时光机')),
-      body: _UserTimelineBody(userId: userId, enablePagination: true),
+      body: UserTimelineBody(userId: userId, enablePagination: true),
     );
   }
 }
@@ -87,7 +89,7 @@ class _UserTimelineBodyState extends ConsumerState<UserTimelineBody> {
     if (widget.enablePagination) {
       _scroll.addListener(() {
         if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
-          ref.read(userTimelineProvider(widget.userId).notifier).loadMore();
+          unawaited(ref.read(userTimelineProvider(widget.userId).notifier).loadMore());
         }
       });
     }

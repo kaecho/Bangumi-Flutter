@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/api/api_client.dart';
-import '../../shared/models/subject.dart';
+import '../../shared/models/subject.dart' hide Tag;
 import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
+import 'subject_models.dart';
 import 'subject_providers.dart';
 
 /// 条目信息

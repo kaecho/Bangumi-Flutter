@@ -1,3 +1,5 @@
+import '../../shared/models/ep.dart';
+import '../../shared/models/mono.dart';
 import '../../shared/models/subject.dart';
 
 /// 条目详情页聚合数据: 旧版条目信息 + v0 扩展 (infobox/tags/eps)
@@ -245,8 +247,7 @@ class MonoDetail {
     final m = (json['birth_mon'] as num?)?.toInt();
     final d = (json['birth_day'] as num?)?.toInt();
     if (y == null) return '';
-    final parts = [y, if (m != null) m, if (d != null) d];
-    return parts.join('-');
+    return [y, ?m, ?d].join('-');
   }
 }
 

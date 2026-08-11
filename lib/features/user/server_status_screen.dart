@@ -149,7 +149,7 @@ class _ServerStatusScreenState extends ConsumerState<ServerStatusScreen> {
                     ),
                   ),
                 );
-              ),
+              },
             ),
     );
   }

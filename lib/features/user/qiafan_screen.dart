@@ -151,7 +151,6 @@ class _QiafanCard extends ConsumerWidget {
                   ),
                 ),
               ],
-            ),
     );
   }
 }

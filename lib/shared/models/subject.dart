@@ -116,12 +116,19 @@ class SubjectImages {
   });
 
   factory SubjectImages.fromJson(Map<String, dynamic> json) => SubjectImages(
-        large: json['large'] as String? ?? '',
-        common: json['common'] as String? ?? '',
-        medium: json['medium'] as String? ?? '',
-        small: json['small'] as String? ?? '',
-        grid: json['grid'] as String? ?? '',
+        large: _https(json['large'] as String? ?? ''),
+        common: _https(json['common'] as String? ?? ''),
+        medium: _https(json['medium'] as String? ?? ''),
+        small: _https(json['small'] as String? ?? ''),
+        grid: _https(json['grid'] as String? ?? ''),
       );
+
+  /// 图片地址统一 https (旧版 API 返回 http://lain.bgm.tv)
+  static String _https(String url) {
+    if (url.startsWith('//')) return 'https:$url';
+    if (url.startsWith('http://')) return url.replaceFirst('http://', 'https://');
+    return url;
+  }
 }
 
 class Rating {

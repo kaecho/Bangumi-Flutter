@@ -1,72 +1,75 @@
-/// bgm.tv 主站 HTML 解析 (regex 版, 对应原项目 cheerio 解析器)
+/// bgm.tv 主站 HTML 解析 (package:html 版, 对应原项目 cheerio 解析器)
 ///
 /// 原项目部分屏幕 (排行榜/日志/小组/标签/维基/频道/新番/年鉴等) 通过抓取
-/// bgm.tv 主站 HTML 页面获得数据 (旧版 JSON API 已下线, 返回 404), 这里用
-/// 正则解析这些页面的固定结构。页面结构改动时仅需修改本文件。
+/// bgm.tv 主站 HTML 页面获得数据 (旧版 JSON API 已下线, 返回 404)。这里
+/// 复用 lib/core/html/bgm_html_parser.dart 的解析基础设施。
 library;
 
+import 'package:html/parser.dart' as parser;
+
+import '../../../core/html/bgm_html_parser.dart';
 import '../../../shared/models/group.dart';
 import '../../../shared/models/subject.dart';
 import '../../../shared/models/user.dart';
 
-/// HTML 实体解码
-String htmlDecode(String input) {
-  return input
-      .replaceAll('&amp;', '&')
-      .replaceAll('&lt;', '<')
-      .replaceAll('&gt;', '>')
-      .replaceAll('&quot;', '"')
-      .replaceAll('&#39;', "'")
-      .replaceAll('&nbsp;', ' ')
-      .trim();
+/// 绝对化图片地址 (//lain.bgm.tv/... → https://lain.bgm.tv/...)
+String _abs(String url) {
+  if (url.isEmpty) return '';
+  if (url.startsWith('//')) return 'https:$url';
+  return url;
 }
 
-String _first(String? source, RegExp re) {
-  if (source == null) return '';
-  final m = re.firstMatch(source);
-  if (m == null) return '';
-  return htmlDecode(m.group(1) ?? m.group(0) ?? '');
-}
+/// 条目类型值 → 类型名 (1=book 2=anime 4=game 6=real)
+String _typeName(int type) => switch (type) {
+      1 => 'book',
+      4 => 'game',
+      6 => 'real',
+      _ => 'anime',
+    };
 
 /// 浏览器 / 排行榜 / 标签条目页共用的条目列表解析
 ///
 /// 页面: /{type}/browser?sort=..&page=.. 与 /{type}/tag/{tag}?page=..
 /// 结构: `<li id="item_N" class="item odd clearit"> ... </li>`
 List<Subject> parseSubjectList(String html) {
+  final doc = parser.parse(html);
+  final container = doc.querySelector('#browserItemList') ?? doc;
   final items = <Subject>[];
-  final itemRe = RegExp(r'<li id="item_(\d+)" class="item[^"]*"[^>]*>([\s\S]*?)</li>');
-  for (final m in itemRe.allMatches(html)) {
-    final id = int.tryParse(m.group(1) ?? '') ?? 0;
+  for (final li in container.querySelectorAll('li.item')) {
+    final idMatch = RegExp(r'item_(\d+)').firstMatch(li.id);
+    final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
     if (id == 0) continue;
-    final block = m.group(2)!;
-    final cover = _first(block, RegExp(r'<img src="(//lain\.bgm\.tv/[^"]+)"'));
-    final title = _first(block, RegExp(r'<a href="/subject/\d+" class="l">([^<]+)</a>'));
-    final jp = _first(block, RegExp(r'<small class="grey">([^<]+)</small>'));
-    final rank = _first(block, RegExp(r'<span class="rank"><small>Rank </small>(\d+)</span>'));
-    final info = _first(block, RegExp(r'<p class="info tip">([\s\S]*?)</p>'));
-    final eps = _first(info, RegExp(r'(\d+)话'));
-    final date = _first(info, RegExp(r'(\d{4})年(\d{1,2})月(\d{1,2})日'));
-    final score = _first(block, RegExp(r'<small class="fade">([\d.]+)</small>'));
-    final total = _first(block, RegExp(r'\((\d+)人评分\)'));
-    final type = RegExp(r'<span class="ll subject_type_(\d)').firstMatch(block)?.group(1) ?? '2';
 
-    final subject = Subject(
+    final titleA = li.querySelector('h3 a.l');
+    final jpEl = li.querySelector('h3 small.grey');
+    final img = li.querySelector('img');
+    final rankEl = li.querySelector('span.rank');
+    final info = li.querySelector('p.info');
+    final scoreEl = li.querySelector('small.fade');
+    final totalEl = li.querySelector('.rateInfo .tip_j');
+    final typeEl = li.querySelector('span.subject_type_\\d');
+
+    final infoText = cText(info);
+    final epsMatch = RegExp(r'(\d+)话').firstMatch(infoText);
+    final dateMatch = RegExp(r'(\d{4})年(\d{1,2})月(\d{1,2})日').firstMatch(infoText);
+    final totalText = cText(totalEl).replaceAll(RegExp(r'[()人评分]'), '');
+
+    items.add(Subject(
       id: id,
-      type: switch (type) {
-        '1' => 'book',
-        '4' => 'game',
-        '6' => 'real',
-        _ => 'anime',
-      },
-      name: jp.isEmpty ? title : jp,
-      nameCn: title,
-      images: SubjectImages(medium: cover.isEmpty ? '' : 'https:$cover'),
-      eps: int.tryParse(eps) ?? 0,
-      airDate: date.replaceAll('年', '-').replaceAll('月', '-').replaceAll('日', ''),
-      rank: int.tryParse(rank) ?? 0,
-      rating: Rating(score: double.tryParse(score) ?? 0, total: int.tryParse(total) ?? 0),
-    );
-    items.add(subject);
+      type: typeEl == null ? 'anime' : _typeName(typeEl.className.contains('subject_type_1') ? 1 : (typeEl.className.contains('subject_type_4') ? 4 : (typeEl.className.contains('subject_type_6') ? 6 : 2))),
+      name: jpEl == null ? cText(titleA) : htmlDecode(jpEl.text.trim()),
+      nameCn: cText(titleA),
+      images: SubjectImages(medium: img == null ? '' : _abs(img.attributes['src'] ?? '')),
+      eps: int.tryParse(epsMatch?.group(1) ?? '') ?? 0,
+      airDate: dateMatch == null
+          ? ''
+          : '${dateMatch.group(1)}-${dateMatch.group(2)}-${dateMatch.group(3)}',
+      rank: int.tryParse(cText(rankEl).replaceAll(RegExp(r'[^\d]'), '')) ?? 0,
+      rating: Rating(
+        score: double.tryParse(cText(scoreEl)) ?? 0,
+        total: int.tryParse(totalText) ?? 0,
+      ),
+    ));
   }
   return items;
 }
@@ -74,26 +77,23 @@ List<Subject> parseSubjectList(String html) {
 /// 小组列表解析
 ///
 /// 页面: https://bgm.tv/group
-/// 结构: `<li><a href="/group/name" title="..."><span class="pictureFrameGroup"><span
-///   class="image"><img src="//lain...icon..."></span>...名称</a><br /><small
-///   class="feed">N 位成员</small></li>`
+/// 结构: `<li><a href="/group/name" title="..."><span class="pictureFrameGroup">...
+///   <img src="//lain...icon..."></span>...名称</a><br /><small class="feed">N 位成员</small></li>`
 List<Group> parseGroupList(String html) {
+  final doc = parser.parse(html);
   final groups = <Group>[];
-  final itemRe = RegExp(
-    r'<a href="/group/([^"]+)" title="([^"]*)"><span class="pictureFrameGroup"><span class="image"><img src="([^"]+)"[\s\S]*?</span></span>([^<]*)</a><br\s*/?>'
-    r'<small class="feed">([\d,]+) 位成员</small>',
-  );
-  for (final m in itemRe.allMatches(html)) {
-    final name = htmlDecode(m.group(1) ?? '');
-    final title = htmlDecode(m.group(2) ?? '');
-    final icon = m.group(3) ?? '';
-    final label = htmlDecode(m.group(4) ?? '');
-    final members = int.tryParse((m.group(5) ?? '').replaceAll(',', '')) ?? 0;
+  for (final li in doc.querySelectorAll('ul.groupsLarge > li')) {
+    final a = li.querySelector('a[href^="/group/"]');
+    if (a == null) continue;
+    final img = a.querySelector('img');
+    final feed = li.querySelector('small.feed');
+    final name = (a.attributes['href'] ?? '').replaceFirst('/group/', '');
+    final membersText = cText(feed).replaceAll(RegExp(r'[^\d]'), '');
     groups.add(Group(
       name: name,
-      title: title.isEmpty ? label : title,
-      icon: icon.isEmpty ? '' : 'https:$icon',
-      members: members,
+      title: htmlDecode(a.attributes['title'] ?? ''),
+      icon: img == null ? '' : _abs(img.attributes['src'] ?? ''),
+      members: int.tryParse(membersText) ?? 0,
     ));
   }
   return groups;
@@ -130,27 +130,36 @@ class BlogListRow {
 ///   <div class="content">...</div> <div class="time"> <a href="/user/N" class="l">用户名</a>
 ///   · 时间 · <a href="/blog/N" class="l">N 回复</a> </div>`
 List<BlogListRow> parseBlogList(String html) {
+  final fragment = htmlMatch(html, '<div id="entry_list', '<div id="columnB"');
+  final doc = parser.parse(fragment.isEmpty ? html : fragment);
+  final list = doc.querySelector('#entry_list');
+  if (list == null) return const [];
+
   final rows = <BlogListRow>[];
-  final itemRe = RegExp(r'<div class="item clearit"[^>]*data-item-user="(\d+)"[^>]*>([\s\S]*?)(?=<div class="item clearit"|</div>\s*</div>\s*<hr)');
-  for (final m in itemRe.allMatches(html)) {
-    final block = m.group(2) ?? '';
-    final id = int.tryParse(_first(block, RegExp(r'href="/blog/(\d+)"'))) ?? 0;
+  for (final item in list.querySelectorAll('div.item')) {
+    final titleA = item.querySelector('h2.title a');
+    if (titleA == null) continue;
+    final idMatch = RegExp(r'/blog/(\d+)').firstMatch(titleA.attributes['href'] ?? '');
+    final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
     if (id == 0) continue;
-    final title = _first(block, RegExp(r'<h2 class="title"><a href="/blog/\d+" class="l">([^<]+)</a></h2>'));
-    final cover = _first(block, RegExp(r'<img src="(//lain\.bgm\.tv/[^"]+)"'));
-    final time = _first(block, RegExp(r'<div class="time">([\s\S]*?)</div>'));
-    final username = _first(time, RegExp(r'<a href="/user/[^"]+" class="l">([^<]+)</a>'));
-    final replies = _first(time, RegExp(r'([\d,]+) 回复'));
-    final content = _first(block, RegExp(r'<div class="content">([\s\S]*?)</div>'));
+
+    final img = item.querySelector('a.avatar img');
+    final contentA = item.querySelector('.content a') ?? item.querySelector('.content');
+    final timeEl = item.querySelector('.time');
+    final timeText = timeEl == null ? '' : htmlDecode(timeEl.text.replaceAll(RegExp(r'\s+'), ' ').trim());
+    final userMatch = RegExp(r'<a href="/user/([^"]+)" class="l">([^<]+)</a>').firstMatch(timeEl?.innerHtml ?? '');
+    final repliesMatch = RegExp(r'([\d,]+)\s*回复').firstMatch(timeText);
+    final timeMatch = RegExp(r'·\s*([\d-]+ [\d:]+)\s*·').firstMatch(timeText);
+
     rows.add(BlogListRow(
       id: id,
-      title: title,
-      cover: cover.isEmpty ? '' : 'https:$cover',
-      time: _first(time, RegExp(r'·\s*([\d-]+ [\d:]+)\s*·')),
-      content: content.replaceAll(RegExp(r'\s+'), ' '),
-      userId: int.tryParse(m.group(1) ?? '') ?? 0,
-      username: username,
-      replies: int.tryParse(replies.replaceAll(',', '')) ?? 0,
+      title: cText(titleA),
+      cover: img == null ? '' : _abs(img.attributes['src'] ?? ''),
+      time: timeMatch?.group(1) ?? timeText.split('·').first.trim(),
+      content: contentA == null ? '' : htmlDecode(contentA.text.replaceAll(RegExp(r'\s+'), ' ').trim()),
+      userId: int.tryParse(userMatch?.group(1) ?? '') ?? 0,
+      username: userMatch?.group(2) ?? '',
+      replies: int.tryParse((repliesMatch?.group(1) ?? '').replaceAll(',', '')) ?? 0,
     ));
   }
   return rows;
@@ -184,29 +193,31 @@ class CatalogRow {
 /// 页面: https://bgm.tv/index/browser?page=..&orderby=..
 /// 结构: `<li id="item_N" class="clearit tml_item index-item"> ... </li>`
 List<CatalogRow> parseCatalogList(String html) {
+  final doc = parser.parse(html);
   final rows = <CatalogRow>[];
-  final itemRe = RegExp(r'<li id="item_(\d+)" class="[^"]*tml_item[^"]*"[^>]*>([\s\S]*?)</li>');
-  for (final m in itemRe.allMatches(html)) {
-    final block = m.group(2) ?? '';
-    final id = int.tryParse(m.group(1) ?? '') ?? 0;
+  for (final li in doc.querySelectorAll('li.tml_item')) {
+    final idMatch = RegExp(r'item_(\d+)').firstMatch(li.id);
+    final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
     if (id == 0) continue;
-    final title = _first(block, RegExp(r'<h3>\s*([^<]+?)\s*</h3>'));
-    final username = _first(block, RegExp(r'<span class="time tip_i">[\s\S]*?<a href="/user/[^"]+" class="l">([^<]+)</a>'));
-    final avatar = _first(block, RegExp(r"background-image:url\('(//lain\.bgm\.tv/[^']+)'\)"));
-    final updated = _first(block, RegExp(r'更新 <span class="tip_j">([\d-]+ [\d:]+)</span>'));
-    final desc = _first(block, RegExp(r'<span class="d[\s\S]*?>([\s\S]*?)</span>'));
+
+    final h3 = li.querySelector('a[href*="/index/"] h3');
+    final avatarEl = li.querySelector('.avatar .avatarNeue');
+    final timeTips = li.querySelectorAll('.time .tip_j');
+    final desc = li.querySelector('.desc');
+
     var total = 0;
-    for (final n in RegExp(r'<span class="num">(\d+)</span>').allMatches(block)) {
-      total += int.tryParse(n.group(1) ?? '') ?? 0;
+    for (final numEl in li.querySelectorAll('.num')) {
+      total += int.tryParse(numEl.text.trim()) ?? 0;
     }
+
     rows.add(CatalogRow(
       id: id,
-      title: title,
-      desc: desc,
+      title: h3 == null ? '' : htmlDecode(h3.text.trim()),
+      desc: desc == null ? '' : htmlDecode(desc.text.trim()),
       total: total,
-      username: username,
-      avatar: avatar.isEmpty ? '' : 'https:$avatar',
-      updatedAt: updated,
+      username: cText(li.querySelector('.time a.l')),
+      avatar: avatarEl == null ? '' : _abs(matchAvatar(avatarEl)),
+      updatedAt: timeTips.length > 1 ? timeTips[1].text.trim() : '',
     ));
   }
   return rows;
@@ -225,15 +236,17 @@ class TagItem {
 /// 页面: https://bgm.tv/{type}/tag
 /// 结构: `<div id="tagList"> <a href="/anime/tag/TV" class="l level1">TV</a><small class="grey">(1396928)</small> ...`
 List<TagItem> parseTagList(String html) {
+  final doc = parser.parse(html);
+  final list = doc.querySelector('#tagList');
+  if (list == null) return const [];
+
   final tags = <TagItem>[];
-  final itemRe = RegExp(r'<a href="/[a-z]+/tag/([^"]+)" class="l[^"]*">([^<]+)</a><small class="grey">\(([\d,]+)\)</small>');
-  for (final m in itemRe.allMatches(html)) {
-    final name = htmlDecode(m.group(2) ?? '');
+  for (final a in list.querySelectorAll('a.l')) {
+    final name = htmlDecode(a.text.trim());
     if (name.isEmpty) continue;
-    tags.add(TagItem(
-      name: name,
-      count: int.tryParse((m.group(3) ?? '').replaceAll(',', '')) ?? 0,
-    ));
+    final next = a.nextElementSibling;
+    final countText = next == null ? '' : cText(next).replaceAll(RegExp(r'[()]'), '');
+    tags.add(TagItem(name: name, count: int.tryParse(countText.replaceAll(',', '')) ?? 0));
   }
   return tags;
 }
@@ -250,11 +263,11 @@ class WikiEntry {
 
 /// 维基人页数据
 class WikiData {
-  final Map<String, int> counts; // 全部条目/动画/书籍/.../编辑
+  final List<(String, int)> counts; // 全部条目/动画/书籍/.../编辑
   final List<WikiEntry> all;
   final List<WikiEntry> lock;
 
-  const WikiData({this.counts = const {}, this.all = const [], this.lock = const []});
+  const WikiData({this.counts = const [], this.all = const [], this.lock = const []});
 }
 
 /// 维基人解析
@@ -262,31 +275,39 @@ class WikiData {
 /// 页面: https://bgm.tv/wiki
 /// 结构: `.wikiStats li` 计数; `#wiki_act-all li` / `#wiki_act-lock li` 编辑动态
 WikiData parseWiki(String html) {
-  final counts = <String, int>{};
-  for (final m in RegExp(r'<li><span>([^<]+)</span><span class="num">([\d,]+)</span></li>').allMatches(html)) {
-    counts[m.group(1) ?? ''] = int.tryParse((m.group(2) ?? '').replaceAll(',', '')) ?? 0;
+  final doc = parser.parse(html);
+
+  final counts = <(String, int)>[];
+  for (final li in doc.querySelectorAll('.wikiStats li')) {
+    final label = li.querySelector('span');
+    final num = li.querySelector('.num');
+    if (label == null || num == null) continue;
+    counts.add((
+      htmlDecode(label.text.trim()),
+      int.tryParse(num.text.trim().replaceAll(',', '')) ?? 0,
+    ));
   }
 
   List<WikiEntry> parseList(String id) {
-    final slice = _first(html, RegExp('$id" class="sideTpcList wikiScrollBlock">([\\s\\S]*?)</ul>'));
-    final list = <WikiEntry>[];
-    for (final m in RegExp(r'<li class="line_[\w]+">([\s\S]*?)</li>').allMatches(slice)) {
-      final block = m.group(1) ?? '';
-      final href = _first(block, RegExp(r'<a href="(/[^"]+)" target="_blank" class="l">'));
-      final name = _first(block, RegExp(r'class="l">([^<]+)</a>'));
-      if (name.isEmpty) continue;
-      final username = _first(block, RegExp(r'by <a href="/user/[^"]+">([^<]+)</a>'));
-      final time = _first(block, RegExp(r'<span class="rr">([\d-]+ [\d:]+)'));
-      list.add(WikiEntry(href: href, name: name, username: username, time: time));
+    final list = doc.querySelector('#$id');
+    if (list == null) return const [];
+    final entries = <WikiEntry>[];
+    for (final li in list.querySelectorAll('li')) {
+      final a = li.querySelector('a[target="_blank"].l');
+      if (a == null) continue;
+      final byUser = li.querySelector('small.grey a[href^="/user/"]');
+      final time = li.querySelector('.rr');
+      entries.add(WikiEntry(
+        href: a.attributes['href'] ?? '',
+        name: htmlDecode(a.text.trim()),
+        username: byUser == null ? '' : htmlDecode(byUser.text.trim()),
+        time: cText(time).split(' / ').first,
+      ));
     }
-    return list;
+    return entries;
   }
 
-  return WikiData(
-    counts: counts,
-    all: parseList('wiki_act-all'),
-    lock: parseList('wiki_act-lock'),
-  );
+  return WikiData(counts: counts, all: parseList('wiki_act-all'), lock: parseList('wiki_act-lock'));
 }
 
 /// 频道条目 (注目动画)
@@ -329,50 +350,53 @@ class ChannelData {
 
 /// 频道聚合解析
 ChannelData parseChannel(String html) {
+  final doc = parser.parse(html);
+
   // 注目动画/图书/游戏: .featuredItems .mainItem
   final rank = <ChannelRankItem>[];
-  final mainRe = RegExp(
-    r'<div class="mainItem"> <a href="/subject/(\d+)" title="([^"]*)"> <div class="image" style="background-image:url\(([^)]+)\);[\s\S]*?</div> </a> <p class="info">[\s\S]*?<a href="/subject/\d+" class="l">([^<]+)</a>[\s\S]*?<small class="grey">([^<]+)</small>',
-  );
-  for (final m in mainRe.allMatches(html)) {
+  for (final item in doc.querySelectorAll('.featuredItems .mainItem')) {
+    final a = item.querySelector('> a');
+    if (a == null) continue;
+    final image = item.querySelector('.image');
+    final grey = item.querySelector('.grey');
     rank.add(ChannelRankItem(
-      id: int.tryParse(m.group(1) ?? '') ?? 0,
-      name: htmlDecode(m.group(2) ?? ''),
-      cover: (m.group(3) ?? '').replaceAll('(', '').replaceAll(')', ''),
-      follow: htmlDecode(m.group(5) ?? ''),
+      id: int.tryParse((a.attributes['href'] ?? '').replaceFirst('/subject/', '')) ?? 0,
+      name: htmlDecode(a.attributes['title'] ?? ''),
+      cover: image == null ? '' : _abs(matchAttr(image, 'style', RegExp(r"url\(([^)]+)\)"))),
+      follow: cText(grey),
     ));
   }
 
   // 讨论: table.topic_list tr
   final discuss = <ChannelDiscussItem>[];
-  final topicRe = RegExp(r'<tr data-item-user="\d+">([\s\S]*?)</tr>');
-  for (final m in topicRe.allMatches(html)) {
-    final block = m.group(1) ?? '';
-    final id = int.tryParse(_first(block, RegExp(r'href="/subject/topic/(\d+)"'))) ?? 0;
+  for (final row in doc.querySelectorAll('table.topic_list tr')) {
+    final titleA = row.querySelector('td a.l');
+    if (titleA == null) continue;
+    final idMatch = RegExp(r'/subject/topic/(\d+)').firstMatch(titleA.attributes['href'] ?? '');
+    final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
     if (id == 0) continue;
-    final title = _first(block, RegExp(r'class="l">([^<]+)</a>'));
-    final replies = _first(block, RegExp(r'class="l">([^<]+)</a> <small class="grey">\(\+(\d+)\)'));
-    final subjectName = _first(block, RegExp(r'<small class="feed"><a href="/subject/\d+">([^<]+)"</a>'));
-    final username = _first(block, RegExp(r'<td class="odd" align="right"><a href="/user/[^"]+">([^<]+)</a>'));
-    final time = _first(block, RegExp(r'<small class="grey">([\d-]+ [\d:]+)</small>'));
+    final replies = row.querySelector('td a.l + small.grey');
+    final subjectA = row.querySelector('small.feed a');
+    final right = row.querySelector('td[align="right"]');
+    final userA = right?.querySelector('a');
+    final time = right?.querySelector('small');
     discuss.add(ChannelDiscussItem(
       id: id,
-      title: title,
-      replies: int.tryParse(replies) ?? 0,
-      subjectName: subjectName,
-      username: username,
-      time: time,
+      title: cText(titleA),
+      replies: int.tryParse(cText(replies).replaceAll(RegExp(r'[()]'), '')) ?? 0,
+      subjectName: cText(subjectA),
+      username: cText(userA),
+      time: cText(time),
     ));
   }
 
   // 日志: #entry_list .item
-  final entryStart = html.indexOf('#entry_list');
-  final blogs = entryStart >= 0 ? parseBlogList(html.substring(entryStart)) : <BlogListRow>[];
+  final blogs = parseBlogList(html);
 
   return ChannelData(rank: rank, discuss: discuss, blogs: blogs);
 }
 
-/// 小组/频道讨论行 (通用: /group/{name}/forum 与频道 topic_list)
+/// 小组/频道讨论行 (Dollars 论坛页: /group/dollars/forum)
 class TopicRow {
   final int id;
   final String title;
@@ -396,22 +420,23 @@ class TopicRow {
 ///   <td class="author"><a href="/user/N" class="l">用户</a></td> <td class="posts">N</td>
 ///   <td class="lastpost"><small class="time">...</small></td> </tr>`
 List<TopicRow> parseTopicRows(String html) {
+  final doc = parser.parse(html);
   final rows = <TopicRow>[];
-  final itemRe = RegExp(r'<tr class="topic[^"]*"[^>]*>([\s\S]*?)</tr>');
-  for (final m in itemRe.allMatches(html)) {
-    final block = m.group(1) ?? '';
-    final id = int.tryParse(_first(block, RegExp(r'href="/group/topic/(\d+)"'))) ?? 0;
+  for (final tr in doc.querySelectorAll('tr.topic')) {
+    final titleA = tr.querySelector('td.subject a.l');
+    if (titleA == null) continue;
+    final idMatch = RegExp(r'/group/topic/(\d+)').firstMatch(titleA.attributes['href'] ?? '');
+    final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
     if (id == 0) continue;
-    final title = _first(block, RegExp(r'<td class="subject"><a href="/group/topic/\d+" title="[^"]*" class="l">([^<]+)</a>'));
-    final username = _first(block, RegExp(r'<td class="author"><a href="/user/[^"]+" class="l">([^<]+)</a>'));
-    final replies = _first(block, RegExp(r'<td class="posts">([\d,]+)</td>'));
-    final lastTime = _first(block, RegExp(r'<small class="time">([\d-]+ [\d:]+)</small>'));
+    final userA = tr.querySelector('td.author a.l');
+    final posts = tr.querySelector('td.posts');
+    final last = tr.querySelector('td.lastpost small.time');
     rows.add(TopicRow(
       id: id,
-      title: title,
-      username: username,
-      replies: int.tryParse(replies.replaceAll(',', '')) ?? 0,
-      lastTime: lastTime,
+      title: cText(titleA),
+      username: cText(userA),
+      replies: int.tryParse(cText(posts).replaceAll(',', '')) ?? 0,
+      lastTime: cText(last),
     ));
   }
   return rows;
@@ -449,37 +474,41 @@ class AwardItem {
 ///   <div class="inner"> <p> <a href="/ep/N">标题</a> <small>+1595</small> </p>
 ///   <a href="/subject/N"><small class="grey">条目名</small></a> </div> </li> ... </ul> </div>`
 List<AwardBlock> parseAward(String html) {
+  final doc = parser.parse(html);
   final blocks = <AwardBlock>[];
-  final blockRe = RegExp(r'<div class="topicRank clearit">([\s\S]*?)(?=<div class="topicRank clearit"|</div>\s*</div>\s*<div id="footer)');
-  for (final m in blockRe.allMatches(html)) {
-    final block = m.group(1) ?? '';
-    final title = _first(block, RegExp(r'<p data-text="([^"]+)"'));
-    final subtitle = _first(block, RegExp(r'<span>([^<]+)</span>'));
-    if (title.isEmpty) continue;
+  for (final block in doc.querySelectorAll('div.topicRank')) {
+    final title = block.querySelector('h3.chl p') ?? block.querySelector('h3 p');
+    final subtitle = block.querySelector('h3.chl span') ?? block.querySelector('h3 span');
+    if (title == null) continue;
+
     final items = <AwardItem>[];
-    final itemRe = RegExp(r'<li>([\s\S]*?)</li>');
-    for (final im in itemRe.allMatches(block)) {
-      final ib = im.group(1) ?? '';
-      final href = _first(ib, RegExp(r'href="(/(?:ep|subject|character|person|anime)/[^"]+)"'));
-      final name = _first(ib, RegExp(r'<a href="/(?:ep|subject|character|person|anime)/[^"]+"[^>]*>([^<]+)</a>'));
-      final count = _first(ib, RegExp(r'<small>([^<]+)</small>'));
-      final subName = _first(ib, RegExp(r'<small class="grey">([^<]+)</small>'));
-      final cover = _first(ib, RegExp(r'<img src="(//lain\.bgm\.tv/[^"]+)"'));
-      if (name.isEmpty && href.isEmpty) continue;
+    for (final li in block.querySelectorAll('ul > li')) {
+      final a = li.querySelector('div.inner p a') ?? li.querySelector('a[href^="/"]');
+      if (a == null) continue;
+      final img = li.querySelector('img');
+      final count = li.querySelector('div.inner p small');
+      final sub = li.querySelector('div.inner a small.grey');
+      final name = a.text.trim();
+      if (name.isEmpty && count == null) continue;
       items.add(AwardItem(
-        href: href,
-        name: name,
-        count: count,
-        subName: subName,
-        cover: cover.isEmpty ? '' : 'https:$cover',
+        href: a.attributes['href'] ?? '',
+        name: htmlDecode(name),
+        count: count == null ? '' : htmlDecode(count.text.trim()),
+        subName: sub == null ? '' : htmlDecode(sub.text.trim()),
+        cover: img == null ? '' : _abs(img.attributes['src'] ?? ''),
       ));
     }
-    blocks.add(AwardBlock(title: title, subtitle: subtitle, items: items));
+
+    blocks.add(AwardBlock(
+      title: htmlDecode(title.text.trim()),
+      subtitle: subtitle == null ? '' : htmlDecode(subtitle.text.trim()),
+      items: items,
+    ));
   }
   return blocks;
 }
 
-/// 将用户收藏 (v0) 转换为 Subject (pic/wordcloud 等复用)
+/// 将用户收藏 (v0) 转换为 Subject (照片墙/词云等复用)
 Subject subjectFromCollectionItem(Map<String, dynamic> json) {
   final subject = json['subject'] as Map<String, dynamic>? ?? const {};
   return Subject(
@@ -501,4 +530,42 @@ Subject subjectFromCollectionItem(Map<String, dynamic> json) {
             .toList() ??
         const [],
   );
+}
+
+/// v0 用户收藏项 (系列/猜你喜欢复用)
+class V0CollectionItem {
+  final int subjectId;
+  final int type; // 1=想看 2=看过 3=在看 4=搁置 5=抛弃
+  final int epStatus;
+  final String updatedAt;
+  final Subject subject;
+
+  const V0CollectionItem({
+    this.subjectId = 0,
+    this.type = 0,
+    this.epStatus = 0,
+    this.updatedAt = '',
+    required this.subject,
+  });
+
+  factory V0CollectionItem.fromJson(Map<String, dynamic> json) {
+    final subject = json['subject'] as Map<String, dynamic>? ?? const {};
+    return V0CollectionItem(
+      subjectId: (json['subject_id'] as num?)?.toInt() ?? (subject['id'] as num?)?.toInt() ?? 0,
+      type: (json['type'] as num?)?.toInt() ?? 0,
+      epStatus: (json['ep_status'] as num?)?.toInt() ?? 0,
+      updatedAt: json['updated_at'] as String? ?? '',
+      subject: subjectFromCollectionItem(json),
+    );
+  }
+}
+
+/// 解析 v0 用户收藏分页响应 { total, limit, offset, data }
+List<V0CollectionItem> parseV0Collections(Object? data) {
+  if (data is! Map<String, dynamic>) return const [];
+  final list = data['data'] as List? ?? const [];
+  return list
+      .whereType<Map<String, dynamic>>()
+      .map(V0CollectionItem.fromJson)
+      .toList();
 }

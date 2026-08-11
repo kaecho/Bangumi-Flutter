@@ -1,73 +1,48 @@
-/// 超展开域 HTML 抓取与解析 (移植自原项目 stores/rakuen/common.ts + screens/rakuen/topic)
+/// 超展开域 HTML 抓取与解析
 ///
-/// 说明: bgm.tv 页面结构与原项目解析器存在差异 (如 `ul.topicList` 实为
-/// `table tr.topic`, 楼层为 `#comment_list > div.row_reply`), 此处按线上
-/// HTML 结构实现; 通用工具函数复用 lib/core/html/bgm_html_parser.dart。
+/// 通用工具与已核对的选择器复用 lib/core/html/bgm_html_parser.dart;
+/// 本模块补充小组论坛 (table tr.topic)、小组成员、日志页、帖子主楼等
+/// 线上页面结构解析, 以及 URL 生成。
 library;
 
 import 'package:html/dom.dart';
 
 import '../../core/html/bgm_html_parser.dart' as core;
 
-/// 超展开板块帖子列表页 (frame 内嵌页, 与 tab 页 URL 不同)
-String rakuenListHtmlUrl(String scope, {String type = '', int page = 1}) {
-  final params = <String>[];
-  if (type.isNotEmpty) params.add('type=$type');
-  if (page > 1) params.add('page=$page');
-  return 'https://bgm.tv/rakuen/$scope/topiclist${params.isEmpty ? '' : '?${params.join('&')}'}';
-}
+/// 帖子页 URL (core 已映射 canonical 路径: /group/topic/N /subject/topic/N ...)
+String topicPageUrl(String topicId, {int page = 1}) => core.topicHtmlUrl(topicId, page: page);
 
-/// 帖子页入口 (页面内 JS 会跳转到 canonical 地址)
-String topicHtmlUrl(String topicId) => 'https://bgm.tv/rakuen/topic/$topicId';
+/// 小组论坛 URL
+String groupForumPageUrl(String group, {int page = 1}) =>
+    core.groupTopicsHtmlUrl(group, page: page);
 
-/// 小组页面
-String groupHomeHtmlUrl(String group) => 'https://bgm.tv/group/$group';
-String groupForumHtmlUrl(String group, {int page = 1}) =>
-    'https://bgm.tv/group/$group/forum${page > 1 ? '?page=$page' : ''}';
-String groupMembersHtmlUrl(String group) => 'https://bgm.tv/group/$group/members';
+/// 小组首页 URL
+String groupHomePageUrl(String group) => 'https://bgm.tv/group/$group';
 
-/// 日志页
-String blogHtmlUrl(int blogId) => 'https://bgm.tv/blog/$blogId';
+/// 小组成员 URL
+String groupMembersPageUrl(String group) => 'https://bgm.tv/group/$group/members';
 
-/// 从 /rakuen/topic/{topicId} 页面提取 canonical 跳转地址
-String? canonicalTopicRedirect(String html) {
-  final m = RegExp(r"rakuen_redirect_url\s*=\s*['\"]([^'\"]+)['\"]").firstMatch(html);
-  return m?.group(1);
+/// 日志页 URL
+String blogPageUrl(int blogId) => 'https://bgm.tv/blog/$blogId';
+
+/// 超展开板块列表 URL (支持分页)
+String rakuenBoardPageUrl(String scope, {String type = '', int page = 1}) {
+  var url = core.rakueHtmlUrl(scope, type);
+  if (page > 1) url = '$url${url.contains('?') ? '&' : '?'}page=$page';
+  return url;
 }
 
 /// href → topicId ('group/350677' / 'blog/123')
 String topicIdFromHref(String href) {
-  const prefix = '/rakuen/topic/';
-  if (href.startsWith(prefix)) return href.substring(prefix.length);
-  final h = href.replaceFirst('/', '');
-  return h;
-}
-
-/// 楼层
-class TopicFloor {
-  final String id;
-  final String floor;
-  final String time;
-  final String avatar;
-  final String userId;
-  final String userName;
-  final String userSign;
-  final String messageHtml;
-  final List<TopicFloor> subs;
-
-  const TopicFloor({
-    this.id = '',
-    this.floor = '',
-    this.time = '',
-    this.avatar = '',
-    this.userId = '',
-    this.userName = '',
-    this.userSign = '',
-    this.messageHtml = '',
-    this.subs = const [],
-  });
-
-  bool get isEmpty => messageHtml.isEmpty && userName.isEmpty;
+  var h = href;
+  h = h.replaceFirst(RegExp(r'^/rakuen/topic/'), '');
+  h = h.replaceFirst(RegExp(r'^/group/topic/'), 'group/');
+  h = h.replaceFirst(RegExp(r'^/subject/topic/'), 'subject/');
+  h = h.replaceFirst(RegExp(r'^/character/topic/'), 'crt/');
+  h = h.replaceFirst(RegExp(r'^/person/topic/'), 'prsn/');
+  h = h.replaceFirst(RegExp(r'^/ep/'), 'ep/');
+  h = h.replaceFirst(RegExp(r'^/blog/'), 'blog/');
+  return h.replaceFirst(RegExp(r'^/'), '');
 }
 
 /// 帖子详情页解析结果
@@ -80,7 +55,7 @@ class TopicPageData {
   final String avatar;
   final String time;
   final String contentHtml;
-  final List<TopicFloor> floors;
+  final List<core.RakuenFloor> floors;
   final int pageTotal;
 
   const TopicPageData({
@@ -107,7 +82,7 @@ class BlogPageData {
   final String avatar;
   final String time;
   final String contentHtml;
-  final List<TopicFloor> floors;
+  final List<core.RakuenFloor> floors;
 
   const BlogPageData({
     this.title = '',
@@ -123,9 +98,10 @@ class BlogPageData {
 /// 小组信息
 class GroupInfoData {
   final String title;
+  final String icon;
   final int members;
 
-  const GroupInfoData({this.title = '', this.members = 0});
+  const GroupInfoData({this.title = '', this.icon = '', this.members = 0});
 }
 
 /// 小组成员
@@ -137,13 +113,40 @@ class GroupMember {
   const GroupMember({this.userId = '', this.userName = '', this.avatar = ''});
 }
 
+/// 帖子列表行 (论坛/板块/搜索通用)
+class RakuenTopicItem {
+  final String topicId;
+  final String title;
+  final String group;
+  final String groupHref;
+  final String userName;
+  final String userId;
+  final String avatar;
+  final String replies;
+  final String time;
+
+  const RakuenTopicItem({
+    this.topicId = '',
+    this.title = '',
+    this.group = '',
+    this.groupHref = '',
+    this.userName = '',
+    this.userId = '',
+    this.avatar = '',
+    this.replies = '',
+    this.time = '',
+  });
+
+  int get replyCount => int.tryParse(replies.replaceAll(RegExp(r'[()+\s]'), '')) ?? 0;
+}
+
 String _bgUrl(String url) => url.startsWith('//') ? 'https:$url' : url;
 
 String? _bgImage(Element? el) {
   if (el == null) return null;
-  final style = el.attributes['style'] ?? '';
-  final m = RegExp(r"background-image:\s*url\('?([^'\)]+)'?\)").firstMatch(style);
-  final src = m?.group(1) ?? el.attributes['src'] ?? '';
+  final avatar = core.matchAvatar(el);
+  if (avatar.isNotEmpty) return _bgUrl(avatar);
+  final src = el.attributes['src'] ?? '';
   return src.isEmpty ? null : _bgUrl(src);
 }
 
@@ -153,17 +156,76 @@ String _h1Title(Element? h1) {
   final html = h1.innerHtml;
   final parts = html.split(RegExp(r'<br\s*/?>'));
   if (parts.length > 1) {
-    return core.htmlDecode(core.cText(parseFragment(parts.last)));
+    return core.htmlDecode(core.cText(core.parseDom(parts.last)));
   }
   return core.htmlDecode(h1.text.trim());
 }
 
-/// 解析帖子页 (主楼 + 楼层 + 子回复)
+/// 解析楼层 (主楼层 + 子回复)
+/// 页面: 帖子/日志页 #comment_list > div.row_reply
+List<core.RakuenFloor> parseTopicFloors(String html) {
+  final doc = core.parseDom(core.removeCF(html));
+  final result = <core.RakuenFloor>[];
+
+  final list = doc.querySelector('#comment_list');
+  if (list == null) return result;
+
+  for (final child in list.children) {
+    if (child.localName != 'div' ||
+        !child.className.split(' ').contains('row_reply')) {
+      continue;
+    }
+    result.add(_parseFloor(child));
+  }
+  return result;
+}
+
+core.RakuenFloor _parseFloor(Element row) {
+  final reInfo = row.querySelector('.post_actions.re_info .action small');
+  final info = reInfo != null ? reInfo.text.trim().split(' - ') : const <String>[];
+  final userLink = row.querySelector('.inner .userInfo strong a.l') ??
+      row.querySelector('.inner strong a.l') ??
+      row.querySelector('a.l');
+  final message = row.querySelector('.inner .reply_content > .message');
+  final sign = row.querySelector('.inner .sign.tip_j') ?? row.querySelector('span.sign.tip_j');
+
+  final subReplies = <core.RakuenFloor>[];
+  for (final sub in row.querySelectorAll('.topic_sub_reply > div.sub_reply_bg')) {
+    final subInfo = sub.querySelector('.post_actions.re_info .action small');
+    final parts = subInfo != null ? subInfo.text.trim().split(' - ') : const <String>[];
+    final subUser = sub.querySelector('.inner strong.userName a.l') ??
+        sub.querySelector('.inner strong a.l') ??
+        sub.querySelector('a.l');
+    subReplies.add(core.RakuenFloor(
+      id: (sub.attributes['id'] ?? '').replaceFirst('post_', ''),
+      floor: parts.isNotEmpty ? parts[0].trim() : '',
+      time: parts.length > 1 ? parts[1].trim() : '',
+      avatar: _bgImage(sub.querySelector('span.avatarNeue')) ?? '',
+      userId: core.matchAttr(subUser, 'href', RegExp(r'/user/(\d+)')),
+      userName: core.htmlDecode(core.cText(subUser ?? sub)),
+      userSign: core.htmlDecode(core.cText(sub.querySelector('.sign.tip_j') ?? sub)),
+      messageHtml: sub.querySelector('.cmt_sub_content')?.innerHtml ?? '',
+    ));
+  }
+
+  return core.RakuenFloor(
+    id: (row.attributes['id'] ?? '').replaceFirst('post_', ''),
+    floor: info.isNotEmpty ? info[0].trim() : '',
+    time: info.length > 1 ? info[1].trim() : '',
+    avatar: _bgImage(row.querySelector('span.avatarNeue')) ?? '',
+    userId: core.matchAttr(userLink, 'href', RegExp(r'/user/(\d+)')),
+    userName: core.htmlDecode(core.cText(userLink ?? row)),
+    userSign: core.htmlDecode(core.cText(sign ?? row)),
+    messageHtml: message?.innerHtml ?? '',
+    subReplies: subReplies,
+  );
+}
+
+/// 解析帖子页 (主楼 + 楼层)
 /// 兼容 group/subject/ep 帖子页 (div.postTopic) 与 prsn/crt 页面 (仅楼层)
 TopicPageData parseTopicPage(String html) {
   final doc = core.parseDom(core.removeCF(html));
 
-  // 主楼
   final postTopic = doc.querySelector('div.postTopic');
   final h1 = doc.querySelector('#pageHeader h1') ?? doc.querySelector('h1');
   final group = doc.querySelector('#pageHeader a.avatar');
@@ -188,7 +250,8 @@ TopicPageData parseTopicPage(String html) {
   String contentHtml = '';
 
   if (postTopic != null) {
-    final userLink = postTopic.querySelector('.inner strong a.l') ?? postTopic.querySelector('a.l');
+    final userLink =
+        postTopic.querySelector('.inner strong a.l') ?? postTopic.querySelector('a.l');
     final reInfo = postTopic.querySelector('.post_actions.re_info .action small');
     final t = reInfo != null ? reInfo.text.trim().split(' - ') : const <String>[];
     userName = core.htmlDecode(core.cText(userLink ?? postTopic));
@@ -196,22 +259,9 @@ TopicPageData parseTopicPage(String html) {
     avatar = _bgImage(postTopic.querySelector('span.avatarNeue')) ?? '';
     time = t.length > 1 ? t[1].trim() : '';
     contentHtml = postTopic.querySelector('.topic_content')?.innerHtml ?? '';
-    // 小组面包屑缺省时用主楼作者
-    if (groupName.isEmpty && postTopic.querySelector('.inner strong a.l') != null) {
-      groupName = userName;
-    }
   } else if (h1 != null) {
     // prsn/crt 页面: 主楼为空, 标题取页面 h1
     title = _h1Title(h1);
-  }
-
-  final floors = <TopicFloor>[];
-  final list = doc.querySelector('#comment_list');
-  if (list != null) {
-    for (final row in list.children.where((e) => e is Element && e.localName == 'div' && e.className.contains('row_reply'))) {
-      final rowEl = row as Element;
-      floors.add(_parseMainFloor(rowEl));
-    }
   }
 
   return TopicPageData(
@@ -223,51 +273,8 @@ TopicPageData parseTopicPage(String html) {
     avatar: avatar,
     time: time,
     contentHtml: contentHtml,
-    floors: floors,
+    floors: parseTopicFloors(html),
     pageTotal: _pageTotalFrom(html),
-  );
-}
-
-TopicFloor _parseMainFloor(Element row) {
-  final id = row.attributes['id']?.replaceFirst('post_', '') ?? '';
-  final reInfo = row.querySelector('.post_actions.re_info .action small');
-  final info = reInfo != null ? reInfo.text.trim().split(' - ') : const <String>[];
-  final userLink = row.querySelector('span.userInfo strong a.l') ??
-      row.querySelector('.inner strong a.l') ??
-      row.querySelector('a.l');
-  final message = row.querySelector('.inner .reply_content > .message');
-  final sign = row.querySelector('.inner span.sign.tip_j') ?? row.querySelector('span.sign.tip_j');
-
-  final subs = <TopicFloor>[];
-  for (final sub in row.querySelectorAll('.sub_reply_bg')) {
-    final subId = sub.attributes['id']?.replaceFirst('post_', '') ?? '';
-    final subInfo = sub.querySelector('.post_actions.re_info .action small');
-    final parts = subInfo != null ? subInfo.text.trim().split(' - ') : const <String>[];
-    final subUser = sub.querySelector('.inner strong.userName a.l') ??
-        sub.querySelector('.inner strong a.l') ??
-        sub.querySelector('a.l');
-    subs.add(TopicFloor(
-      id: subId,
-      floor: parts.isNotEmpty ? parts[0].trim() : '',
-      time: parts.length > 1 ? parts[1].trim() : '',
-      avatar: _bgImage(sub.querySelector('span.avatarNeue')) ?? '',
-      userId: core.matchAttr(subUser, 'href', RegExp(r'/user/(\d+)')),
-      userName: core.htmlDecode(core.cText(subUser ?? sub)),
-      userSign: core.htmlDecode(core.cText(sub.querySelector('.sign.tip_j') ?? sub)),
-      messageHtml: sub.querySelector('.cmt_sub_content')?.innerHtml ?? '',
-    ));
-  }
-
-  return TopicFloor(
-    id: id,
-    floor: info.isNotEmpty ? info[0].trim() : '',
-    time: info.length > 1 ? info[1].trim() : '',
-    avatar: _bgImage(row.querySelector('span.avatarNeue')) ?? '',
-    userId: core.matchAttr(userLink, 'href', RegExp(r'/user/(\d+)')),
-    userName: core.htmlDecode(core.cText(userLink ?? row)),
-    userSign: core.htmlDecode(core.cText(sign ?? row)),
-    messageHtml: message?.innerHtml ?? '',
-    subs: subs,
   );
 }
 
@@ -296,14 +303,6 @@ BlogPageData parseBlogPage(String html) {
     time = timeEl.text.trim().split('·').first.trim();
   }
 
-  final floors = <TopicFloor>[];
-  final list = doc.querySelector('#comment_list');
-  if (list != null) {
-    for (final row in list.children.where((e) => e is Element && e.localName == 'div' && e.className.contains('row_reply'))) {
-      floors.add(_parseMainFloor(row as Element));
-    }
-  }
-
   return BlogPageData(
     title: title,
     userName: core.htmlDecode(core.cText(userLink ?? doc)),
@@ -311,35 +310,8 @@ BlogPageData parseBlogPage(String html) {
     avatar: _bgImage(doc.querySelector('#viewEntry .author img')) ?? '',
     time: time,
     contentHtml: content,
-    floors: floors,
+    floors: parseTopicFloors(html),
   );
-}
-
-/// 帖子列表行 (论坛/板块/搜索通用)
-class RakuenTopicItem {
-  final String topicId;
-  final String title;
-  final String group;
-  final String groupHref;
-  final String userName;
-  final String userId;
-  final String avatar;
-  final String replies;
-  final String time;
-
-  const RakuenTopicItem({
-    this.topicId = '',
-    this.title = '',
-    this.group = '',
-    this.groupHref = '',
-    this.userName = '',
-    this.userId = '',
-    this.avatar = '',
-    this.replies = '',
-    this.time = '',
-  });
-
-  int get replyCount => int.tryParse(replies.trim()) ?? 0;
 }
 
 /// 解析小组论坛 (table tr.topic)
@@ -372,12 +344,16 @@ GroupInfoData parseGroupHome(String html) {
   final doc = core.parseDom(core.removeCF(html));
   final h1 = doc.querySelector('h1');
   final title = h1 != null ? core.htmlDecode(h1.text.trim()) : '';
+  final iconEl = doc.querySelector('.header .avatar img') ??
+      doc.querySelector('#pageHeader a.avatar img') ??
+      doc.querySelector('a.avatar img');
+  final icon = _bgImage(iconEl) ?? '';
   var members = 0;
   for (final m in RegExp(r'(\d[\d,]*)').allMatches(html)) {
     final v = int.tryParse(m.group(1)!.replaceAll(',', ''));
     if (v != null && v > members && v < 100000000) members = v;
   }
-  return GroupInfoData(title: title, members: members);
+  return GroupInfoData(title: title, icon: icon, members: members);
 }
 
 /// 解析小组成员列表
@@ -390,7 +366,7 @@ List<GroupMember> parseGroupMembers(String html) {
     result.add(GroupMember(
       userId: core.matchAttr(link, 'href', RegExp(r'/user/(\d+)')),
       userName: core.htmlDecode(core.cText(li.querySelector('strong a') ?? link ?? li)),
-      avatar: _bgImage(li.querySelector('img')),
+      avatar: _bgImage(li.querySelector('img')) ?? '',
     ));
   }
   return result;

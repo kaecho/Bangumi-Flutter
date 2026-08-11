@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -73,7 +74,7 @@ class ZoneCollectionsNotifier
     final status = arg.status == 0 ? '0' : '${arg.status}';
     final data = await client.get(apiV0UsersCollections(
       arg.userId,
-      v0SubjectTypeInt(arg.type),
+      '${v0SubjectTypeInt(arg.type)}',
       100,
       offset,
       status,
@@ -429,11 +430,13 @@ class _ZoneCollectionsTab extends ConsumerWidget {
                   if (index >= data.items.length) {
                     return Center(
                       child: TextButton(
-                        onPressed: () => ref
-                            .read(zoneCollectionsProvider(
-                              (userId: userId, type: type, status: status),
-                            ).notifier)
-                            .loadMore(),
+                        onPressed: () => unawaited(
+                          ref
+                              .read(zoneCollectionsProvider(
+                                (userId: userId, type: type, status: status),
+                              ).notifier)
+                              .loadMore(),
+                        ),
                         child: const Text('加载更多'),
                       ),
                     );

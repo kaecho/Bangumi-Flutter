@@ -2,8 +2,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api/api_client.dart';
 import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import 'subject_models.dart';
@@ -242,7 +242,6 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: ChoiceChip(

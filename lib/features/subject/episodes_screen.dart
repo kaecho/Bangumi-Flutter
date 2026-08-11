@@ -52,7 +52,7 @@ class EpisodesScreen extends ConsumerWidget {
               SliverToBoxAdapter(
                 child: _BatchBar(subjectId: id),
               ),
-              for (final (title, list) in sections)
+              for (final (title, _) in sections)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -105,7 +105,7 @@ class _BatchBar extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               minimumSize: const Size(0, 32),
             ),
-            onPressed: () => showDialog(
+            onPressed: () => showDialog<void>(
               context: context,
               builder: (_) => _BatchDialog(
                 subjectId: subjectId,

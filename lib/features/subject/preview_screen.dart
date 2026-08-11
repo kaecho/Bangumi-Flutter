@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 
-import '../../core/api/api_client.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
@@ -87,7 +86,7 @@ class PreviewScreen extends ConsumerWidget {
   void _openViewer(BuildContext context, List<PreviewImage> list, int index) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      MaterialPageRoute<_PreviewViewer>(
         builder: (_) => _PreviewViewer(images: list, initialIndex: index),
       ),
     );

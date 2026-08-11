@@ -4,8 +4,6 @@
 /// 与原生 App 一致, 直接从主站 HTML 页面提取数据。
 library;
 
-import 'dart:convert';
-
 import 'subject_models.dart';
 
 /// 去除 HTML 标签, 还原实体
@@ -25,7 +23,7 @@ String stripHtmlTags(String html) {
 
 /// 从 style="background-image:url('...')" 提取图片地址
 String _avatarFromStyle(String style) {
-  final m = RegExp(r"url\('([^']+)'\)").firstMatch(style ?? '');
+  final m = RegExp(r"url\('([^']+)'\)").firstMatch(style);
   if (m == null) return '';
   return _https(m.group(1)!);
 }
@@ -80,7 +78,7 @@ CommentPage parseSubjectCommentsHtml(String html) {
   final page = int.tryParse(
           RegExp(r'<strong class="p_cur">(\d+)</strong>').firstMatch(html)?.group(1) ?? '1') ??
       1;
-  final edge = RegExp(r'p_edge">[^<]*<[^>]*>\s*(\d+)\s*[^<]*/\s*(\d+)')
+  final edge = RegExp(r'p_edge">[^0-9]*(\d+)[^0-9]*/[^0-9]*(\d+)')
       .firstMatch(html);
   final pageTotal = int.tryParse(edge?.group(2) ?? '') ?? (page > 1 ? page : 1);
 
@@ -125,7 +123,7 @@ CommentPage parseTopicCommentsHtml(String html) {
   final page = int.tryParse(
           RegExp(r'<strong class="p_cur">(\d+)</strong>').firstMatch(html)?.group(1) ?? '1') ??
       1;
-  final edge = RegExp(r'p_edge">[^<]*<[^>]*>\s*(\d+)\s*[^<]*/\s*(\d+)')
+  final edge = RegExp(r'p_edge">[^0-9]*(\d+)[^0-9]*/[^0-9]*(\d+)')
       .firstMatch(html);
   final pageTotal = int.tryParse(edge?.group(2) ?? '') ?? (page > 1 ? page : 1);
 
@@ -193,10 +191,4 @@ List<WikiEdit> parseWikiEditsHtml(String html) {
     items.add(WikiEdit(time: time, userName: userName, summary: summary, rev: rev));
   }
   return items;
-}
-
-/// JSON 反序列化辅助: 兼容 UTF-8 BOM / 注释
-dynamic decodeJson(String body) {
-  final text = body.replaceFirst(RegExp(r'^\uFEFF'), '');
-  return jsonDecode(text);
 }

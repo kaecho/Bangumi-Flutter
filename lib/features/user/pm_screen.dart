@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -310,9 +312,10 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
                           onPressed: _sending
                               ? null
                               : () {
-                                  final form = ref.read(pmChatProvider(convId)).valueOrNull?.form ??
-                                      const PmForm();
-                                  _send(form);
+                                  final form =
+                                      ref.read(pmChatProvider(convId)).valueOrNull?.form ??
+                                          const PmForm();
+                                  unawaited(_send(form));
                                 },
                           child: const Text('发送'),
                         ),

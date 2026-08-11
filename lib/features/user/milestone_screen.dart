@@ -17,7 +17,7 @@ final milestoneProvider = FutureProvider.family<List<CollectionItem>, String>((r
   for (final type in kUserTypeTabs) {
     try {
       final data = await client.get(
-        apiV0UsersCollections(userId, v0SubjectTypeInt(type.$1), 100, 0, '2'),
+        apiV0UsersCollections(userId, '${v0SubjectTypeInt(type.$1)}', 100, 0, '2'),
       );
       items.addAll(UserCollection.fromJson(data as Map<String, dynamic>).data);
     } catch (_) {
@@ -39,7 +39,6 @@ class MilestoneScreen extends ConsumerStatefulWidget {
 
 class _MilestoneScreenState extends ConsumerState<MilestoneScreen> {
   int _columns = 4;
-  bool _loadedColumns = false;
 
   static const _kColumnsKey = 'user_grid_num';
 
@@ -53,10 +52,7 @@ class _MilestoneScreenState extends ConsumerState<MilestoneScreen> {
     final prefs = await SharedPreferences.getInstance();
     final v = prefs.getInt(_kColumnsKey);
     if (!mounted) return;
-    setState(() {
-      _columns = v ?? 4;
-      _loadedColumns = true;
-    });
+    setState(() => _columns = v ?? 4);
   }
 
   Future<void> _saveColumns(int value) async {

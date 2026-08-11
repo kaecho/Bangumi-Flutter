@@ -23,7 +23,7 @@ class BackupScreen extends ConsumerWidget {
     final cache = <String, dynamic>{};
     for (final name in _kCacheBoxes) {
       try {
-        final box = Hive.box(name);
+        final box = Hive.box<dynamic>(name);
         cache[name] = box.toMap();
       } catch (_) {
         // 未打开的 box 跳过
@@ -103,7 +103,7 @@ class BackupScreen extends ConsumerWidget {
 
       for (final boxEntry in cache.entries) {
         try {
-          final box = Hive.box(boxEntry.key);
+          final box = Hive.box<dynamic>(boxEntry.key);
           final values = boxEntry.value as Map<String, dynamic>? ?? const {};
           for (final kv in values.entries) {
             await box.put(kv.key, kv.value);

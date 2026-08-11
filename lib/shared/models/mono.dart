@@ -10,11 +10,17 @@ class MonoImages {
   const MonoImages({this.large = '', this.medium = '', this.small = '', this.grid = ''});
 
   factory MonoImages.fromJson(Map<String, dynamic> json) => MonoImages(
-        large: json['large'] as String? ?? '',
-        medium: json['medium'] as String? ?? '',
-        small: json['small'] as String? ?? '',
-        grid: json['grid'] as String? ?? '',
+        large: _https(json['large'] as String? ?? ''),
+        medium: _https(json['medium'] as String? ?? ''),
+        small: _https(json['small'] as String? ?? ''),
+        grid: _https(json['grid'] as String? ?? ''),
       );
+
+  static String _https(String url) {
+    if (url.startsWith('//')) return 'https:$url';
+    if (url.startsWith('http://')) return url.replaceFirst('http://', 'https://');
+    return url;
+  }
 }
 
 /// 角色 (虚拟)

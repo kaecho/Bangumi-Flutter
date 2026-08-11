@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../shared/models/collection.dart';
 import '../../shared/models/ep.dart';
+import '../../shared/models/subject.dart' as models;
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
@@ -50,10 +51,10 @@ class SubjectScreen extends ConsumerWidget {
           children: [
             _SubjectHeader(subjectId: id, detail: value),
             _SummarySection(summary: value.subject.summary),
-            if (value.subject.type == 'anime' || value.subject.eps > 0)
+            if (value.subject.type != 'game')
               _EpSection(subjectId: id),
             if (value.tags.isNotEmpty)
-              _TagSection(subjectId: id, tags: value.tags),
+              _TagSection(subjectId: id, type: value.subject.type, tags: value.tags),
             _CharacterSection(subjectId: id),
             _PersonSection(subjectId: id),
             _RelationSection(subjectId: id),
@@ -132,6 +133,21 @@ class _SubjectHeader extends ConsumerWidget {
                     fontSize: 13,
                   ),
                 ],
+                if (subject.collection != null && subject.collection!.total > 0) ...[
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () => context.push('/subject/$subjectId/rating'),
+                    child: Text(
+                      subject.collectionText,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -169,7 +185,7 @@ class _SubjectHeader extends ConsumerWidget {
       context.push('/login');
       return;
     }
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -179,7 +195,7 @@ class _SubjectHeader extends ConsumerWidget {
 
   void _openProgressDialog(
       BuildContext context, WidgetRef ref, int watched, int total) {
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (_) => _BatchProgressDialog(
         subjectId: subjectId,
@@ -270,7 +286,6 @@ class _BatchProgressDialogState extends ConsumerState<_BatchProgressDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return AlertDialog(
       title: const Text('设置观看进度'),
       content: Column(
@@ -379,7 +394,6 @@ class _EpSection extends ConsumerWidget {
     final eps = epsAsync.valueOrNull;
     if (eps == null || eps.eps.isEmpty) return const SizedBox.shrink();
 
-    final isLogin = ref.watch(isLoggedInProvider);
     final epStatus = ref.watch(epStatusProvider(subjectId)).valueOrNull;
     final shown = eps.eps.take(6).toList();
 
@@ -500,8 +514,9 @@ class _EpRow extends ConsumerWidget {
 /// 标签区块
 class _TagSection extends ConsumerWidget {
   final int subjectId;
-  final List<Tag> tags;
-  const _TagSection({required this.subjectId, required this.tags});
+  final String type;
+  final List<models.Tag> tags;
+  const _TagSection({required this.subjectId, required this.type, required this.tags});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -526,7 +541,9 @@ class _TagSection extends ConsumerWidget {
             children: [
               for (final tag in shown)
                 GestureDetector(
-                  onTap: () => context.push('/subject/$subjectId/typerank?tag=${Uri.encodeComponent(tag.name)}'),
+                  onTap: () => context.push(
+                    '/subject/$subjectId/typerank?tag=${Uri.encodeComponent(tag.name)}&type=$type',
+                  ),
                   child: Tag(text: tag.name),
                 ),
             ],

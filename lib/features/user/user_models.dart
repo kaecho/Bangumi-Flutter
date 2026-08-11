@@ -9,6 +9,7 @@ import 'package:html/dom.dart';
 import 'package:html/parser.dart' as parser;
 
 import '../../core/html/bgm_html_parser.dart';
+import '../../shared/models/collection.dart';
 import '../../shared/models/subject.dart';
 import '../../shared/models/timeline.dart';
 import '../../shared/models/user.dart';
@@ -54,7 +55,7 @@ String absUrl(String url) {
 
 /// 从 style="background-image:url('...')" 提取图片地址
 String bgImageUrl(String style) {
-  final match = RegExp(r"url\(['\"]?([^'\")]+)['\"]?\)").firstMatch(style);
+  final match = RegExp(r'''url\(['"]?([^'")]+)['"]?\)''').firstMatch(style);
   return absUrl(match?.group(1) ?? '');
 }
 
@@ -198,19 +199,19 @@ List<UserTimelineGroup> parseUserTimeline(String html) {
   final container = doc.querySelector('#timeline');
   if (container == null) return groups;
 
+  // 按文档顺序遍历日期头与条目 (条目嵌套在 ul 内)
   String currentDate = '';
   final current = <TimelineItem>[];
-  for (final node in container.nodes) {
-    if (node is Element && node.localName == 'h4' && node.className.contains('Header')) {
+  for (final el in container.querySelectorAll('h4.Header, li.tml_item')) {
+    if (el.localName == 'h4') {
       if (currentDate.isNotEmpty && current.isNotEmpty) {
         groups.add(UserTimelineGroup(date: currentDate, items: List.of(current)));
         current.clear();
       }
-      currentDate = node.text.trim();
+      currentDate = el.text.trim();
       continue;
     }
-    if (node is! Element || !node.className.contains('tml_item')) continue;
-    final item = _timelineItemFromElement(node);
+    final item = _timelineItemFromElement(el);
     if (item.id > 0 || item.content.isNotEmpty) current.add(item);
   }
   if (currentDate.isNotEmpty && current.isNotEmpty) {
@@ -474,15 +475,12 @@ List<PmItem> parsePmInbox(String html) {
       final isSelf = el.className.contains('pm-message-self');
       final peer = doc.querySelector('.pm-chat-title strong a.l');
       final peerUserId = (peer?.attributes['href'] ?? '').replaceFirst(RegExp(r'^/user/'), '');
+      final peerName = peer == null ? '' : htmlDecode(peer.text.trim());
 
       list.add(PmMessage(
         type: 'message',
         threadId: currentThreadId,
-        name: isSelf
-            ? '我'
-            : (peer == null ? '' : htmlDecode(peer.text.trim())) == ''
-                ? peerUserId
-                : htmlDecode(peer.text.trim()),
+        name: isSelf ? '我' : (peerName.isEmpty ? peerUserId : peerName),
         avatar: avatarEl == null ? '' : bgImageUrl(avatarEl.attributes['style'] ?? ''),
         userId: (avatarA?.attributes['href'] ?? '').replaceFirst(RegExp(r'^/user/'), ''),
         content: body == null ? '' : body.innerHtml,

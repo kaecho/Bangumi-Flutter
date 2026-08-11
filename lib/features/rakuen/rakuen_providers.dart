@@ -30,12 +30,7 @@ class TopicDetailNotifier extends FamilyAsyncNotifier<TopicPageData, String> {
 
   Future<TopicPageData> _fetch(String topicId, int page) async {
     final client = ref.read(apiClientProvider);
-    var html = await client.fetchHtml(topicHtmlUrl(topicId));
-    final redirect = canonicalTopicRedirect(html);
-    if (redirect != null && redirect.isNotEmpty) {
-      final base = redirect.startsWith('http') ? redirect : 'https://bgm.tv$redirect';
-      html = await client.fetchHtml('$base${page > 1 ? '?page=$page' : ''}');
-    }
+    final html = await client.fetchHtml(topicPageUrl(topicId, page: page));
     final parsed = parseTopicPage(html);
     if (parsed.isEmpty) {
       // JSON 兜底: /topic/{topicId}
@@ -101,6 +96,7 @@ class TopicDetailNotifier extends FamilyAsyncNotifier<TopicPageData, String> {
           group: data.group,
           userName: data.userName,
           replies: data.floors.length,
+          time: DateTime.now().millisecondsSinceEpoch ~/ 1000,
         ));
   }
 }
@@ -116,9 +112,9 @@ class BlogDetailNotifier extends FamilyAsyncNotifier<BlogPageData, int> {
   Future<BlogPageData> build(int blogId) async {
     final client = ref.read(apiClientProvider);
     try {
-      final html = await client.fetchHtml(blogHtmlUrl(blogId));
+      final html = await client.fetchHtml(blogPageUrl(blogId));
       final parsed = parseBlogPage(html);
-      if (!parsed.title.isEmpty || parsed.floors.isNotEmpty) return parsed;
+      if (parsed.title.isNotEmpty || parsed.floors.isNotEmpty) return parsed;
     } catch (_) {}
     // JSON 兜底
     try {
@@ -145,21 +141,21 @@ class BlogDetailNotifier extends FamilyAsyncNotifier<BlogPageData, int> {
   }
 }
 
-TopicFloor _floorFromJson(Map<String, dynamic> json) {
+core.RakuenFloor _floorFromJson(Map<String, dynamic> json) {
   final user = json['user'] as Map<String, dynamic>? ?? const {};
   final subs = (json['sub_replies'] as List? ?? const [])
       .whereType<Map>()
       .map((e) => _floorFromJson(Map<String, dynamic>.from(e)))
       .toList();
   final avatar = user['avatar'] as Map<String, dynamic>? ?? const {};
-  return TopicFloor(
+  return core.RakuenFloor(
     id: (json['id'] as num?)?.toInt().toString() ?? '',
     time: json['created_at'] as String? ?? '',
     avatar: (avatar['large'] as String? ?? avatar['medium'] as String? ?? '').toString(),
     userId: (user['id'] as num?)?.toInt().toString() ?? '',
     userName: (user['nickname'] as String? ?? user['username'] as String? ?? '').toString(),
     messageHtml: json['content'] as String? ?? '',
-    subs: subs,
+    subReplies: subs,
   );
 }
 
@@ -167,7 +163,7 @@ TopicFloor _floorFromJson(Map<String, dynamic> json) {
 final groupInfoProvider = FutureProvider.family<GroupInfoData, String>((ref, name) async {
   final client = ref.read(apiClientProvider);
   try {
-    final html = await client.fetchHtml(groupHomeHtmlUrl(name));
+    final html = await client.fetchHtml(groupHomePageUrl(name));
     final info = parseGroupHome(html);
     if (info.title.isNotEmpty) return info;
   } catch (_) {}
@@ -177,6 +173,7 @@ final groupInfoProvider = FutureProvider.family<GroupInfoData, String>((ref, nam
     final group = json['group'] as Map<String, dynamic>? ?? json;
     return GroupInfoData(
       title: (group['title'] as String? ?? group['name'] as String? ?? '').toString(),
+      icon: (group['icon'] as String? ?? '').toString(),
       members: (group['members'] as num?)?.toInt() ?? 0,
     );
   } catch (_) {
@@ -201,7 +198,7 @@ class GroupForumNotifier extends FamilyAsyncNotifier<RakuenListData<RakuenTopicI
 
   Future<RakuenListData<RakuenTopicItem>> _fetch(String name, int page) async {
     final client = ref.read(apiClientProvider);
-    final html = await client.fetchHtml(groupForumHtmlUrl(name, page: page));
+    final html = await client.fetchHtml(groupForumPageUrl(name, page: page));
     final items = parseGroupForum(html);
     final maxPage = _maxPageOf(html);
     if (maxPage > _maxPage) _maxPage = maxPage;
@@ -235,7 +232,7 @@ class GroupForumNotifier extends FamilyAsyncNotifier<RakuenListData<RakuenTopicI
 final groupMembersProvider = FutureProvider.family<List<GroupMember>, String>((ref, name) async {
   final client = ref.read(apiClientProvider);
   try {
-    final html = await client.fetchHtml(groupMembersHtmlUrl(name));
+    final html = await client.fetchHtml(groupMembersPageUrl(name));
     final members = parseGroupMembers(html);
     if (members.isNotEmpty) return members;
   } catch (_) {}
@@ -273,7 +270,7 @@ class BoardTopicsNotifier extends FamilyAsyncNotifier<RakuenListData<RakuenTopic
 
   Future<RakuenListData<RakuenTopicItem>> _fetch(String scope, int page) async {
     final client = ref.read(apiClientProvider);
-    final html = await client.fetchHtml(rakuenListHtmlUrl(scope, page: page));
+    final html = await client.fetchHtml(rakuenBoardPageUrl(scope, page: page));
     final items = core
         .parseRakuenList(html)
         .map((e) => RakuenTopicItem(

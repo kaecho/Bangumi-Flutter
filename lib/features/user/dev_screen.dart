@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -32,7 +33,7 @@ class _DevScreenState extends ConsumerState<DevScreen> {
   @override
   void initState() {
     super.initState();
-    _collect();
+    unawaited(_collect());
   }
 
   Future<void> _collect() async {
@@ -45,7 +46,7 @@ class _DevScreenState extends ConsumerState<DevScreen> {
     final boxNames = ['settings', 'subject', 'user', 'collection', 'timeline', 'topic', 'rakuen'];
     for (final name in boxNames) {
       try {
-        debugLog('缓存 $name: ${Hive.box(name).length} 条');
+        debugLog('缓存 $name: ${Hive.box<dynamic>(name).length} 条');
       } catch (_) {}
     }
     if (mounted) setState(() {});

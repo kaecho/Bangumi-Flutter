@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 ///
 /// - body 14px, 行高 1.6
 /// - 引用块 (<q>) 左侧主题色边框 + 浅底色
-/// - 图片最大宽度 100%, 点击进入全屏查看器
+/// - 网络图片: 宽度不超过容器, 点击进入全屏查看器
 /// - 链接主题色, bgm 站内链接跳转对应页面, 其余用系统浏览器打开
 class BgmHtml extends StatelessWidget {
   final String data;
@@ -48,7 +48,7 @@ class BgmHtml extends StatelessWidget {
             : const Color(0xFF2A2A2A));
 
     return Html(
-      data: data,
+      data: html,
       style: {
         'body': Style(
           margin: Margins.zero,
@@ -83,7 +83,6 @@ class BgmHtml extends StatelessWidget {
               ? const Color(0xFFF6F6F6)
               : const Color(0xFF1E1E1E),
           padding: HtmlPaddings.all(8),
-          borderRadius: const BorderRadius.all(Radius.circular(4)),
           fontSize: FontSize(12.5),
           fontFamily: 'monospace',
         ),
@@ -94,22 +93,12 @@ class BgmHtml extends StatelessWidget {
           fontSize: FontSize(12.5),
         ),
         'a': Style(color: accent, textDecoration: TextDecoration.none),
-        'img': Style(
-          // 无尺寸属性的图片限制为容器宽度
-          width: Width(100, WidthUnit.percent),
+      },
+      extensions: [
+        _BgmImageExtension(
+          onImageTap: (url) => _openImage(context, url),
         ),
-      },
-      customRender: {
-        // 图片点击 → 全屏查看
-        'img': (context, child) {
-          final src = context.tree.element.attributes['src'] ?? '';
-          if (src.isEmpty) return child;
-          return GestureDetector(
-            onTap: () => _openImage(context, src),
-            child: child,
-          );
-        },
-      },
+      ],
       onLinkTap: (url, attributes, element) {
         if (url == null || url.isEmpty) return;
         _handleLink(context, url);
@@ -126,6 +115,13 @@ class BgmHtml extends StatelessWidget {
     var href = url;
     if (href.startsWith('//')) href = 'https:$href';
 
+    // 图片链接 → 查看器
+    final lower = href.toLowerCase();
+    if (_imageExt.any(lower.endsWith)) {
+      _openImage(context, href);
+      return;
+    }
+
     // bgm 站内帖子/日志/条目 → 站内页面
     final topic = RegExp(r'^(?:https?://bgm\.tv)?/rakuen/topic/([^/]+/\d+)').firstMatch(href);
     if (topic != null) {
@@ -137,7 +133,7 @@ class BgmHtml extends StatelessWidget {
       context.push('/rakuen/topic/${topic2.group(1)}/${topic2.group(2)}');
       return;
     }
-    final blog = RegExp(r'^(?:https?://bgm\.tv)?/blog/(\d+)').firstMatch(href);
+    final blog = RegExp(r'^(?:https?://bgm\.tv)?/blog(?:/entry)?/(\d+)').firstMatch(href);
     if (blog != null) {
       context.push('/rakuen/blog/${blog.group(1)}');
       return;
@@ -147,12 +143,74 @@ class BgmHtml extends StatelessWidget {
       context.push('/subject/${subject.group(1)}');
       return;
     }
-    // 图片链接 → 查看器
-    final lower = href.toLowerCase();
-    if (_imageExt.any(lower.endsWith)) {
-      _openImage(context, href);
-      return;
-    }
     launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+  }
+}
+
+/// 网络图片扩展: 限制宽度 + 点击查看
+class _BgmImageExtension extends HtmlExtension {
+  final void Function(String url) onImageTap;
+
+  const _BgmImageExtension({required this.onImageTap});
+
+  @override
+  Set<String> get supportedTags => {'img'};
+
+  @override
+  bool matches(ExtensionContext context) {
+    final src = context.attributes['src'] ?? '';
+    return src.isNotEmpty &&
+        !src.startsWith('data:') &&
+        !src.startsWith('asset:') &&
+        !src.endsWith('.svg');
+  }
+
+  @override
+  InlineSpan build(ExtensionContext context) {
+    final element = context.styledElement as ImageElement;
+    final src = element.src;
+    final imageStyle =
+        Style(width: element.width, height: element.height).merge(context.styledElement!.style);
+
+    return WidgetSpan(
+      alignment: context.style!.verticalAlign.toPlaceholderAlignment(context.style!.display),
+      baseline: TextBaseline.alphabetic,
+      child: CssBoxWidget(
+        style: imageStyle,
+        childIsReplaced: true,
+        child: LayoutBuilder(
+          builder: (context, constraints) => ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+            child: GestureDetector(
+              onTap: () => onImageTap(src),
+              child: Image.network(
+                src,
+                width: imageStyle.width?.value,
+                height: imageStyle.height?.value,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stack) => const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Icon(Icons.broken_image_outlined, size: 18, color: Colors.grey),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

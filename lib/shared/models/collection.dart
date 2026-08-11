@@ -93,7 +93,12 @@ class CollectionItem {
               images: const SubjectImages(),
             ),
       subjectId: (json['subject_id'] as num?)?.toInt() ?? 0,
-      subjectType: json['subject_type'] as String? ?? 'anime',
+      // v0 API 返回数字类型 (1=book 2=anime 3=music 4=game 6=real), 旧版返回字符串
+      subjectType: switch (json['subject_type']) {
+        final String s => s,
+        final num n => const {1: 'book', 2: 'anime', 3: 'music', 4: 'game', 6: 'real'}[n.toInt()] ?? 'anime',
+        _ => 'anime',
+      },
       rate: (json['rate'] as num?)?.toInt() ?? 0,
       type: (json['type'] as num?)?.toInt() ?? 0,
       comment: json['comment'] as String? ?? '',

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api/api_client.dart';
 import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';

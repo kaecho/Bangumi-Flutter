@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/api/api_client.dart';
 import '../../shared/models/subject.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';

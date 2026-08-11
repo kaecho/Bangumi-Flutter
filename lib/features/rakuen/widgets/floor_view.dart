@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/cover.dart';
-import '../../rakuen/html_parse.dart';
+import '../../../core/html/bgm_html_parser.dart' as core;
 import '../../rakuen/rakuen_settings.dart';
 import '../../../shared/widgets/bgm_html.dart';
 import '../../../core/utils/format.dart';
 
 /// 帖子楼层视图 (主楼层 + 子回复)
 class FloorView extends StatelessWidget {
-  final TopicFloor floor;
+  final core.RakuenFloor floor;
   final String floorLabel;
   final bool isAuthor;
   final RakuenSettingsState settings;
@@ -56,9 +56,9 @@ class FloorView extends StatelessWidget {
     }
 
     final subExpand = int.tryParse(settings.subExpand) ?? 0;
-    final showAllSubs = expanded || subExpand == 0 || floor.subs.length <= subExpand;
-    final visibleSubs = showAllSubs ? floor.subs : floor.subs.take(subExpand).toList();
-    final hiddenSubs = floor.subs.length - visibleSubs.length;
+    final showAllSubs = expanded || subExpand == 0 || floor.subReplies.length <= subExpand;
+    final visibleSubs = showAllSubs ? floor.subReplies : floor.subReplies.take(subExpand).toList();
+    final hiddenSubs = floor.subReplies.length - visibleSubs.length;
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -143,7 +143,7 @@ class FloorView extends StatelessWidget {
                 ),
               ),
             ),
-          if (floor.subs.isNotEmpty)
+          if (floor.subReplies.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(top: 6, left: 36),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

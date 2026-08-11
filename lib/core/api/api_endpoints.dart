@@ -436,6 +436,53 @@ String apiAnimeBrowser({int? year, int? month, String? sort, int? page, String? 
 /// 每日放送放送时间 (bangumi-data 开源数据, 与原项目 onAir 同源; 调用时传 host: 'https://bangumi-data.github.io')
 String apiBangumiData() => '/bangumi-data/data.json';
 
+/// v0 目录 (官方 JSON API; 相对路径, 与 kApiHost 拼接)
+String apiV0Index(int id) => '/v0/indices/$id';
+String apiV0IndexSubjects(int id, {int page = 1, int limit = 30, String? sort}) =>
+    '/v0/indices/$id/subjects?page=$page&limit=$limit${sort != null && sort.isNotEmpty ? '&sort=$sort' : ''}';
+String apiV0UserCharacters(String username) => '/v0/users/$username/collections/-/characters';
+
+/// 发现页: 评分月刊 / 半月刊 (原项目公开 CDN 静态数据, 调用时传 host: [kDogeCdnHost])
+const String kDogeCdnHost = 'http://bangumi-app-assets.5t5.top';
+String apiVibJson() => '/vib.json';
+String apiBiWeeklyJson() => '/biweekly.json';
+
+/// 发现页: 机核资讯 (Anitama 数据源之一, 调用时传 host: 'https://www.gcores.com')
+String apiGcoresOriginals(int page) =>
+    '/gapi/v1/originals?page%5Blimit%5D=12&page%5Boffset%5D=${(page - 1) * 12}'
+    '&sort=-published-at&include=category,user&filter%5Bis-news%5D=1&filter%5Blist-all%5D=0'
+    '&fields%5Barticles%5D=title,desc,thumb,cover,comments-count,likes-count,published-at,duration,category,user';
+
+/// 发现页: 主站 HTML 页面 (旧版 JSON API 已下线, 调用时传 host: kHost)
+String htmlBlogList({int page = 1}) => '/blog/$page.html';
+String htmlGroupList({int page = 1}) => page > 1 ? '/group?page=$page' : '/group';
+String htmlRankBrowser(String type, {String sort = 'rank', int page = 1}) =>
+    '/$type/browser?sort=$sort&page=$page';
+String htmlTypeTag(String type, {int page = 1}) => page > 1 ? '/$type/tag?page=$page' : '/$type/tag';
+String htmlTagSubjects(String type, String tag, {int page = 1}) =>
+    '/$type/tag/${Uri.encodeComponent(tag)}?page=$page';
+String htmlWiki() => '/wiki';
+String htmlChannel(String type) => '/$type';
+String htmlAward(int year) => '/award/$year';
+String htmlCatalogBrowser({int page = 1, String orderby = 'rank'}) =>
+    '/index/browser?page=$page&orderby=$orderby';
+String htmlDollarsForum({int page = 1}) =>
+    '/group/dollars/forum${page > 1 ? '?page=$page' : ''}';
+
+/// 季度新番浏览 (bgm.tv 主站: 动画标签 + 放送季, 调用时传 host: kHost)
+/// /anime/browser/airtime/{ym} 被 CDN 拦截, 等价数据在标签页提供
+String htmlSeasonBrowser({
+  String tag = 'TV',
+  int? year,
+  int? month,
+  String sort = 'rank',
+  int page = 1,
+}) {
+  final airtime = year == null ? '' : '$year${month == null ? '' : '-$month'}';
+  final path = airtime.isEmpty ? '/anime/tag/$tag' : '/anime/tag/$tag/airtime/$airtime';
+  return '$path?sort=$sort&page=$page';
+}
+
 /// 第三方
 String apiMosaicTile(String username, String type) =>
     'https://bangumi-mosaic-tile.aho.im/users/$username/timelines/$type.json';

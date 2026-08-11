@@ -41,7 +41,7 @@ class ActionsController extends Notifier<List<ActionItem>> {
   }
 
   Future<void> _load() async {
-    final box = await Hive.openBox(_boxName);
+    final box = await Hive.openBox<dynamic>(_boxName);
     final raw = box.get(_key) as String?;
     if (raw == null) return;
     try {
@@ -52,7 +52,7 @@ class ActionsController extends Notifier<List<ActionItem>> {
   }
 
   Future<void> _save() async {
-    final box = await Hive.openBox(_boxName);
+    final box = await Hive.openBox<dynamic>(_boxName);
     await box.put(_key, jsonEncode([for (final item in state) item.toJson()]));
   }
 
@@ -126,13 +126,13 @@ class ActionsScreen extends ConsumerWidget {
                     value: item.active,
                     onChanged: (v) =>
                         ref.read(actionsControllerProvider.notifier).toggle(item.uuid, v),
-                    secondary: IconButton(
-                      icon: const Icon(Icons.open_in_new, size: 18),
-                      onPressed: () => launchUrl(Uri.parse(item.url)),
-                    ),
-                    trailing: Row(
+                    secondary: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.open_in_new, size: 18),
+                          onPressed: () => launchUrl(Uri.parse(item.url)),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.edit_outlined, size: 18),
                           onPressed: () => _edit(context, ref, item: item),
@@ -181,9 +181,9 @@ class ActionsScreen extends ConsumerWidget {
     if (saved != true) return;
     final controller = ref.read(actionsControllerProvider.notifier);
     if (item == null) {
-      controller.add(nameCtrl.text.trim(), urlCtrl.text.trim());
+      await controller.add(nameCtrl.text.trim(), urlCtrl.text.trim());
     } else {
-      controller.update(item.uuid, nameCtrl.text.trim(), urlCtrl.text.trim());
+      await controller.update(item.uuid, nameCtrl.text.trim(), urlCtrl.text.trim());
     }
   }
 }

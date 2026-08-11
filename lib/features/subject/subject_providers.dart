@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,11 +7,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
-import '../../shared/models/collection.dart';
 import '../../shared/models/ep.dart';
 import '../../shared/models/subject.dart';
 import 'html_parser.dart';
 import 'subject_models.dart';
+
+/// 第三方数据 (bilibili / bangumi-data) 使用独立 HTTP 请求,
+/// 避免把 bgm.tv 的 OAuth token 发送到第三方域名
+Future<String> _plainGet(String url) async {
+  final client = HttpClient();
+  try {
+    final req = await client.getUrl(Uri.parse(url));
+    req.headers.set(HttpHeaders.userAgentHeader, 'Bangumi/Flutter');
+    final resp = await req.close();
+    return await resp.transform(utf8.decoder).join();
+  } finally {
+    client.close();
+  }
+}
 
 /// 条目详情: 旧版 /subject/{id} + v0 large (infobox/tags)
 final subjectDetailProvider = FutureProvider.family<SubjectDetail, int>((ref, id) async {
@@ -231,12 +245,11 @@ final bangumiDataProvider = FutureProvider<BangumiDataIndex>((ref) {
 });
 
 Future<BangumiDataIndex> _loadBangumiData(Ref ref) async {
-  final client = ref.read(apiClientProvider);
-  final body = await client.get(kBangumiDataUrl, host: 'https://cdn.jsdelivr.net');
-  final root = jsonDecode(body as String) as Map<String, dynamic>;
+  final body = await _plainGet(kBangumiDataUrl);
+  final root = jsonDecode(body) as Map<String, dynamic>;
   final items = root['items'] as List? ?? const [];
   final seasons = <int, int>{};
-  final titles = <int, int>{};
+  final titles = <int, String>{};
   for (final item in items.whereType<Map<String, dynamic>>()) {
     final sites = item['sites'] as List? ?? const [];
     int? bangumiId;
@@ -261,12 +274,8 @@ final previewProvider = FutureProvider.family<List<PreviewImage>, int>((ref, id)
   final seasonId = index.bilibiliSeasons[id];
   if (seasonId == null) return const [];
 
-  final client = ref.read(apiClientProvider);
-  final raw = await client.get(
-    apiBilibiliSeasonSection(seasonId),
-    host: 'https://api.bilibili.com',
-  );
-  final map = raw as Map<String, dynamic>;
+  final body = await _plainGet(apiBilibiliSeasonSection(seasonId));
+  final map = jsonDecode(body) as Map<String, dynamic>;
   final result = map['result'] as Map<String, dynamic>? ?? const {};
   final sections = [
     ...?((result['main_section'] as Map<String, dynamic>?)?['episodes'] as List?),
