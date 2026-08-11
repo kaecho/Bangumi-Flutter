@@ -63,9 +63,21 @@ const List<DiscoveryMenuItem> kDiscoveryMenus = [
   DiscoveryMenuItem(key: 'Link', name: '剪贴板', icon: Icons.link_outlined, route: '/link'),
 ];
 
-/// 自定义菜单 (设置中开启的菜单 key, 为空则全部)
+/// 自定义菜单 (设置中开启的菜单 key; 未设置 = 全部显示)
 List<DiscoveryMenuItem> getDiscoveryMenus(WidgetRef ref) {
-  return kDiscoveryMenus;
+  final custom = ref.watch(settingsStoreProvider).discoveryMenu;
+  if (custom == null || custom.isEmpty) return kDiscoveryMenus;
+  final byKey = {for (final m in kDiscoveryMenus) m.key: m};
+  final result = <DiscoveryMenuItem>[];
+  for (final key in custom) {
+    final m = byKey[key];
+    if (m != null) result.add(m);
+  }
+  // 未在自定义列表中的新菜单追加在末尾 (与原项目一致)
+  for (final m in kDiscoveryMenus) {
+    if (!result.contains(m)) result.add(m);
+  }
+  return result;
 }
 
 /// 今日放送数据
@@ -293,7 +305,13 @@ class _MenuSettingSheet extends ConsumerStatefulWidget {
 }
 
 class _MenuSettingSheetState extends ConsumerState<_MenuSettingSheet> {
-  late Set<String> _enabled = kDiscoveryMenus.map((m) => m.key).toSet();
+  late Set<String> _enabled = _initialEnabled(ref);
+
+  Set<String> _initialEnabled(WidgetRef ref) {
+    final custom = ref.read(settingsStoreProvider).discoveryMenu;
+    if (custom != null && custom.isNotEmpty) return custom.toSet();
+    return kDiscoveryMenus.map((m) => m.key).toSet();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -327,13 +345,19 @@ class _MenuSettingSheetState extends ConsumerState<_MenuSettingSheet> {
             child: Row(
               children: [
                 TextButton(
-                  onPressed: () => setState(() => _enabled = kDiscoveryMenus.map((m) => m.key).toSet()),
+                  onPressed: () async {
+                    setState(() => _enabled = kDiscoveryMenus.map((m) => m.key).toSet());
+                    await ref.read(settingsStoreProvider).resetDiscoveryMenu();
+                  },
                   child: const Text('重置'),
                 ),
                 const Spacer(),
                 FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
+                  onPressed: () async {
+                    await ref
+                        .read(settingsStoreProvider)
+                        .setDiscoveryMenu(_enabled.toList());
+                    if (context.mounted) Navigator.of(context).pop();
                   },
                   child: const Text('完成'),
                 ),

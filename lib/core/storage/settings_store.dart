@@ -50,6 +50,17 @@ class SettingsStore {
     await _prefs.setStringList('setting_home_render_tabs', tabs);
   }
 
+  /// 发现页自定义菜单 (启用项 key 列表, null = 全部显示)
+  List<String>? get discoveryMenu => _prefs.getStringList('setting_discovery_menu');
+
+  Future<void> setDiscoveryMenu(List<String> keys) async {
+    await _prefs.setStringList('setting_discovery_menu', keys);
+  }
+
+  Future<void> resetDiscoveryMenu() async {
+    await _prefs.remove('setting_discovery_menu');
+  }
+
   String get initialPage => _prefs.getString('setting_initial_page') ?? 'Home';
 
   Future<void> setInitialPage(String page) async {
