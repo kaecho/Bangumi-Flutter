@@ -28,20 +28,22 @@ class CollectionStatus {
       };
 }
 
-/// 条目类型: anime | book | real | game
+/// 条目类型: anime | book | real | game | music
 class SubjectType {
   static const String anime = 'anime';
   static const String book = 'book';
   static const String real = 'real';
   static const String game = 'game';
+  static const String music = 'music';
 
-  static const List<String> all = [anime, book, real, game];
+  static const List<String> all = [anime, book, real, game, music];
 
   static String text(String type) => switch (type) {
         anime => '动画',
         book => '书籍',
         real => '三次元',
         game => '游戏',
+        music => '音乐',
         _ => type,
       };
 
@@ -50,6 +52,7 @@ class SubjectType {
         book => '书籍',
         real => '三次元',
         game => '游戏',
+        music => '音乐',
         _ => type,
       };
 }

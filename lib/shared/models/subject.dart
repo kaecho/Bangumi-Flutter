@@ -38,10 +38,27 @@ class Subject {
     this.volums = 0,
   });
 
+  /// 旧版 API / v0 API 返回数字类型 (1=book 2=anime 3=music 4=game 6=real),
+  /// 兼容字符串类型
+  static String parseType(dynamic value) {
+    if (value is String) return value;
+    if (value is num) {
+      return switch (value.toInt()) {
+        1 => 'book',
+        2 => 'anime',
+        3 => 'music',
+        4 => 'game',
+        6 => 'real',
+        _ => 'anime',
+      };
+    }
+    return 'anime';
+  }
+
   factory Subject.fromJson(Map<String, dynamic> json) => Subject(
         id: (json['id'] as num?)?.toInt() ?? 0,
         url: json['url'] as String? ?? '',
-        type: json['type'] as String? ?? 'anime',
+        type: parseType(json['type']),
         name: json['name'] as String? ?? '',
         nameCn: json['name_cn'] as String? ?? '',
         summary: json['summary'] as String? ?? '',
@@ -177,5 +194,25 @@ class Infobox {
         value: json['value'],
       );
 
-  String get valueText => value.toString();
+  /// 展示值: 兼容字符串 / 数字 / v0 的 [{v: '...'}] 嵌套结构
+  String get valueText {
+    final v = value;
+    if (v == null) return '';
+    if (v is String || v is num) return v.toString();
+    if (v is List) {
+      return v.map((e) {
+        if (e is Map) {
+          final item = e['v'] ?? e['value'] ?? e.values.firstOrNull;
+          return item?.toString() ?? '';
+        }
+        return e.toString();
+      }).where((s) => s.isNotEmpty).join(' / ');
+    }
+    if (v is Map) {
+      final item = v['v'] ?? v['value'];
+      if (item != null) return item.toString();
+      return v.values.whereType<String>().join(' / ');
+    }
+    return v.toString();
+  }
 }

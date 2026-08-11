@@ -58,6 +58,37 @@ String apiSubjectBlogs(int subjectId) => '$kApiHost/subject/$subjectId/blogs';
 String apiSubjectUpdateWatched(int subjectId) => '$kApiHost/subject/$subjectId/update/watched_eps';
 String apiEpStatus(int epId, int status) => '$kApiHost/ep/$epId/status/$status';
 
+/// v0 条目 (详情含 infobox/tags/eps)
+String apiV0Subject(int subjectId) => '$kApiV0/subjects/$subjectId?responseGroup=large';
+String apiV0SubjectCharacters(int subjectId) => '$kApiV0/subjects/$subjectId/characters';
+String apiV0SubjectPersons(int subjectId) => '$kApiV0/subjects/$subjectId/persons';
+String apiV0SubjectSeries(int subjectId) => '$kApiV0/subjects/$subjectId/subjects';
+
+/// v0 角色 / 人物
+String apiV0Character(int id) => '$kApiV0/characters/$id';
+String apiV0CharacterSubjects(int id) => '$kApiV0/characters/$id/subjects';
+String apiV0Person(int id) => '$kApiV0/persons/$id';
+String apiV0PersonSubjects(int id) => '$kApiV0/persons/$id/subjects';
+
+/// v0 标签搜索条目 (typerank)
+String apiV0TagSubjects(String type, String tag, {int limit = 30, int offset = 0}) =>
+    '$kApiV0/subjects?tag=${Uri.encodeComponent(tag)}&type=$type&limit=$limit&offset=$offset';
+
+/// 主站 HTML 页面 (吐槽箱 / 目录 / 维基 / 预览)
+String htmlSubjectComments(int subjectId, {int page = 1}) =>
+    '$kHost/subject/$subjectId/comments?page=$page';
+String htmlEpPage(int epId) => '$kHost/ep/$epId';
+String htmlCharacterPage(int id) => '$kHost/character/$id';
+String htmlSubjectCatalogs(int subjectId, {int page = 1}) =>
+    '$kHost/subject/$subjectId/index?page=$page';
+String htmlSubjectWikiEdit(int subjectId) => '$kHost/subject/$subjectId/edit';
+
+/// 第三方: 番剧截图预览 (bangumi-data + bilibili)
+const String kBangumiDataUrl =
+    'https://cdn.jsdelivr.net/gh/bangumi-data/bangumi-data@master/dist/data.json';
+String apiBilibiliSeasonSection(int seasonId) =>
+    'https://api.bilibili.com/pgc/web/season/section?season_id=$seasonId';
+
 /// 收藏
 String apiCollection(int subjectId) => '$kApiHost/collection/$subjectId';
 String apiCollectionAction(int subjectId, String action) =>

@@ -7,6 +7,7 @@ import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/storage/settings_store.dart';
 import '../../core/utils/format.dart';
+import '../../core/utils/url_match.dart';
 import '../../shared/models/subject.dart';
 import '../../shared/models/timeline.dart';
 import '../../shared/widgets/cover.dart';
@@ -103,6 +104,11 @@ class DiscoveryScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('发现'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.link),
+            tooltip: '剪贴板',
+            onPressed: () => showClipboardModal(context),
+          ),
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: '自定义菜单',
@@ -288,6 +294,68 @@ class _TodayCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 剪贴板识别弹窗 (原项目 Link 入口): 粘贴 bgm.tv 链接 → 打开对应页面
+Future<void> showClipboardModal(BuildContext context) {
+  final controller = TextEditingController();
+  return showModalBottomSheet<void>(
+    context: context,
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('剪贴板', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text(
+              '粘贴 bgm.tv 链接, 自动识别并打开对应页面 (条目/帖子/用户/角色...)',
+              style: TextStyle(fontSize: 12, color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'https://bgm.tv/subject/123',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () {
+                    final input = controller.text.trim();
+                    final url = matchBgmUrl(input);
+                    final route = url != null ? bgmUrlToRoute(url) : null;
+                    Navigator.of(ctx).pop();
+                    if (route == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('链接不符合格式, 请检查')),
+                      );
+                      return;
+                    }
+                    context.push(route);
+                  },
+                  child: const Text('打开'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// 自定义菜单对话框 (原项目 Open 入口)
