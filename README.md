@@ -3,7 +3,7 @@
 一个基于 [Flutter](https://flutter.dev) 的 [Bangumi](https://bgm.tv) 第三方客户端。
 
 本仓库是 [czy0729/Bangumi](https://github.com/czy0729/Bangumi)（React Native 版，v8.38.x）的
-**1:1 功能重写版**：原项目所有功能在重写版中一一对应，使用最新稳定版 Flutter（3.44.x，
+**1:1 功能重写版**（仓库: [kaecho/Bangumi-Flutter](https://github.com/kaecho/Bangumi-Flutter)）：原项目所有功能在重写版中一一对应，使用最新稳定版 Flutter（3.44.x，
 Material 3）与最新的 Flutter/Dart 特性，面向长期演进与企业级工程实践设计。
 
 ## 功能
@@ -62,8 +62,9 @@ lib/
 
 GitHub Actions：
 
-- `ci.yml` — PR / main 分支：`flutter analyze` + `flutter test`
-- `build.yml` — 打 tag 时构建 Android APK / AAB 并上传 GitHub Release
+- `ci.yml` — PR / main 分支：`flutter analyze` + `flutter test`（含代码覆盖率）
+- `release.yml` — 打 tag 时构建 Android APK / AAB 并上传 GitHub Release
+- `dependabot.yml` — 每周自动更新 pub 依赖与 GitHub Actions
 
 ## 免责
 

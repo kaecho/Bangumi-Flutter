@@ -211,6 +211,14 @@ Key endpoints (see api_endpoints.dart for the complete port):
 
 Every row in this matrix must exist as a route by the end of the rewrite.
 
+## 完成状态 (2026-08-11, v1.0.0)
+
+- 135 条路由 + 6 个 Tab, 全部页面已移植 (见上方矩阵, 各 feature 的 routes 文件为准)
+- 全部数据源对照线上验证: 官方 v0 API / 主站 HTML 解析 (旧版 JSON API 部分下线,
+  与原 App 一致采用 fetchHTML + cheerio 等价方案) / 小圣杯实测 API
+- `flutter analyze`: 0 issues; `flutter test`: 94 tests passing
+- CI (GitHub Actions) 通过; v1.0.0 Release 含 Android APK/AAB
+
 ## Definition of done (per feature)
 
 - Route registered in router.dart, screen builds without exceptions
