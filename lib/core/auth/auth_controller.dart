@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,7 +48,7 @@ class AuthController extends Notifier<AuthState> {
     }
     state = AuthState(token: token, user: user);
     if (token.isNotEmpty) {
-      refreshUser();
+      unawaited(refreshUser());
     }
   }
 

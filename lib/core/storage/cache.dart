@@ -22,15 +22,15 @@ class Cache {
   Future<void> init() async {
     await Hive.initFlutter();
     for (final name in _kBoxes) {
-      await Hive.openBox(name);
+      await Hive.openBox<dynamic>(name);
     }
   }
 
-  Box<dynamic> box(String name) => Hive.box(name);
+  Box<dynamic> box(String name) => Hive.box<dynamic>(name);
 
   /// 读取缓存, 带过期时间 (秒)
   dynamic get(String boxName, String key, {Duration? maxAge}) {
-    final box = Hive.box(boxName);
+    final box = Hive.box<dynamic>(boxName);
     if (!box.containsKey(key)) return null;
     final entry = box.get(key) as Map?;
     if (entry == null) return null;
@@ -44,18 +44,18 @@ class Cache {
   }
 
   Future<void> put(String boxName, String key, dynamic value) async {
-    await Hive.box(boxName).put(key, {
+    await Hive.box<dynamic>(boxName).put(key, {
       '_t': DateTime.now().millisecondsSinceEpoch,
       '_v': value,
     });
   }
 
   Future<void> remove(String boxName, String key) async {
-    await Hive.box(boxName).delete(key);
+    await Hive.box<dynamic>(boxName).delete(key);
   }
 
   Future<void> clear(String boxName) async {
-    await Hive.box(boxName).clear();
+    await Hive.box<dynamic>(boxName).clear();
   }
 }
 

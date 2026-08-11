@@ -307,7 +307,7 @@ class _ProgressItemView extends StatelessWidget {
   }
 
   void _showStatusDialog(BuildContext context) {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(

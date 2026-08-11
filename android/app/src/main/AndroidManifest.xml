@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 网络访问: 应用为纯网络客户端, debug 自动带, release 需显式声明 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="bangumi"
+        android:label="Bangumi"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

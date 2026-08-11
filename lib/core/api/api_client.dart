@@ -43,13 +43,13 @@ class ApiClient {
   }) async {
     final uri = Uri.parse('${host ?? kApiHost}$path').replace(queryParameters: query);
     try {
-      final resp = await _dio.getUri(uri);
+      final resp = await _dio.getUri<dynamic>(uri);
       return resp.data;
     } on DioException catch (e) {
       // 主域名失败时降级到备用域名 (仅 bgm 官方 API)
       if (host == null && e.response?.statusCode != null && e.response!.statusCode! >= 500) {
         final backup = uri.replace(scheme: 'https', host: Uri.parse(kApiHostBackup).host);
-        final resp = await _dio.getUri(backup);
+        final resp = await _dio.getUri<dynamic>(backup);
         return resp.data;
       }
       rethrow;
@@ -65,7 +65,7 @@ class ApiClient {
     bool auth = false,
   }) async {
     final uri = Uri.parse('${host ?? kApiHost}$path').replace(queryParameters: query);
-    final resp = await _dio.postUri(uri, data: data);
+    final resp = await _dio.postUri<dynamic>(uri, data: data);
     return resp.data;
   }
 
@@ -77,7 +77,7 @@ class ApiClient {
     String? host,
   }) async {
     final uri = Uri.parse('${host ?? kApiHost}$path').replace(queryParameters: query);
-    final resp = await _dio.putUri(uri, data: data);
+    final resp = await _dio.putUri<dynamic>(uri, data: data);
     return resp.data;
   }
 
@@ -89,7 +89,7 @@ class ApiClient {
     String? host,
   }) async {
     final uri = Uri.parse('${host ?? kApiHost}$path').replace(queryParameters: query);
-    final resp = await _dio.deleteUri(uri, data: data);
+    final resp = await _dio.deleteUri<dynamic>(uri, data: data);
     return resp.data;
   }
 }
