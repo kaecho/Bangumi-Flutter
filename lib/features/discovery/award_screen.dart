@@ -9,6 +9,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import 'widgets/discovery_html.dart';
+import 'yearbook_screen.dart';
 
 /// 年度动画大赏
 ///

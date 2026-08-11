@@ -36,7 +36,7 @@ class TinygrailCharaScreen extends ConsumerWidget {
           ),
         ),
         data: (data) {
-          final chara = data.$1;
+          final chara = data.chara;
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(_charaProvider(monoId)),
             child: ListView(
@@ -595,7 +595,12 @@ final _userLogsProvider = FutureProvider.family<
     final logs = await api.fetchUserLogs(monoId);
     return (bids: logs.bids, asks: logs.asks, bidHistory: logs.bidHistory, askHistory: logs.askHistory);
   } catch (_) {
-    return (bids: const [], asks: const [], bidHistory: const [], askHistory: const []);
+    return (
+      bids: <TinygrailLog>[],
+      asks: <TinygrailLog>[],
+      bidHistory: <TinygrailLog>[],
+      askHistory: <TinygrailLog>[],
+    );
   }
 });
 

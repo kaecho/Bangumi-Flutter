@@ -29,7 +29,7 @@ void main() {
     test('解析主楼 + 楼层 + 子回复', () {
       const html = '''
 <html><body>
-<div id="pageHeader"><h1><a href="/group/dev">番组开发</a> » <a href="/group/dev/forum">讨论</a><br />测试标题</h1></div>
+<div id="pageHeader"><h1><span><a class="avatar" href="/group/dev">番组开发</a> » <a href="/group/dev/forum">讨论</a></span><br />测试标题</h1></div>
 <div id="post_1" class="postTopic">
   <div class="post_actions re_info"><div class="action"><small>#1 - 2024-1-1 10:00</small></div></div>
   <a href="/user/100" class="avatar"><span class="avatarNeue avatarSize48" style="background-image:url('//lain.bgm.tv/pic/a.jpg')"></span></a>

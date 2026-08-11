@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
+import '../../shared/widgets/score.dart';
 import 'widgets/discovery_html.dart';
 import 'widgets/paged.dart';
 

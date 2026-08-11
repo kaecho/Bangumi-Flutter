@@ -21,8 +21,8 @@ class TinygrailDealScreen extends ConsumerWidget {
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
         data: (data) {
-          final chara = data.$1;
-          final logs = data.$2;
+          final chara = data.chara;
+          final logs = data.logs;
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(dealCharaProvider(monoId)),
             child: ListView(

@@ -56,8 +56,8 @@ class _TinygrailLoginScreenState extends ConsumerState<TinygrailLoginScreen> {
   Future<void> _finishLogin() async {
     try {
       // 等待 tinygrail 服务端 Set-Cookie 落地
-      await Future.delayed(const Duration(milliseconds: 1200));
-      final cookies = await WebViewCookieManager().getCookies(kTinygrailHost);
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      final cookies = await WebViewCookieManager().getCookies(domain: Uri.parse(kTinygrailHost));
       if (cookies.isEmpty) {
         if (mounted) setState(() => _error = '授权失败, 未获取到会话, 请重试');
         _handled = false;

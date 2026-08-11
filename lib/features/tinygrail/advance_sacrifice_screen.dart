@@ -8,7 +8,7 @@ class TinygrailAdvanceSacrificeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const AdvanceListScreen(
+    return AdvanceListScreen(
       title: '献祭推荐',
       provider: advanceSacrificeProvider,
       valueLabel: '增益',

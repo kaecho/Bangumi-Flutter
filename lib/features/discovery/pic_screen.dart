@@ -5,12 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
-import '../../shared/models/subject.dart';
+import '../../shared/models/subject.dart' hide Tag;
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import 'widgets/discovery_html.dart';
+import 'widgets/recommend_list.dart';
 
 /// 照片墙: 用户收藏条目封面网格
 ///

@@ -76,9 +76,10 @@ class TinygrailChara {
   factory TinygrailChara.fromJson(Map<String, dynamic> json) {
     final id = (json['CharacterId'] ?? json['Id'] ?? 0) as num;
     final fluctuation = (json['Fluctuation'] ?? 0) as num;
+    final monoId = (json['CharacterId'] ?? json['Id'] ?? json['MonoId'] ?? 0) as num;
     return TinygrailChara(
       id: id.toInt(),
-      monoId: (json['CharacterId'] ?? json['Id'] ?? json['MonoId'] ?? 0) as num as int,
+      monoId: monoId.toInt(),
       name: json['Name'] as String? ?? '',
       icon: json['Icon'] as String? ?? '',
       level: (json['Level'] as num?)?.toInt() ?? 0,
@@ -104,7 +105,7 @@ class TinygrailChara {
       rate: (json['Rate'] as num?)?.toDouble() ?? 0,
       starForces: (json['StarForces'] as num?)?.toInt() ?? 0,
       stars: (json['Stars'] as num?)?.toInt() ?? 0,
-      sacrifices: (json['Sacrifices'] ?? json['Sa'] ?? 0) as num as int,
+      sacrifices: ((json['Sacrifices'] ?? json['Sa'] ?? 0) as num).toInt(),
       listedDate: json['ListedDate'] as String? ?? '',
       crown: (json['Crown'] as num?)?.toInt() ?? 0,
       subjectId: (json['SubjectId'] as num?)?.toInt() ?? 0,
@@ -182,7 +183,7 @@ class TinygrailRich {
         nickname: json['Nickname'] as String? ?? '',
         userId: json['Name'] as String? ?? '',
         assets: (json['Assets'] as num?)?.toInt() ?? 0,
-        total: (json['TotalBalance'] ?? json['Total'] ?? 0) as num as int,
+        total: ((json['TotalBalance'] ?? json['Total'] ?? 0) as num).toInt(),
         principal: (json['Principal'] as num?)?.toInt() ?? 0,
         lastActiveDate: (json['LastActiveDate'] as num?)?.toInt() ?? 0,
         lastIndex: (json['LastIndex'] as num?)?.toInt() ?? 0,
@@ -278,7 +279,7 @@ class TinygrailLog {
         amount: (json['Amount'] as num?)?.toInt() ?? 0,
         price: (json['Price'] as num?)?.toInt() ?? 0,
         type: (json['Type'] as num?)?.toInt() ?? 0,
-        time: json['Begin'] ?? json['TradeTime'] ?? json['Time'] ?? '' as String? ?? '',
+        time: (json['Begin'] ?? json['TradeTime'] ?? json['Time'] ?? '') as String? ?? '',
       );
 }
 
@@ -440,7 +441,7 @@ class TinygrailTopWeek {
   factory TinygrailTopWeek.fromJson(Map<String, dynamic> json, {int rank = 0}) =>
       TinygrailTopWeek(
         id: (json['CharacterId'] as num?)?.toInt() ?? 0,
-        name: json['CharacterName'] ?? json['Name'] as String? ?? '',
+        name: (json['CharacterName'] ?? json['Name'] ?? '') as String? ?? '',
         avatar: json['Avatar'] as String? ?? '',
         level: (json['CharacterLevel'] as num?)?.toInt() ?? 0,
         price: (json['Price'] as num?)?.toInt() ?? 0,
@@ -568,18 +569,18 @@ class TinygrailTemple {
 
   factory TinygrailTemple.fromJson(Map<String, dynamic> json) => TinygrailTemple(
         id: (json['CharacterId'] as num?)?.toInt() ?? 0,
-        name: json['CharacterName'] ?? json['Name'] as String? ?? '',
+        name: (json['CharacterName'] ?? json['Name'] ?? '') as String? ?? '',
         nickname: json['Nickname'] as String? ?? '',
         avatar: json['Avatar'] as String? ?? '',
         cover: json['Cover'] as String? ?? '',
-        level: (json['CharacterLevel'] ?? json['Level'] ?? 0) as num as int,
+        level: ((json['CharacterLevel'] ?? json['Level'] ?? 0) as num).toInt(),
         rank: (json['CharacterRank'] as num?)?.toInt() ?? 0,
         rate: (json['Rate'] as num?)?.toDouble() ?? 0,
         refine: (json['Refine'] as num?)?.toInt() ?? 0,
         sacrifices: (json['Sacrifices'] as num?)?.toInt() ?? 0,
         assets: (json['Assets'] as num?)?.toInt() ?? 0,
-        stars: (json['CharacterStars'] ?? json['Stars'] ?? 0) as num as int,
-        starForces: (json['CharacterStarForces'] ?? json['StarForces'] ?? 0) as num as int,
+        stars: ((json['CharacterStars'] ?? json['Stars'] ?? 0) as num).toInt(),
+        starForces: ((json['CharacterStarForces'] ?? json['StarForces'] ?? 0) as num).toInt(),
         userStarForces: (json['StarForces'] as num?)?.toInt() ?? 0,
         lastActive: json['LastActive'] as String? ?? '',
       );

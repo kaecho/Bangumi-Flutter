@@ -8,7 +8,7 @@ class TinygrailAdvanceAskScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const AdvanceListScreen(
+    return AdvanceListScreen(
       title: '买入推荐',
       provider: advanceAskProvider,
       valueLabel: '回报',

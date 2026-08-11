@@ -7,7 +7,6 @@ import '../../core/storage/cache.dart';
 import '../../shared/models/group.dart';
 import '../../shared/models/timeline.dart';
 import '../../shared/models/topic.dart';
-import '../../shared/models/user.dart';
 import 'html_parse.dart';
 import 'rakuen_models.dart';
 

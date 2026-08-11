@@ -7,6 +7,7 @@ import '../../core/api/api_endpoints.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/score.dart';
 import 'widgets/discovery_html.dart';
 import 'widgets/season_filter.dart';
 

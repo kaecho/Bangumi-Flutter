@@ -47,7 +47,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
 
   Future<void> _joinGroup() async {
     if (!ref.read(isLoggedInProvider)) {
-      context.push('/login');
+      await context.push('/login');
       return;
     }
     setState(() => _joining = true);

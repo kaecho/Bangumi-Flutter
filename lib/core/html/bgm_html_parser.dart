@@ -243,8 +243,25 @@ RakuenFloor _parseFloor(Element row) {
     messageHtml: row.querySelector('.reply_content > .message')?.innerHtml ?? '',
     subReplies: [
       for (final sub in row.querySelectorAll('div.topic_sub_reply > div.sub_reply_bg'))
-        _parseFloor(sub),
+        _parseSubFloor(sub),
     ],
+  );
+}
+
+/// 子楼层正文节点 (.cmt_sub_content)
+RakuenFloor _parseSubFloor(Element row) {
+  final action = cText(row.querySelector('.action small') ?? row);
+  final info = action.split(' - ');
+  final name = row.querySelector('.inner .userInfo a.l') ?? row.querySelector('a.l');
+  return RakuenFloor(
+    id: cData(row, 'id').replaceFirst('post_', ''),
+    time: info.length > 1 ? info[1] : '',
+    floor: info.isNotEmpty ? info[0] : '',
+    avatar: matchAvatar(row.querySelector('span.avatarNeue')),
+    userId: matchAttr(name, 'href', RegExp(r'/user/(\d+)')),
+    userName: htmlDecode(cText(name)),
+    userSign: cText(row.querySelector('.inner .sign')),
+    messageHtml: row.querySelector('.cmt_sub_content')?.innerHtml ?? '',
   );
 }
 
@@ -271,8 +288,9 @@ List<RakuenFloor> parseRakuenFloors(String html) {
   return (page: 1, pageTotal: 1);
 }
 
-/// 小组/条目 帖子列表页解析
+/// 小组/条目 帖子列表页解析 (已对照线上页面)
 /// 页面: https://bgm.tv/group/{name}/forum 等 (table > tr.topic)
+/// 列结构: td.subject a(标题+楼主) / td.posts(回复数) / td.lastpost small.time
 List<RakuenItem> parseTopicList(String html) {
   final fragment = htmlMatch(html, '<div id="topic_list', '</body');
   if (fragment.isEmpty) return const [];
@@ -280,10 +298,10 @@ List<RakuenItem> parseTopicList(String html) {
   final result = <RakuenItem>[];
 
   for (final row in doc.querySelectorAll('tr.topic')) {
-    final title = row.querySelector('a.topic');
-    final user = row.querySelector('td a.l') ?? row.querySelector('a.l');
-    final replies = row.querySelector('td .reply_count') ?? row.querySelector('td.num');
-    final time = row.querySelector('small.time');
+    final title = row.querySelector('td.subject a');
+    final user = row.querySelector('td.subject a.l');
+    final replies = row.querySelector('td.posts');
+    final time = row.querySelector('td.lastpost small.time');
 
     result.add(RakuenItem(
       title: htmlDecode(cText(title ?? row)),
@@ -295,6 +313,64 @@ List<RakuenItem> parseTopicList(String html) {
     ));
   }
   return result;
+}
+
+/// 小组帖子列表行 (tr.topic) 的完整字段 (含 是否置顶/精华)
+class GroupTopicRow {
+  final String title;
+  final String href;
+  final String userName;
+  final String userId;
+  final String replies;
+  final String time;
+  final bool pin;
+
+  const GroupTopicRow({
+    this.title = '',
+    this.href = '',
+    this.userName = '',
+    this.userId = '',
+    this.replies = '',
+    this.time = '',
+    this.pin = false,
+  });
+}
+
+/// 解析小组讨论区 (live tr.topic 结构, 兼容置顶行 tr.row_top)
+List<GroupTopicRow> parseGroupForum(String html) {
+  final fragment = htmlMatch(html, '<div id="topic_list', '</body');
+  if (fragment.isEmpty) return const [];
+  final doc = parseDom(removeCF(fragment));
+  final result = <GroupTopicRow>[];
+
+  for (final row in doc.querySelectorAll('tr.topic, tr.row_top')) {
+    final title = row.querySelector('td.subject a');
+    final user = row.querySelector('td.subject a.l');
+    final replies = row.querySelector('td.posts');
+    final time = row.querySelector('td.lastpost small.time');
+    result.add(GroupTopicRow(
+      title: htmlDecode(cText(title ?? row)),
+      href: cData(title, 'href'),
+      userName: htmlDecode(cText(user)),
+      userId: matchAttr(user, 'href', RegExp(r'/user/(\d+)')),
+      replies: cText(replies),
+      time: cText(time),
+      pin: row.className.contains('row_top'),
+    ));
+  }
+  return result;
+}
+
+/// 解析小组会员列表
+/// 页面: https://bgm.tv/group/{name}/members (#memberUserList li.user)
+List<String> parseGroupMembers(String html) {
+  final fragment = htmlMatch(html, '<div id="memberUserList', '</div>');
+  if (fragment.isEmpty) return const [];
+  final doc = parseDom(removeCF(fragment));
+  return [
+    for (final row in doc.querySelectorAll('li.user a.avatar'))
+      htmlDecode(cData(row, 'title')),
+  ];
 }
 
 /// 小组信息解析: 标题/成员数 (页面 https://bgm.tv/group/{name})

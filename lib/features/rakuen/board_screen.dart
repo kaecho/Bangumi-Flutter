@@ -89,7 +89,6 @@ class _BoardTopicList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(boardTopicsProvider(scope));
-    final theme = Theme.of(context);
     return async.when(
       loading: () => const Loading(height: double.infinity),
       error: (e, _) => Center(

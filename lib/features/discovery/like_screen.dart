@@ -7,15 +7,6 @@ import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/score.dart';
 import 'widgets/recommend_list.dart';
 
-/// 类型 Tab (v0 subject_type 数字)
-const kRecommendTypes = [
-  (2, '动画'),
-  (1, '书籍'),
-  (4, '游戏'),
-  (3, '音乐'),
-  (6, '三次元'),
-];
-
 /// 猜你喜欢
 ///
 /// 原项目以用户收藏为数据源做客户端推荐评分, 本页移植该逻辑:

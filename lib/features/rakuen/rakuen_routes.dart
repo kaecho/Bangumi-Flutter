@@ -39,7 +39,7 @@ final List<GoRoute> rakuenRoutes = [
   ),
   GoRoute(
     path: '/rakuen/board/:key',
-    builder: (_, state) => BoardScreen(key: state.pathParameters['key'] ?? 'topiclist'),
+    builder: (_, state) => BoardScreen(boardKey: state.pathParameters['key'] ?? 'topiclist'),
   ),
   GoRoute(
     path: '/rakuen/notify',

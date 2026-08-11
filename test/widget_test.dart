@@ -19,7 +19,7 @@ void main() {
     expect(subject.displayName, '测试');
     expect(subject.rating?.score, 8.5);
     expect(subject.collection?.total, 69);
-    expect(subject.images.common, '//lain.bgm.tv/pic/cover/m/123.jpg');
+    expect(subject.images.common, 'https://lain.bgm.tv/pic/cover/m/123.jpg');
   });
 
   test('CollectionItem.fromJson 解析收藏字段', () {

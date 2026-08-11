@@ -106,8 +106,8 @@ class TinygrailApi {
       avatar: value['Avatar'] as String? ?? '',
       balance: (value['Balance'] as num?)?.toInt() ?? 0,
       principal: (value['Principal'] as num?)?.toInt() ?? 0,
-      amount: (value['Assets'] ?? value['Amount'] ?? 0) as num as int,
-      total: (value['Total'] ?? value['Assets'] ?? 0) as num as int,
+      amount: ((value['Assets'] ?? value['Amount'] ?? 0) as num).toInt(),
+      total: ((value['Total'] ?? value['Assets'] ?? 0) as num).toInt(),
       lastIndex: (value['LastIndex'] as num?)?.toInt() ?? 0,
     );
   }
@@ -183,10 +183,10 @@ class TinygrailApi {
   /// 我的持仓 (chara + ico)
   Future<({List<TinygrailChara> chara, List<TinygrailChara> ico})> fetchMyCharaAssets() async {
     final value = await get(apiTinygrailMyCharaAssets2());
-    if (value is! Map<String, dynamic>) return (chara: const [], ico: const []);
+    if (value is! Map<String, dynamic>) return (chara: <TinygrailChara>[], ico: <TinygrailChara>[]);
     List<TinygrailChara> parse(dynamic raw) => (raw is List)
         ? raw.map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>)).toList()
-        : const [];
+        : <TinygrailChara>[];
     return (chara: parse(value['Characters']), ico: parse(value['Initials']));
   }
 
@@ -286,11 +286,18 @@ class TinygrailApi {
   })> fetchUserLogs(int monoId) async {
     final value = await get(apiTinygrailCharaUserLogs(monoId));
     if (value is! Map<String, dynamic>) {
-      return (bids: const [], asks: const [], bidHistory: const [], askHistory: const [], sacrifices: 0, amount: 0);
+      return (
+        bids: <TinygrailLog>[],
+        asks: <TinygrailLog>[],
+        bidHistory: <TinygrailLog>[],
+        askHistory: <TinygrailLog>[],
+        sacrifices: 0,
+        amount: 0,
+      );
     }
     List<TinygrailLog> parse(dynamic raw) => (raw is List)
         ? raw.map((e) => TinygrailLog.fromJson(e as Map<String, dynamic>)).toList()
-        : const [];
+        : <TinygrailLog>[];
     return (
       bids: parse(value['Bids']),
       asks: parse(value['Asks']),

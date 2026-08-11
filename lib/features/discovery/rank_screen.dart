@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
-import '../../shared/models/subject.dart';
+import '../../shared/models/subject.dart' hide Tag;
 import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/score.dart';
 import 'widgets/discovery_html.dart';
 import 'widgets/paged.dart';
 import 'widgets/subject_card.dart';

@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../shared/widgets/app_bar.dart';
-import '../../shared/widgets/loading.dart';
 import 'widgets/paged.dart';
 
 /// 机核资讯文章 (Anitama 数据源)

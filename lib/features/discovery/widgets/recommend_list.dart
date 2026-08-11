@@ -47,9 +47,18 @@ const kTypeText = {
   5: '抛弃',
 };
 
+/// 类型 Tab (v0 subject_type 数字)
+const kRecommendTypes = [
+  (2, '动画'),
+  (1, '书籍'),
+  (4, '游戏'),
+  (3, '音乐'),
+  (6, '三次元'),
+];
+
 /// 拉取用户某类型的全部收藏 (各状态第一页, 每页 100)
 Future<List<V0CollectionItem>> fetchUserCollectionsAll(
-  WidgetRef ref,
+  Ref ref,
   String userId,
   int subjectType,
 ) async {

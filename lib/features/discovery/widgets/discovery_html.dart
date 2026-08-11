@@ -10,7 +10,6 @@ import 'package:html/parser.dart' as parser;
 import '../../../core/html/bgm_html_parser.dart';
 import '../../../shared/models/group.dart';
 import '../../../shared/models/subject.dart';
-import '../../../shared/models/user.dart';
 
 /// 绝对化图片地址 (//lain.bgm.tv/... → https://lain.bgm.tv/...)
 String _abs(String url) {
@@ -244,8 +243,8 @@ List<TagItem> parseTagList(String html) {
   for (final a in list.querySelectorAll('a.l')) {
     final name = htmlDecode(a.text.trim());
     if (name.isEmpty) continue;
-    final next = a.nextElementSibling;
-    final countText = next == null ? '' : cText(next).replaceAll(RegExp(r'[()]'), '');
+      final next = a.nextElementSibling;
+      final countText = next == null ? '' : cText(next).replaceAll(RegExp(r'[()]'), '');
     tags.add(TagItem(name: name, count: int.tryParse(countText.replaceAll(',', '')) ?? 0));
   }
   return tags;
@@ -362,7 +361,7 @@ ChannelData parseChannel(String html) {
     rank.add(ChannelRankItem(
       id: int.tryParse((a.attributes['href'] ?? '').replaceFirst('/subject/', '')) ?? 0,
       name: htmlDecode(a.attributes['title'] ?? ''),
-      cover: image == null ? '' : _abs(matchAttr(image, 'style', RegExp(r"url\(([^)]+)\)"))),
+      cover: image == null ? '' : _abs(matchAttr(image, 'style', RegExp(r'url\(([^)]+)\)'))),
       follow: cText(grey),
     ));
   }

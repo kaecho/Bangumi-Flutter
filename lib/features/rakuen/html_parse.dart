@@ -156,7 +156,9 @@ String _h1Title(Element? h1) {
   final html = h1.innerHtml;
   final parts = html.split(RegExp(r'<br\s*/?>'));
   if (parts.length > 1) {
-    return core.htmlDecode(core.cText(core.parseDom(parts.last)));
+    // 取 <br> 后的片段并去除残留标签 (html 包对裸文本片段解析不可靠)
+    final raw = parts.last.replaceAll(RegExp(r'<[^>]+>'), '').trim();
+    return core.htmlDecode(raw);
   }
   return core.htmlDecode(h1.text.trim());
 }

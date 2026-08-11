@@ -93,6 +93,7 @@ class _RakuenSearchScreenState extends ConsumerState<RakuenSearchScreen> {
   }
 
   Widget _buildHistory() {
+    final theme = Theme.of(context);
     if (_history.isEmpty) {
       return const Center(child: Text('输入关键词搜索帖子'));
     }

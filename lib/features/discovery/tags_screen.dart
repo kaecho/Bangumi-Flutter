@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/score.dart';
 import 'widgets/discovery_html.dart';
 
 /// 标签类型 Tab
@@ -86,7 +87,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                           padding: const EdgeInsets.only(bottom: 6),
                           child: InkWell(
                             onTap: () => context.push(
-                              '/tags/${_type}/${Uri.encodeComponent(tag.name)}',
+                              '/tags/$_type/${Uri.encodeComponent(tag.name)}',
                             ),
                             borderRadius: BorderRadius.circular(8),
                             child: Padding(
