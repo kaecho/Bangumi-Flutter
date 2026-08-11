@@ -171,7 +171,7 @@ class _ActionBar extends StatelessWidget {
   }
 
   void _showTradeSheet(BuildContext context, {required bool isBid}) {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (_) => _TradeSheet(monoId: monoId, isBid: isBid, current: chara.current),

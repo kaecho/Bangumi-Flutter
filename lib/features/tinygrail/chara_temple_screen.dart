@@ -68,7 +68,7 @@ class TinygrailCharaValhallaScreen extends ConsumerWidget {
                 child: ListTile(
                   leading: const Icon(Icons.gavel_outlined),
                   title: const Text('可拍卖数量'),
-                  trailing: Text('${data.chara}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  trailing: Text('${data.amount}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
               ),
               const SizedBox(height: 8),

@@ -36,6 +36,7 @@ class TinygrailChara {
   final int userAmount;
   final int userTotal;
   final int type;
+  final int amount;
 
   const TinygrailChara({
     this.id = 0,
@@ -71,6 +72,7 @@ class TinygrailChara {
     this.userAmount = 0,
     this.userTotal = 0,
     this.type = 0,
+    this.amount = 0,
   });
 
   factory TinygrailChara.fromJson(Map<String, dynamic> json) {
@@ -89,9 +91,10 @@ class TinygrailChara {
       state: (json['State'] as num?)?.toInt() ?? 0,
       change: (json['Change'] as num?)?.toInt() ?? 0,
       // 列表接口涨跌幅已是百分比, 详情接口为小数
-      fluctuation: fluctuation >= -1 && fluctuation <= 1 && json['Fluctuation'] != null
-          ? fluctuation * 100
-          : fluctuation,
+      fluctuation: (fluctuation >= -1 && fluctuation <= 1 && json['Fluctuation'] != null
+              ? fluctuation * 100
+              : fluctuation)
+          .toDouble(),
       asks: (json['Asks'] as num?)?.toInt() ?? 0,
       bids: (json['Bids'] as num?)?.toInt() ?? 0,
       bonus: (json['Bonus'] as num?)?.toInt() ?? 0,
@@ -114,6 +117,7 @@ class TinygrailChara {
       userAmount: (json['UserAmount'] as num?)?.toInt() ?? 0,
       userTotal: (json['UserTotal'] as num?)?.toInt() ?? 0,
       type: (json['Type'] as num?)?.toInt() ?? 0,
+      amount: (json['Amount'] as num?)?.toInt() ?? 0,
     );
   }
 }

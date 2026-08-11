@@ -93,7 +93,6 @@ class TinygrailCharaListScreen extends ConsumerStatefulWidget {
 class _TinygrailCharaListScreenState extends ConsumerState<TinygrailCharaListScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab = TabController(length: widget.tabs.length, vsync: this);
-  int _index = 0;
 
   @override
   void dispose() {
@@ -118,7 +117,6 @@ class _TinygrailCharaListScreenState extends ConsumerState<TinygrailCharaListScr
                 controller: _tab,
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                onTap: (i) => setState(() => _index = i),
                 tabs: [for (final t in widget.tabs) Tab(text: t.$1)],
               )
             : null,

@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
-import 'tinygrail_widgets.dart';
 
 /// 圣殿列表 (最近圣殿)
 class TinygrailTemplesScreen extends ConsumerWidget {

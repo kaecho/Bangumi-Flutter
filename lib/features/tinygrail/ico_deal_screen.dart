@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/utils/format.dart';
 import '../../shared/widgets/loading.dart';
@@ -23,7 +22,7 @@ class TinygrailIcoDealScreen extends ConsumerWidget {
         error: (_, _) => const Center(child: Text('加载失败')),
         data: (data) {
           final chara = data.chara;
-          final initial = data.logs;
+          final initial = data.initial;
           return ListView(
             padding: const EdgeInsets.all(12),
             children: [

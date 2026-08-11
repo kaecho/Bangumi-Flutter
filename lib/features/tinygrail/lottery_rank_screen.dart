@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,12 +21,13 @@ class _TinygrailLotteryRankScreenState extends ConsumerState<TinygrailLotteryRan
   @override
   void initState() {
     super.initState();
-    _loadCount();
+    unawaited(_loadCount());
   }
 
   Future<void> _loadCount() async {
     final count = await ref.read(tinygrailApiProvider).doDailyCount();
-    if (mounted) setState(() => _count = count);
+    if (!mounted) return;
+    setState(() => _count = count);
   }
 
   Future<void> _scratch() async {
@@ -33,7 +36,7 @@ class _TinygrailLotteryRankScreenState extends ConsumerState<TinygrailLotteryRan
       final result = await ref.read(tinygrailApiProvider).doScratch();
       if (!mounted) return;
       setState(() => _result = result);
-      _loadCount();
+      await _loadCount();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('刮奖失败: $e')));
