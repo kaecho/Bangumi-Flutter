@@ -178,13 +178,19 @@ String apiPm() => '$kApiHost/pm';
 String apiPmChat() => '$kApiHost/pm/chat';
 String apiPmSend() => '$kApiHost/pm/send';
 
+/// 添加好友 (需站点 cookie + formhash gh)
+String apiConnect(String userId, String gh) => '/connect/$userId?gh=$gh&ajax=1';
+
 /// 其他站点同步
 String apiBilibiliSync() => '$kApiHost/bilibili/sync';
 String apiDoubanSync() => '$kApiHost/douban/sync';
 
 /// 点赞 (站内 ajax 接口, 需 host: [kHost])
 /// type: LIKE_TYPE_TIMELINE=40 / LIKE_TYPE_SAY=50; main_id: 吐槽/条目 id
-String apiLike(int type, int mainId) => '/like?type=$type&main_id=$mainId&ajax=1';
+/// 帖子楼层表情点赞 (需站点 cookie + formhash)
+/// POST https://bgm.tv/like?type=&main_id=&id=&value=&gh=&ajax=1
+String apiLike(int type, int mainId, {int id = 0, String value = '赞', String gh = ''}) =>
+    '/like?type=$type&main_id=$mainId&id=$id&value=$value&gh=$gh&ajax=1';
 
 /// GitHub Releases (需 host: [kGithubApiHost])
 const String kGithubApiHost = 'https://api.github.com';

@@ -78,6 +78,7 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (v) => store.setTinygrailEnabled(v),
           ),
           _SectionHeader('其他'),
+          _LinkTile('站点 Cookie 登录', Icons.cookie_outlined, '/settings/cookies'),
           _LinkTile('个人设置', Icons.person_outline, '/settings/user'),
           _LinkTile('源头设置', Icons.link, '/settings/origin'),
           _LinkTile('服务器状态', Icons.monitor_heart_outlined, '/settings/status'),

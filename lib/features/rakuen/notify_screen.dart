@@ -83,6 +83,10 @@ class _NotifyScreenState extends ConsumerState<NotifyScreen> {
                     onPressed: () => ref.invalidate(notifyProvider(1)),
                     child: const Text('重试'),
                   ),
+                  TextButton(
+                    onPressed: () => context.push('/settings/cookies'),
+                    child: const Text('配置站点 Cookie'),
+                  ),
                 ],
               ),
             ),

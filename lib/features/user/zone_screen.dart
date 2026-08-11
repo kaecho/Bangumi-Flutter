@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/site_cookies.dart';
 import '../../shared/models/collection.dart';
 import '../../shared/models/user.dart';
 import '../../shared/widgets/cover.dart';
@@ -270,6 +271,12 @@ class _ZoneHeader extends ConsumerWidget {
                     tooltip: '设置',
                     onPressed: () => context.push('/settings'),
                   ),
+                )
+              else
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: _ConnectButton(userId: userId),
                 ),
             ],
           ),
@@ -351,6 +358,82 @@ class _ZoneHeader extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 加好友按钮 (需站点 Cookie + formhash)
+class _ConnectButton extends ConsumerWidget {
+  final String userId;
+
+  const _ConnectButton({required this.userId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return IconButton(
+      icon: const Icon(Icons.person_add_alt, color: Colors.white),
+      tooltip: '加好友',
+      onPressed: () async {
+        if (!ref.read(canActAsLoggedInProvider)) {
+          if (context.mounted) {
+            await showModalBottomSheet<void>(
+              context: context,
+              builder: (ctx) => SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ListTile(title: Text('加好友需要登录')),
+                    ListTile(
+                      leading: const Icon(Icons.login),
+                      title: const Text('OAuth 登录'),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        context.push('/login');
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.cookie_outlined),
+                      title: const Text('配置站点 Cookie'),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        context.push('/settings/cookies');
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return;
+        }
+        String gh = '';
+        try {
+          gh = await ref.read(formhashProvider.future);
+        } catch (_) {}
+        if (gh.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('操作失败, 请确认已配置站点 Cookie')),
+            );
+          }
+          return;
+        }
+        try {
+          final client = ref.read(apiClientProvider);
+          await client.post(apiConnect(userId, gh), host: kHost);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('已发送好友申请')),
+            );
+          }
+        } catch (_) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('申请失败, 请稍后重试')),
+            );
+          }
+        }
+      },
     );
   }
 }

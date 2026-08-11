@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 1.0.1 - 2026-08-11
+
+### 新增
+
+- 站点 Cookie 登录支持: 全部请求自动附带 bgm.tv Cookie (与原 App 一致)
+  - OAuth 登录后自动从 WebView 捕获 Cookie
+  - 设置 → 站点 Cookie 登录: 可粘贴浏览器导出的 Cookie (JSON 数组或 header 格式) 并检测登录态
+- 吐槽点赞修复: 补全 formhash/楼层/表情参数
+- 用户空间加好友功能 (站点操作, 需 Cookie + formhash)
+- 短信/电波提醒/帖子回复支持仅 Cookie 登录 (无需 OAuth)
+
+### 修复
+
+- Cookie 认证功能在无 Cookie 时给出明确引导 (OAuth 或 Cookie 配置入口)
+
 ## 1.0.0 - 2026-08-11
 
 ### 新增

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/auth/site_cookies.dart';
 import '../../core/utils/format.dart';
 import '../../shared/models/timeline.dart';
 import '../../shared/models/user.dart';
@@ -154,7 +155,25 @@ class _SayHeaderState extends ConsumerState<_SayHeader> {
     setState(() => _liking = true);
     try {
       final client = ref.read(apiClientProvider);
-      await client.post(apiLike(kLikeTypeSay, widget.id), host: kHost);
+      // 站点操作需要 formhash (来自登录页), 依赖站点 Cookie
+      String gh;
+      try {
+        gh = await ref.read(formhashProvider.future);
+      } catch (_) {
+        gh = '';
+      }
+      if (gh.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('点赞需要站点 Cookie 登录, 请到 设置 → 站点 Cookie 登录 配置')),
+          );
+        }
+        return;
+      }
+      await client.post(
+        apiLike(kLikeTypeSay, widget.id, value: '赞', gh: gh),
+        host: kHost,
+      );
       if (mounted) setState(() => _liked = true);
     } catch (_) {
       if (mounted) {

@@ -5,6 +5,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/site_cookies.dart';
 
 /// 登录页: OAuth2 网页授权流程
 /// 1. WebView 打开 https://bgm.tv/oauth/authorize?client_id=...&redirect_uri=https://bgm.tv/dev/app
@@ -42,6 +43,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               final code = uri.queryParameters['code'];
               if (code != null && code.isNotEmpty) {
                 final ok = await ref.read(authControllerProvider.notifier).loginWithCode(code);
+                // 登录成功后捕获 bgm.tv 站点 cookie (PM/电波提醒等需要)
+                try {
+                  final cookies = await WebViewCookieManager()
+                      .getCookies(domain: Uri.parse('https://bgm.tv'));
+                  if (cookies.isNotEmpty) {
+                    final header = cookies
+                        .map((c) => '${c.name}=${c.value}')
+                        .join('; ');
+                    await SiteCookiesStore.instance.setCookieHeader(header);
+                  }
+                } catch (_) {
+                  // cookie 捕获失败不影响 OAuth 登录
+                }
                 if (mounted) {
                   if (ok) {
                     context.go('/progress');

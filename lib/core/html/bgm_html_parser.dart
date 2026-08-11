@@ -426,3 +426,11 @@ String topicHtmlUrl(String topicId, {int page = 1}) {
 String groupTopicsHtmlUrl(String group, {int page = 1}) {
   return 'https://bgm.tv/group/$group/forum${page > 1 ? '?page=$page' : ''}';
 }
+
+/// 解析 formhash (登录页隐藏字段, 点赞/加好友/编辑等操作必需)
+/// 页面: https://bgm.tv/settings/privacy 等登录后页面
+String parseFormhash(String html) {
+  final doc = parseDom(removeCF(html));
+  final input = doc.querySelector('input[name=formhash]');
+  return input?.attributes['value'] ?? '';
+}

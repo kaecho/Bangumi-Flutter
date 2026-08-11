@@ -4,6 +4,7 @@ import 'actions_screen.dart';
 import 'backup_screen.dart';
 import 'blogs_screen.dart';
 import 'catalogs_screen.dart';
+import 'cookie_setting_screen.dart';
 import 'dev_screen.dart';
 import 'friends_screen.dart';
 import 'login_screen.dart';
@@ -65,6 +66,7 @@ final List<GoRoute> userRoutes = [
   // 设置
   GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
   GoRoute(path: '/settings/backup', builder: (_, _) => const BackupScreen()),
+  GoRoute(path: '/settings/cookies', builder: (_, _) => const CookieSettingScreen()),
   GoRoute(path: '/settings/smb', builder: (_, _) => const SmbScreen()),
   GoRoute(path: '/settings/user', builder: (_, _) => const UserSettingScreen()),
   GoRoute(path: '/settings/origin', builder: (_, _) => const OriginSettingScreen()),

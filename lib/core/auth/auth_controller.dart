@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../shared/models/user.dart';
 import '../api/api_client.dart';
 import '../api/api_endpoints.dart';
+import 'site_cookies.dart';
 
 /// 认证状态
 class AuthState {
@@ -130,4 +131,10 @@ final currentUserProvider = Provider<User?>((ref) {
 /// 是否已登录
 final isLoggedInProvider = Provider<bool>((ref) {
   return ref.watch(authControllerProvider).isLoggedIn;
+});
+
+/// 能否以登录态操作: OAuth 登录 或 站点 Cookie 登录 任一
+/// 站点 Cookie 可支持: 短信/电波提醒/点赞/时间线/回复 等站点认证功能
+final canActAsLoggedInProvider = Provider<bool>((ref) {
+  return ref.watch(isLoggedInProvider) || ref.watch(siteCookiesProvider).hasCookies;
 });

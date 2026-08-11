@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/site_cookies.dart';
 import '../../core/utils/format.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
@@ -34,9 +35,10 @@ class PmScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isLogin = ref.watch(isLoggedInProvider);
+    final hasSiteCookies = ref.watch(siteCookiesProvider).hasCookies;
     return Scaffold(
       appBar: AppBar(title: const Text('短信')),
-      body: isLogin ? const _PmInbox() : const _PmLoginGate(),
+      body: isLogin || hasSiteCookies ? const _PmInbox() : const _PmLoginGate(),
     );
   }
 }
@@ -52,11 +54,16 @@ class _PmLoginGate extends StatelessWidget {
         children: [
           const Icon(Icons.mail_outline, size: 48, color: Colors.grey),
           const SizedBox(height: 12),
-          const Text('登录后查看短信'),
+          const Text('短信需要登录后才能查看'),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: () => context.push('/login'),
-            child: const Text('登录'),
+            child: const Text('OAuth 登录'),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => context.push('/settings/cookies'),
+            child: const Text('或使用站点 Cookie 登录'),
           ),
         ],
       ),

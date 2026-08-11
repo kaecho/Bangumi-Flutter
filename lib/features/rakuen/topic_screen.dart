@@ -48,7 +48,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
   Future<void> _sendReply() async {
     final text = _replyController.text.trim();
     if (text.isEmpty) return;
-    if (!ref.read(isLoggedInProvider)) {
+    if (!ref.read(canActAsLoggedInProvider)) {
       await context.push('/login');
       return;
     }
@@ -327,7 +327,7 @@ class _ReplyBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isLogin = ref.watch(isLoggedInProvider);
+    final isLogin = ref.watch(canActAsLoggedInProvider);
     final theme = Theme.of(context);
 
     return SafeArea(
