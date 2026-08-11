@@ -513,3 +513,32 @@ bool isMainSiteValidPage(String html, String marker) {
   if (title.contains('登录')) return false;
   return html.contains(marker);
 }
+
+/// 基础片假名 → 罗马音 (仅单音, 不含拗音/促音/长音, 用于本地管理的标题注音)
+const Map<String, String> _katakanaRomaji = {
+  'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
+  'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
+  'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
+  'タ': 'ta', 'チ': 'chi', 'ツ': 'tsu', 'テ': 'te', 'ト': 'to',
+  'ナ': 'na', 'ニ': 'ni', 'ヌ': 'nu', 'ネ': 'ne', 'ノ': 'no',
+  'ハ': 'ha', 'ヒ': 'hi', 'フ': 'fu', 'ヘ': 'he', 'ホ': 'ho',
+  'マ': 'ma', 'ミ': 'mi', 'ム': 'mu', 'メ': 'me', 'モ': 'mo',
+  'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo',
+  'ラ': 'ra', 'リ': 'ri', 'ル': 'ru', 'レ': 're', 'ロ': 'ro',
+  'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
+  'ガ': 'ga', 'ギ': 'gi', 'グ': 'gu', 'ゲ': 'ge', 'ゴ': 'go',
+  'ザ': 'za', 'ジ': 'ji', 'ズ': 'zu', 'ゼ': 'ze', 'ゾ': 'zo',
+  'ダ': 'da', 'ヂ': 'ji', 'ヅ': 'zu', 'デ': 'de', 'ド': 'do',
+  'バ': 'ba', 'ビ': 'bi', 'ブ': 'bu', 'ベ': 'be', 'ボ': 'bo',
+  'パ': 'pa', 'ピ': 'pi', 'プ': 'pu', 'ペ': 'pe', 'ポ': 'po',
+};
+
+String basicKatakanaToRomaji(String text) {
+  if (text.isEmpty) return '';
+  final buffer = StringBuffer();
+  for (final rune in text.runes) {
+    final ch = String.fromCharCode(rune);
+    buffer.write(_katakanaRomaji[ch] ?? ch);
+  }
+  return buffer.toString();
+}

@@ -2,6 +2,10 @@
 ///
 /// 原项目对超展开/帖子/小组等页面使用 cheerio 解析 HTML (而非 JSON API),
 /// 因为旧版 JSON API 在后端负载均衡下不稳定。此处用 `html` 包等价移植。
+///
+/// 选择器已对照 2026-08 线上页面验证:
+/// - 列表页: /rakuen/{scope}/topiclist?type={type} → li.item_list
+/// - 楼层: #comment_list > div.row_reply (+ div.sub_reply_bg)
 library;
 
 import 'package:html/parser.dart' as parser;
@@ -28,7 +32,7 @@ String removeCF(String html) {
       .replaceAll(RegExp(r'<style[^>]*>.*?</style>', dotAll: true), '');
 }
 
-/// 提取 start 与 end 之间的片段 (等价原项目 htmlMatch)
+/// 提取 start 与 end 之间的片段 (等价原项目 htmlMatch, 不含 end)
 String htmlMatch(String html, String start, String end) {
   final s = html.indexOf(start);
   if (s < 0) return '';
@@ -48,26 +52,8 @@ String cText(Object? el) {
   return htmlDecode(text.replaceAll(RegExp(r'\s+'), ' '));
 }
 
-/// 查找第一个匹配 selector 的节点
-Element? cFind(Element el, String selector) => el.querySelector(selector);
-
 /// 节点 attribute 值
 String cData(Element? el, String attr) => el?.attributes[attr] ?? '';
-
-/// 元素或文档的查询 (html 包: Element 与 Document 均实现此接口)
-String textOf(Object? el) {
-  if (el == null) return '';
-  if (el is Element) return cText(el);
-  if (el is Document) return cText(el);
-  return '';
-}
-
-String? querySelectorOf(Object? el, String selector) {
-  if (el == null) return null;
-  if (el is Element) return el.querySelector(selector)?.outerHtml;
-  if (el is Document) return el.querySelector(selector)?.outerHtml;
-  return null;
-}
 
 /// 匹配 attr 中的内容
 String matchAttr(Element? el, String attr, RegExp regex) {
@@ -76,30 +62,68 @@ String matchAttr(Element? el, String attr, RegExp regex) {
   return m?.group(1) ?? '';
 }
 
-/// 相对中文时间 → epoch 毫秒 (刚刚/N分钟前/N小时前/N天前/M月D日/YYYY-M-D)
-int? relativeEnToEpoch(String time, int loaded) {
-  final t = time.trim();
-  if (t.isEmpty) return null;
-  final now = DateTime.fromMillisecondsSinceEpoch(loaded);
+/// 从 style 中匹配头像地址
+/// eg: background-image:url('//lain.bgm.tv/pic/user/l/xxx.jpg?r=1&hd=1')
+String matchAvatar(Element? el) {
+  return matchAttr(
+    el,
+    'style',
+    RegExp(r"background-image:\s*url\('?([^'\)]+)'?\)"),
+  );
+}
 
-  if (t == '刚刚') return loaded;
-  var m = RegExp(r'^(\d+)分钟前$').firstMatch(t);
-  if (m != null) return loaded - int.parse(m.group(1)!) * 60 * 1000;
-  m = RegExp(r'^(\d+)小时前$').firstMatch(t);
-  if (m != null) return loaded - int.parse(m.group(1)!) * 3600 * 1000;
-  m = RegExp(r'^(\d+)天前$').firstMatch(t);
-  if (m != null) return loaded - int.parse(m.group(1)!) * 86400 * 1000;
-  m = RegExp(r'^(\d+)月(\d+)日$').firstMatch(t);
-  if (m != null) {
-    final dt = DateTime(now.year, int.parse(m.group(1)!), int.parse(m.group(2)!));
-    return dt.millisecondsSinceEpoch;
+/// 中文相对时间 ("3天15时前") 转 epoch 毫秒 (等价原项目 relativeToEpoch)
+int? relativeToEpoch(String time, int loaded) {
+  if (!time.contains('前')) return null;
+  var relativePart = time.trim();
+  final suffixIdx = relativePart.indexOf(' · ');
+  if (suffixIdx > 0) relativePart = relativePart.substring(0, suffixIdx);
+
+  const units = [
+    ('年', 60 * 60 * 24 * 365),
+    ('月', 60 * 60 * 24 * 30),
+    ('周', 60 * 60 * 24 * 7),
+    ('天', 86400),
+    ('时', 3600),
+    ('分', 60),
+    ('秒', 1),
+  ];
+  var offset = 0;
+  for (final (unit, seconds) in units) {
+    final m = RegExp('(\\d+)$unit').firstMatch(relativePart);
+    if (m != null) offset += int.parse(m.group(1)!) * seconds;
   }
-  m = RegExp(r'^(\d{4})-(\d{1,2})-(\d{1,2})$').firstMatch(t);
-  if (m != null) {
-    final dt = DateTime(int.parse(m.group(1)!), int.parse(m.group(2)!), int.parse(m.group(3)!));
-    return dt.millisecondsSinceEpoch;
-  }
-  return null;
+  return offset > 0 ? loaded - offset * 1000 : null;
+}
+
+/// 英文相对时间 ("...1h 2m ago") 转 epoch 毫秒 (等价原项目 relativeEnToEpoch)
+int? relativeEnToEpoch(String time, int loaded) {
+  final clean = time.replaceFirst(RegExp(r'^\.\.\.'), '').trim();
+  if (!clean.contains('ago')) return null;
+  final relative = clean.replaceFirst(RegExp(r'\s*ago$'), '').trim();
+  var offset = 0;
+
+  final y = RegExp(r'(\d+)\s*y(?!\w)').firstMatch(relative);
+  if (y != null) offset += int.parse(y.group(1)!) * 60 * 60 * 24 * 365;
+  final mo = RegExp(r'(\d+)\s*mo(?!\w)').firstMatch(relative);
+  if (mo != null) offset += int.parse(mo.group(1)!) * 60 * 60 * 24 * 30;
+  final w = RegExp(r'(\d+)\s*w(?!\w)').firstMatch(relative);
+  if (w != null) offset += int.parse(w.group(1)!) * 60 * 60 * 24 * 7;
+  final d = RegExp(r'(\d+)\s*d(?!\w)').firstMatch(relative);
+  if (d != null) offset += int.parse(d.group(1)!) * 86400;
+  final h = RegExp(r'(\d+)\s*h(?!\w)').firstMatch(relative);
+  if (h != null) offset += int.parse(h.group(1)!) * 3600;
+  final m = RegExp(r'(\d+)\s*m(?!\w)').firstMatch(relative);
+  if (m != null) offset += int.parse(m.group(1)!) * 60;
+  final s = RegExp(r'(\d+)\s*s(?!\w)').firstMatch(relative);
+  if (s != null) offset += int.parse(s.group(1)!);
+
+  return offset > 0 ? loaded - offset * 1000 : null;
+}
+
+/// 兼容两种格式的相对时间
+int? relativeTimeToEpoch(String time, int loaded) {
+  return relativeEnToEpoch(time, loaded) ?? relativeToEpoch(time, loaded);
 }
 
 /// 超展开列表项 (等价原项目 RakuenItem)
@@ -126,17 +150,29 @@ class RakuenItem {
     this.time = '',
   });
 
-  /// href 形如 /group/xxx 或 /subject/xxx /ep/xxx /person/xxx /character/xxx
+  /// 帖子 id, 如 group/468570
+  /// href 形如 /rakuen/topic/group/468570 或 /group/topic/468570
   String get topicId {
-    final h = href.replaceFirst('/', '');
+    var h = href;
+    h = h.replaceFirst(RegExp(r'^/rakuen/topic/'), '');
+    h = h.replaceFirst(RegExp(r'^/group/topic/'), 'group/');
+    h = h.replaceFirst(RegExp(r'^/subject/topic/'), 'subject/');
+    h = h.replaceFirst(RegExp(r'^/character/topic/'), 'crt/');
+    h = h.replaceFirst(RegExp(r'^/person/topic/'), 'prsn/');
+    h = h.replaceFirst(RegExp(r'^/ep/'), 'ep/');
+    h = h.replaceFirst(RegExp(r'^/'), '');
     return h;
   }
 
-  int? get replyCount => int.tryParse(replies.trim());
+  int? get replyCount {
+    final m = RegExp(r'\((\+?)(\d+)\)').firstMatch(replies.trim());
+    if (m != null) return int.tryParse(m.group(2)!);
+    return int.tryParse(replies.trim());
+  }
 }
 
 /// 解析超展开列表页 (等价原项目 cheerioRakuen)
-/// 页面: https://bgm.tv/rakuen/{scope}?type={type}
+/// 页面: https://bgm.tv/rakuen/{scope}/topiclist?type={type}
 List<RakuenItem> parseRakuenList(String html) {
   final fragment = htmlMatch(html, '<div id="eden_tpc_list', '</body');
   if (fragment.isEmpty) return const [];
@@ -149,12 +185,13 @@ List<RakuenItem> parseRakuenList(String html) {
     final title = inner?.querySelector('a.title');
     final rowInner = inner?.querySelector('span.row');
     final group = rowInner?.querySelector('a');
+    final avatarLink = row.querySelector('a.avatar');
 
     result.add(RakuenItem(
       title: htmlDecode(cText(title ?? row)),
-      avatar: matchAttr(avatarNeue, 'style', RegExp(r"background-image:\s*url\('?([^'\)]+)'?\)")),
+      avatar: matchAvatar(avatarNeue),
       userId: cData(avatarNeue, 'data-user'),
-      userName: htmlDecode(cData(row.querySelector('a.avatar'), 'title')),
+      userName: htmlDecode(cData(avatarLink, 'title')),
       href: cData(title, 'href'),
       replies: cText(inner?.querySelector('small.grey') ?? row),
       group: htmlDecode(cText(group ?? row)),
@@ -166,7 +203,7 @@ List<RakuenItem> parseRakuenList(String html) {
 }
 
 /// 帖子楼层 (等价原项目 cheerioComments)
-/// 页面: https://bgm.tv/rakuen/topic/{topicId}
+/// 页面: https://bgm.tv/group/topic/{id} 等
 class RakuenFloor {
   final String id;
   final String time;
@@ -176,6 +213,7 @@ class RakuenFloor {
   final String userName;
   final String userSign;
   final String messageHtml;
+  final List<RakuenFloor> subReplies;
 
   const RakuenFloor({
     this.id = '',
@@ -186,31 +224,37 @@ class RakuenFloor {
     this.userName = '',
     this.userSign = '',
     this.messageHtml = '',
+    this.subReplies = const [],
   });
+}
+
+RakuenFloor _parseFloor(Element row) {
+  final action = cText(row.querySelector('.action small') ?? row);
+  final info = action.split(' - ');
+  final name = row.querySelector('.inner .userInfo a.l') ?? row.querySelector('a.l');
+  return RakuenFloor(
+    id: cData(row, 'id').replaceFirst('post_', ''),
+    time: info.length > 1 ? info[1] : '',
+    floor: info.isNotEmpty ? info[0] : '',
+    avatar: matchAvatar(row.querySelector('span.avatarNeue')),
+    userId: matchAttr(name, 'href', RegExp(r'/user/(\d+)')),
+    userName: htmlDecode(cText(name)),
+    userSign: cText(row.querySelector('.inner .sign')),
+    messageHtml: row.querySelector('.reply_content > .message')?.innerHtml ?? '',
+    subReplies: [
+      for (final sub in row.querySelectorAll('div.topic_sub_reply > div.sub_reply_bg'))
+        _parseFloor(sub),
+    ],
+  );
 }
 
 List<RakuenFloor> parseRakuenFloors(String html) {
   final fragment = htmlMatch(html, '<div id="comment_list"', '<div id="footer">');
   if (fragment.isEmpty) return const [];
   final doc = parseDom(removeCF(fragment));
-  final result = <RakuenFloor>[];
-
-  for (final row in doc.querySelectorAll('.commentList .row_replyclearit')) {
-    final info = cText(row.querySelector('div.action small') ?? row).split(' - ');
-    final name = row.querySelector('a.l');
-    result.add(RakuenFloor(
-      id: cData(row, 'id').replaceFirst('post_', ''),
-      time: info.length > 1 ? info[1] : '',
-      floor: info.isNotEmpty ? info[0] : '',
-      avatar: matchAttr(
-          row.querySelector('span.avatarNeue'), 'style', RegExp(r"background-image:\s*url\('?([^'\)]+)'?\)")),
-      userId: matchAttr(name, 'href', RegExp(r'/user/(\d+)')),
-      userName: cText(name ?? row),
-      userSign: cText(row.querySelector('span.sign') ?? row),
-      messageHtml: row.querySelector('.reply_content > .message')?.innerHtml ?? '',
-    ));
-  }
-  return result;
+  return [
+    for (final row in doc.querySelectorAll('#comment_list > div.row_reply')) _parseFloor(row),
+  ];
 }
 
 /// 解析分页: 当前页/总页数 (bgm.tv 分页 DOM)
@@ -227,27 +271,27 @@ List<RakuenFloor> parseRakuenFloors(String html) {
   return (page: 1, pageTotal: 1);
 }
 
-/// 小组/条目/章节 帖子列表页解析
-/// 页面: https://bgm.tv/group/{name}/topics?page=N 等
+/// 小组/条目 帖子列表页解析
+/// 页面: https://bgm.tv/group/{name}/forum 等 (table > tr.topic)
 List<RakuenItem> parseTopicList(String html) {
   final fragment = htmlMatch(html, '<div id="topic_list', '</body');
   if (fragment.isEmpty) return const [];
   final doc = parseDom(removeCF(fragment));
   final result = <RakuenItem>[];
 
-  for (final row in doc.querySelectorAll('ul.topicList li')) {
+  for (final row in doc.querySelectorAll('tr.topic')) {
     final title = row.querySelector('a.topic');
-    final user = row.querySelector('a.l');
-    final replies = row.querySelector('small.grey');
+    final user = row.querySelector('td a.l') ?? row.querySelector('a.l');
+    final replies = row.querySelector('td .reply_count') ?? row.querySelector('td.num');
     final time = row.querySelector('small.time');
 
     result.add(RakuenItem(
       title: htmlDecode(cText(title ?? row)),
       href: cData(title, 'href'),
-      userName: htmlDecode(cText(user ?? row)),
+      userName: htmlDecode(cText(user)),
       userId: matchAttr(user, 'href', RegExp(r'/user/(\d+)')),
-      replies: cText(replies ?? row),
-      time: cText(time ?? row),
+      replies: cText(replies),
+      time: cText(time),
     ));
   }
   return result;
@@ -266,32 +310,43 @@ List<RakuenItem> parseTopicList(String html) {
   );
 }
 
-/// 帖子标题 + 主楼内容 (页面 https://bgm.tv/rakuen/topic/{topicId})
+/// 帖子标题 + 主楼内容 (页面 https://bgm.tv/group/topic/{id})
+/// 主楼: div.postTopic .topic_content; 标题 h1 (换行分隔 中文/日文名)
 ({String title, String user, String contentHtml}) parseTopicHeader(String html) {
   final doc = parseDom(removeCF(html));
   final title = doc.querySelector('h1') ?? doc.querySelector('#topic_subject');
-  final user = doc.querySelector('.post_subject a.l') ?? doc.querySelector('a.avatar');
-  final content = doc.querySelector('#comment_list .message') ??
-      doc.querySelector('.reply_content .message');
+  final user = doc.querySelector('.postTopic a.l') ?? doc.querySelector('a.avatar');
+  final content = doc.querySelector('.postTopic .topic_content') ??
+      doc.querySelector('#comment_list .message');
   return (
-    title: htmlDecode(title?.text.trim() ?? ''),
+    title: htmlDecode((title?.text ?? '').replaceFirst(RegExp(r'\s*<br\s*/?>'), ' ').trim()),
     user: htmlDecode(user?.text.trim() ?? ''),
     contentHtml: content?.innerHtml ?? '',
   );
 }
 
-/// 生成抓取用的 URL
+/// 生成抓取用的 URL (列表页: /rakuen/{scope}/topiclist?type={type})
 String rakueHtmlUrl(String scope, String type) {
   final t = type.isEmpty ? '' : '?type=$type';
-  return 'https://bgm.tv/rakuen/$scope$t';
+  return 'https://bgm.tv/rakuen/$scope/topiclist$t';
 }
 
-/// 主题页 URL
+/// 主题页 URL (注意: /rakuen/topic/group/N 会 JS 跳转到 /group/topic/N)
 String topicHtmlUrl(String topicId, {int page = 1}) {
-  return 'https://bgm.tv/rakuen/topic/$topicId${page > 1 ? '?page=$page' : ''}';
+  final type = topicId.split('/').first;
+  final id = topicId.split('/').last;
+  final path = switch (type) {
+    'group' => '/group/topic/$id',
+    'subject' => '/subject/topic/$id',
+    'ep' => '/ep/$id',
+    'prsn' => '/person/$id',
+    'crt' => '/character/$id',
+    _ => '/rakuen/topic/$topicId',
+  };
+  return 'https://bgm.tv$path${page > 1 ? '?page=$page' : ''}';
 }
 
-/// 小组话题页 URL
+/// 小组话题页 URL (/group/{name}/forum)
 String groupTopicsHtmlUrl(String group, {int page = 1}) {
-  return 'https://bgm.tv/group/$group/topics${page > 1 ? '?page=$page' : ''}';
+  return 'https://bgm.tv/group/$group/forum${page > 1 ? '?page=$page' : ''}';
 }

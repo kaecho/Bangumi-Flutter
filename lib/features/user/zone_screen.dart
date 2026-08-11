@@ -126,8 +126,6 @@ class ZoneScreen extends ConsumerStatefulWidget {
 class _ZoneScreenState extends ConsumerState<ZoneScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab = TabController(length: 5, vsync: this);
-  String _type = 'anime';
-  int _status = 0;
 
   @override
   void dispose() {
@@ -136,16 +134,14 @@ class _ZoneScreenState extends ConsumerState<ZoneScreen>
   }
 
   void _selectStat(String type, int status) {
-    setState(() {
-      _type = type;
-      _status = status;
-    });
+    ref.read(zoneScreenControllerProvider.notifier).setFilter(type, status);
     _tab.animateTo(0);
   }
 
   @override
   Widget build(BuildContext context) {
     final userAsync = ref.watch(zoneUserProvider(widget.userId));
+    final filter = ref.watch(zoneScreenControllerProvider);
     return Scaffold(
       body: userAsync.when(
         loading: () => const Loading(),
@@ -180,7 +176,11 @@ class _ZoneScreenState extends ConsumerState<ZoneScreen>
               child: TabBarView(
                 controller: _tab,
                 children: [
-                  _ZoneCollectionsTab(userId: widget.userId, type: _type, status: _status),
+                  _ZoneCollectionsTab(
+                    userId: widget.userId,
+                    type: filter.type,
+                    status: filter.status,
+                  ),
                   UserTimelineBody(userId: widget.userId),
                   UserBlogsList(userId: widget.userId),
                   UserCatalogsList(userId: widget.userId),

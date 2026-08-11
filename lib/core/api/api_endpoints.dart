@@ -104,12 +104,16 @@ String apiPersonSubjects(int id) => '$kApiHost/person/$id/subjects';
 String apiGroup(String name) => '$kApiHost/group/$name';
 String apiGroupTopics(String name) => '$kApiHost/group/$name/topics';
 String apiGroupMembers(String name) => '$kApiHost/group/$name/members';
+String apiGroupJoin(String name) => '$kApiHost/group/$name/join';
 String apiTopic(String topicId) => '$kApiHost/topic/$topicId';
 String apiTopicNewReply(String topicId) => '$kApiHost/topic/$topicId/new_reply';
 String apiBlog(String blogId) => '$kApiHost/blog/$blogId';
 String apiBlogNewReply(String blogId) => '$kApiHost/blog/$blogId/new_reply';
 String apiComment(int id) => '$kApiHost/comment/$id';
 String apiSearch(String keywords) => '$kApiHost/search/subject/$keywords';
+String apiSearchTopic(String keywords, {int page = 1}) =>
+    '$kApiHost/search/topic/$keywords?page=$page';
+String apiUserTopics(String userId) => '$kApiHost/user/$userId/topics';
 
 /// 超展开
 String apiRakuenBoard() => '$kApiHost/rakuen/board';
@@ -239,6 +243,171 @@ String apiTinygrailAuction(int page, int limit) =>
     '$kTinygrailHost/api/auction/list/$page/$limit';
 String apiTinygrailAuctionBid(int auctionId, int price) =>
     '$kTinygrailHost/api/auction/bid/$auctionId/$price';
+
+/// 小圣杯 (live API 正确路径; 与上方旧版 apiTinygrail* 并存, 均为新增)
+/// 角色列表: type = mvc 最高市值 / mrc 最大涨幅 / mfc 最大跌幅 / msrc 最高股息 /
+/// mvi ico资金 / mpi ico人气 / mri ico结束 / rai ico活跃 / recent 最近活跃 /
+/// nbc 新番活跃 / tnbc 新番市值 / bid 买盘 / asks 卖盘
+String apiTinygrailRankList(String type, int page, int limit) =>
+    '$kTinygrailHost/api/chara/$type/$page/$limit';
+
+/// 角色详情
+String apiTinygrailCharaDetail(int monoId) => '$kTinygrailHost/api/chara/$monoId';
+
+/// 深度图
+String apiTinygrailCharaDepth(int monoId) => '$kTinygrailHost/api/chara/depth/$monoId';
+
+/// 奖池
+String apiTinygrailCharaPool2(int monoId) => '$kTinygrailHost/api/chara/pool/$monoId';
+
+/// K 线 (date 形如 2026-08-11T00:00:00+08:00 或 2026-08-11)
+String apiTinygrailCharts2(int monoId, String date) =>
+    '$kTinygrailHost/api/chara/charts/$monoId/$date';
+
+/// 发行价 (历史第一笔成交)
+String apiTinygrailIssuePrice2(int monoId) =>
+    '$kTinygrailHost/api/chara/charts/$monoId/2021-08-08';
+
+/// 英灵殿
+String apiTinygrailValhalla(int page, int limit) =>
+    '$kTinygrailHost/api/chara/user/chara/tinygrail/$page/$limit';
+
+/// 幻想乡
+String apiTinygrailFantasy(int page, int limit) =>
+    '$kTinygrailHost/api/chara/user/chara/blueleaf/$page/$limit';
+
+/// 精炼排行
+String apiTinygrailRefineRank(int page, int limit) =>
+    '$kTinygrailHost/api/chara/refine/temple/$page/$limit';
+
+/// 番市首富
+String apiTinygrailRichList(int page, int limit) => '$kTinygrailHost/api/chara/top/$page/$limit';
+
+/// 圣星 (通天塔)
+String apiTinygrailBabel(int page, int limit) => '$kTinygrailHost/api/chara/babel/$page/$limit';
+
+/// 圣星记录
+String apiTinygrailStarLogList(int page, int limit) =>
+    '$kTinygrailHost/api/chara/star/log/$page/$limit';
+
+/// 每周萌王
+String apiTinygrailTopWeek() => '$kTinygrailHost/api/chara/topweek';
+
+/// 每周萌王历史 (一页含两周数据)
+String apiTinygrailTopWeekHistory(int prev) =>
+    '$kTinygrailHost/api/chara/topweek/history/$prev';
+
+/// 搜索
+String apiTinygrailSearch2(String keyword) => '$kTinygrailHost/api/chara/search?keyword=$keyword';
+
+/// 用户资产 (hash 为空表示自己)
+String apiTinygrailUserAssets(String hash) =>
+    '$kTinygrailHost/api/chara/user/assets${hash.isEmpty ? '' : '/$hash'}';
+
+/// 用户资产概览 (characters + initials)
+String apiTinygrailUserCharaAssets2(String hash) =>
+    '$kTinygrailHost/api/chara/user/assets/$hash/true';
+
+/// 我的持仓 (只显示有流动股的角色)
+String apiTinygrailMyCharaAssets2() => '$kTinygrailHost/api/chara/user/assets/0/true';
+
+/// 用户挂单和交易记录
+String apiTinygrailCharaUserLogs(int monoId) => '$kTinygrailHost/api/chara/user/$monoId';
+
+/// 用户所有角色信息
+String apiTinygrailUserCharaAll2(String hash) =>
+    '$kTinygrailHost/api/chara/user/chara/$hash/1/1000';
+
+/// 用户所有圣殿信息
+String apiTinygrailUserTemple2(String hash) =>
+    '$kTinygrailHost/api/chara/user/temple/$hash/1/1000';
+
+/// 用户圣殿数量
+String apiTinygrailUserTempleTotal2(String hash) =>
+    '$kTinygrailHost/api/chara/user/temple/$hash/1/1';
+
+/// 用户角色数量
+String apiTinygrailUserCharaTotal2(String hash) =>
+    '$kTinygrailHost/api/chara/user/chara/$hash/1/1';
+
+/// 可拍卖信息
+String apiTinygrailValhallaChara2(int monoId) =>
+    '$kTinygrailHost/api/chara/user/$monoId/tinygrail/false';
+
+/// 我的买单
+String apiTinygrailMyBids() => '$kTinygrailHost/api/chara/bids/0/1/800';
+
+/// 我的卖单
+String apiTinygrailMyAsks() => '$kTinygrailHost/api/chara/asks/0/1/800';
+
+/// 我的拍卖列表
+String apiTinygrailMyAuction() => '$kTinygrailHost/api/chara/user/auction/1/200';
+
+/// [POST] 当前拍卖状态 (body 为角色 ID 数组)
+String apiTinygrailAuctionStatus() => '$kTinygrailHost/api/chara/auction/list';
+
+/// [POST] 竞拍
+String apiTinygrailAuctionBid2(int monoId, int price, int amount) =>
+    '$kTinygrailHost/api/chara/auction/$monoId/$price/$amount';
+
+/// [POST] 取消竞拍
+String apiTinygrailAuctionCancel(int id) => '$kTinygrailHost/api/chara/auction/cancel/$id';
+
+/// 上周拍卖结果
+String apiTinygrailAuctionLastWeek(int monoId) =>
+    '$kTinygrailHost/api/chara/auction/list/$monoId/1';
+
+/// 资金日志
+String apiTinygrailBalance2(int page) => '$kTinygrailHost/api/chara/user/balance/$page/200';
+
+/// [POST] 启动 ICO
+String apiTinygrailInit2(int monoId) => '$kTinygrailHost/api/chara/init/$monoId/10000';
+
+/// ICO 参与者
+String apiTinygrailInitialUsers(int icoId, int page) =>
+    '$kTinygrailHost/api/chara/initial/users/$icoId/$page';
+
+/// [POST] 参与 ICO
+String apiTinygrailJoin2(int icoId, int amount) => '$kTinygrailHost/api/chara/join/$icoId/$amount';
+
+/// 董事会
+String apiTinygrailUsers2(int monoId) => '$kTinygrailHost/api/chara/users/$monoId/1/80';
+
+/// 最近圣殿
+String apiTinygrailTempleLast2(int page, int limit) =>
+    '$kTinygrailHost/api/chara/temple/last/$page/$limit';
+
+/// 我的某角色圣殿
+String apiTinygrailMyTemple2(String hash, int keyword) =>
+    '$kTinygrailHost/api/chara/user/temple/$hash/1/1?keyword=$keyword';
+
+/// [POST] 灌注星之力
+String apiTinygrailCharaStar2(int monoId, int amount) =>
+    '$kTinygrailHost/api/chara/star/$monoId/$amount';
+
+/// [POST] 角色关联
+String apiTinygrailLink(int monoId, int toMonoId) =>
+    '$kTinygrailHost/api/chara/link/$monoId/$toMonoId';
+
+/// [POST] 批量获取角色 (body 为角色 ID 数组)
+String apiTinygrailCharaList2() => '$kTinygrailHost/api/chara/list';
+
+/// 我的道具
+String apiTinygrailMyItems() => '$kTinygrailHost/api/chara/user/item/0/1/50';
+
+/// [POST] 使用道具 (type: chaos/guidepost/stardust/starbreak/fisheye/refine)
+String apiTinygrailMagic(int monoId, String type, int toMonoId, int amount, bool isTemple) =>
+    '$kTinygrailHost/api/chara/magic/$monoId/$type/$toMonoId/$amount/${isTemple ? 1 : 0}';
+
+/// 环保刮刮乐
+String apiTinygrailScratch() => '$kTinygrailHost/api/event/scratch/bonus2';
+
+/// 今日刮刮乐次数
+String apiTinygrailDailyCount() => '$kTinygrailHost/api/event/daily/count/10';
+
+/// 小圣杯 OAuth 授权页 (bgm.tv 登录授权)
+String kTinygrailOauthAuthorize() =>
+    '$kHost/oauth/authorize?client_id=$kTinygrailAppId&response_type=code&redirect_uri=$kTinygrailOauthRedirect';
 
 /// 发现页: 目录 / 日志 / 小组 / 维基 / 系列
 String apiIndexList({int page = 1}) => '$kApiHost/index/list?page=$page';
