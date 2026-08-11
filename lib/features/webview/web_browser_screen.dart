@@ -36,8 +36,13 @@ class _WebBrowserScreenState extends State<WebBrowserScreen> {
           }),
           onPageFinished: (_) => setState(() => _loading = false),
         ),
-      )
-      ..loadRequest(Uri.parse(widget.url));
+      );
+    if (widget.url.isEmpty) {
+      _error = '链接无效';
+      _loading = false;
+    } else {
+      _controller.loadRequest(Uri.parse(widget.url));
+    }
   }
 
   void _refresh() {
