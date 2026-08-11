@@ -30,12 +30,34 @@ class LogStore {
 
 /// 日志查看 (移植自原项目 screens/web-view/log)
 /// 路由: /log
-class LogScreen extends ConsumerWidget {
+class LogScreen extends ConsumerStatefulWidget {
   const LogScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final logs = LogStore.read();
+  ConsumerState<LogScreen> createState() => _LogScreenState();
+}
+
+class _LogScreenState extends ConsumerState<LogScreen> {
+  late List<String> _logs;
+
+  @override
+  void initState() {
+    super.initState();
+    _logs = LogStore.read();
+  }
+
+  Future<void> _clear() async {
+    await LogStore.clear();
+    setState(() => _logs = const []);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('日志已清空')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('日志'),
@@ -43,26 +65,18 @@ class LogScreen extends ConsumerWidget {
           IconButton(
             tooltip: '清空日志',
             icon: const Icon(Icons.delete_sweep_outlined),
-            onPressed: () async {
-              await LogStore.clear();
-              if (context.mounted) {
-                ref.invalidateSelf();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('日志已清空')),
-                );
-              }
-            },
+            onPressed: _logs.isEmpty ? null : _clear,
           ),
         ],
       ),
-      body: logs.isEmpty
+      body: _logs.isEmpty
           ? const Center(child: Text('暂无日志'))
           : ListView.separated(
               padding: const EdgeInsets.all(12),
-              itemCount: logs.length,
+              itemCount: _logs.length,
               separatorBuilder: (_, _) => const SizedBox(height: 4),
               itemBuilder: (context, index) => Text(
-                logs[index],
+                _logs[index],
                 style: const TextStyle(fontSize: 12, fontFamily: 'monospace', height: 1.4),
               ),
             ),

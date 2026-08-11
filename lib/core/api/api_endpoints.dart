@@ -245,6 +245,23 @@ String apiRandomAvatar() => 'https://api.yimian.xyz/img?type=head';
 String apiAnitabi(int subjectId) => 'https://api.anitabi.cn/bangumi/$subjectId/lite';
 String apiBgmStatus() => 'https://bgm-status.ry.mk';
 
+/// 用户域: 主站 HTML 页面 (调用时传 host: kHost)
+/// 旧版 JSON API 已下线, 日志/好友/目录/时光机/短信仅主站提供
+String apiUserTimelineHtml(String userId, {String type = 'all', int page = 1}) =>
+    '$kHost/user/$userId/timeline?type=$type&page=$page&ajax=1';
+String apiUserBlogsHtml(String userId, {int page = 1}) =>
+    '$kHost/user/$userId/blog?page=$page';
+String apiUserCatalogsHtml(String userId, {int page = 1}) =>
+    '$kHost/user/$userId/index?page=$page';
+String apiUserFriendsHtml(String userId) => '$kHost/user/$userId/friends';
+String apiUserMonoHtml(String userId, {String kind = 'character', int page = 1}) =>
+    '$kHost/user/$userId/mono/$kind?page=$page';
+String apiPmInboxHtml({int page = 1}) => '$kHost/pm/inbox.chii?page=$page';
+String apiPmConversationHtml(int conversationId, {int page = 1, String? thread}) =>
+    '$kHost/pm/conversation/$conversationId.chii?page=$page${thread != null ? '&thread=$thread' : ''}';
+String apiPmComposeParamsHtml(String userId) => '$kHost/pm/compose/$userId.chii';
+String apiPmCreateHtml() => '$kHost/pm/create.chii';
+
 /// 图片: 条目封面
 String coverUrl(String url, {String size = 'm'}) {
   if (url.isEmpty) return '';

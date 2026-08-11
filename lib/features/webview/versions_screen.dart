@@ -65,7 +65,7 @@ final releaseCheckProvider = FutureProvider<GitHubRelease?>((ref) async {
     receiveTimeout: const Duration(seconds: 10),
   ));
   try {
-    final resp = await dio.get('$kGithubApiHost${apiGithubReleasesLatest()}');
+    final resp = await dio.get<dynamic>('$kGithubApiHost${apiGithubReleasesLatest()}');
     final data = resp.data as Map<String, dynamic>?;
     if (data == null) return null;
     return GitHubRelease.fromJson(data);
@@ -109,51 +109,51 @@ class VersionsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...release.when(
-            loading: () => const [Card(child: ListTile(title: Text('正在检查更新...')))],
-            error: (_, _) => const [Card(child: ListTile(title: Text('检查更新失败')))],
-            data: (value) {
-              if (value == null) {
-                return const [Card(child: ListTile(title: Text('检查更新失败'))]);
-              }
-              final newer = isNewerVersion(value.tagName, kAppVersion);
-              return [
-                Card(
-                  color: newer ? scheme.primaryContainer : null,
-                  child: ListTile(
-                    leading: Icon(
-                      newer ? Icons.system_update_alt : Icons.check_circle_outline,
-                      color: scheme.primary,
-                    ),
-                    title: Text(newer ? '发现新版本 ${value.tagName}' : '已是最新版本'),
-                    subtitle: Text(newer ? value.name : '当前版本已是最新'),
-                    trailing: newer
-                        ? TextButton(
-                            onPressed: () => launchUrl(Uri.parse(value.htmlUrl)),
-                            child: const Text('查看'),
-                          )
-                        : null,
-                  ),
-                ),
-              ];
-            },
-          ),
+          ..._releaseCards(context, release),
           const SizedBox(height: 16),
           const Text('更新日志', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          changelog.when(
-            loading: () => const Center(child: Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(),
-            )),
-            error: (_, _) => const Text('更新日志加载失败'),
-            data: (text) => SelectableText(
-              text,
-              style: const TextStyle(fontSize: 13, height: 1.6),
+          SelectableText(
+            changelog.when(
+              loading: () => '加载中...',
+              error: (_, _) => '更新日志加载失败',
+              data: (text) => text,
             ),
+            style: const TextStyle(fontSize: 13, height: 1.6),
           ),
         ],
       ),
     );
+  }
+
+  List<Widget> _releaseCards(BuildContext context, AsyncValue<GitHubRelease?> release) {
+    final scheme = Theme.of(context).colorScheme;
+    if (release.isLoading) {
+      return const [Card(child: ListTile(title: Text('正在检查更新...')))];
+    }
+    final value = release.valueOrNull;
+    if (value == null) {
+      return const [Card(child: ListTile(title: Text('检查更新失败')))];
+    }
+    final newer = isNewerVersion(value.tagName, kAppVersion);
+    return [
+      Card(
+        color: newer ? scheme.primaryContainer : null,
+        child: ListTile(
+          leading: Icon(
+            newer ? Icons.system_update_alt : Icons.check_circle_outline,
+            color: scheme.primary,
+          ),
+          title: Text(newer ? '发现新版本 ${value.tagName}' : '已是最新版本'),
+          subtitle: Text(newer ? value.name : '当前版本已是最新'),
+          trailing: newer
+              ? TextButton(
+                  onPressed: () => launchUrl(Uri.parse(value.htmlUrl)),
+                  child: const Text('查看'),
+                )
+              : null,
+        ),
+      ),
+    ];
   }
 }
