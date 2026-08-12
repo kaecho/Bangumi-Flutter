@@ -159,8 +159,19 @@ String apiUserLikes(String userId) => '$kApiHost/user/$userId/likes';
 /// v0
 String apiV0Me() => '$kApiV0/me';
 String apiV0Users(String userId) => '$kApiV0/users/$userId';
-String apiV0UsersCollections(String userId, String subjectType, int limit, int offset, String type) =>
-    '$kApiV0/users/$userId/collections?subject_type=$subjectType&type=$type&limit=$limit&offset=$offset';
+/// v0 subject_type 接受整数: 1 book / 2 anime / 3 music / 4 game / 6 real
+/// 传字符串名时在此映射,已是数字串的原样保留。
+String apiV0UsersCollections(String userId, String subjectType, int limit, int offset, String type) {
+  final st = switch (subjectType) {
+    'book' => '1',
+    'anime' => '2',
+    'music' => '3',
+    'game' => '4',
+    'real' => '6',
+    _ => subjectType,
+  };
+  return '$kApiV0/users/$userId/collections?subject_type=$st&type=$type&limit=$limit&offset=$offset';
+}
 String apiV0UsersCollection(String userId, int subjectId) =>
     '$kApiV0/users/$userId/collections/$subjectId';
 String apiV0UsersEpisodes(String userId, int subjectId) =>
