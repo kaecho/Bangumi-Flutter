@@ -77,6 +77,14 @@ class SettingsScreen extends ConsumerWidget {
             value: store.tinygrailEnabled,
             onChanged: (v) => store.setTinygrailEnabled(v),
           ),
+          _SectionHeader('调试'),
+          _SwitchTile(
+            title: '调试模式',
+            subtitle: '记录 API 请求日志到文件, 便于排查问题',
+            value: store.debugLog,
+            onChanged: (v) => store.setDebugLog(v),
+          ),
+          _LinkTile('调试日志', Icons.terminal, '/settings/dev'),
           _SectionHeader('其他'),
           _LinkTile('站点 Cookie 登录', Icons.cookie_outlined, '/settings/cookies'),
           _LinkTile('个人设置', Icons.person_outline, '/settings/user'),
@@ -87,7 +95,6 @@ class SettingsScreen extends ConsumerWidget {
           _LinkTile('本地管理', Icons.folder_outlined, '/settings/smb'),
           _LinkTile('本地备份', Icons.inbox_outlined, '/settings/backup'),
           _LinkTile('赞助', Icons.favorite_outline, '/settings/sponsor'),
-          _LinkTile('开发', Icons.code, '/settings/dev'),
         ],
       ),
     );

@@ -109,6 +109,14 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 调试模式: 开启后记录 API 请求/响应日志到文件 (设置 → 开发 → 调试日志)
+  bool get debugLog => _prefs.getBool('setting_debug_log') ?? false;
+
+  Future<void> setDebugLog(bool value) async {
+    await _prefs.setBool('setting_debug_log', value);
+    notifyListeners();
+  }
+
   /// 超展开: 屏蔽规则 (用户/小组/条目/人物 id 列表)
   List<String> get rakuenBlockedUsers => _prefs.getStringList('rakuen_block_users') ?? const [];
 

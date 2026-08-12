@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/site_cookies.dart';
+import '../debug/debug_log.dart';
+import '../storage/settings_store.dart';
 import 'api_endpoints.dart';
 
 /// 全局 HTTP 客户端
@@ -15,7 +18,7 @@ import 'api_endpoints.dart';
 ///   供 PM/电波提醒/点赞/formhash 等站点认证功能使用)
 /// - 请求超时 15s
 class ApiClient {
-  ApiClient({this._tokenProvider, this._cookieProvider});
+  ApiClient({this._tokenProvider, this._cookieProvider, this.onLog});
 
   late final Dio _dio = Dio(
     BaseOptions(
@@ -44,6 +47,46 @@ class ApiClient {
   /// 站点 Cookie header (chii_auth 等), 附加到所有请求
   final String? Function()? _cookieProvider;
 
+  /// 调试日志回调 (由调用方决定是否落盘; 不记录 Authorization/Cookie 等敏感信息)
+  final void Function(String line)? onLog;
+
+  void _log(String line) => onLog?.call(line);
+
+  /// 执行请求并记录日志: 方法 + URL + 状态码/错误 + 耗时
+  Future<Response<T>> _track<T>(
+    String method,
+    Uri uri,
+    Future<Response<T>> Function() run,
+  ) async {
+    final sw = Stopwatch()..start();
+    try {
+      final resp = await run();
+      _log('$method $uri → ${resp.statusCode} (${sw.elapsedMilliseconds}ms)');
+      return resp;
+    } on DioException catch (e) {
+      _log('$method $uri → ${_describeError(e)} (${sw.elapsedMilliseconds}ms)');
+      rethrow;
+    }
+  }
+
+  static String _describeError(DioException e) {
+    final status = e.response?.statusCode;
+    if (status != null) {
+      final data = e.response?.data;
+      if (data is String && data.trim().isNotEmpty) {
+        final s = data.trim();
+        return 'HTTP $status: ${s.length > 200 ? s.substring(0, 200) : s}';
+      }
+      if (data is Map) {
+        final desc = data['description'] ?? data['error'];
+        if (desc is String && desc.isNotEmpty) return 'HTTP $status: $desc';
+      }
+      return 'HTTP $status';
+    }
+    final msg = e.message;
+    return '${e.type.name}${msg != null && msg.isNotEmpty ? ': $msg' : ''}';
+  }
+
   /// 发起 GET 请求; [host] 覆盖 baseUrl (小圣杯等第三方域)
   Future<dynamic> get(
     String path, {
@@ -53,13 +96,13 @@ class ApiClient {
   }) async {
     final uri = buildApiUri(path, host: host, query: query);
     try {
-      final resp = await _dio.getUri<dynamic>(uri);
+      final resp = await _track('GET', uri, () => _dio.getUri<dynamic>(uri));
       return resp.data;
     } on DioException catch (e) {
       // 主域名失败时降级到备用域名 (仅 bgm 官方 API)
       if (host == null && e.response?.statusCode != null && e.response!.statusCode! >= 500) {
         final backup = uri.replace(scheme: 'https', host: Uri.parse(kApiHostBackup).host);
-        final resp = await _dio.getUri<dynamic>(backup);
+        final resp = await _track('GET', backup, () => _dio.getUri<dynamic>(backup));
         return resp.data;
       }
       rethrow;
@@ -75,7 +118,7 @@ class ApiClient {
     bool auth = false,
   }) async {
     final uri = buildApiUri(path, host: host, query: query);
-    final resp = await _dio.postUri<dynamic>(uri, data: data);
+    final resp = await _track('POST', uri, () => _dio.postUri<dynamic>(uri, data: data));
     return resp.data;
   }
 
@@ -87,7 +130,7 @@ class ApiClient {
     String? host,
   }) async {
     final uri = buildApiUri(path, host: host, query: query);
-    final resp = await _dio.putUri<dynamic>(uri, data: data);
+    final resp = await _track('PUT', uri, () => _dio.putUri<dynamic>(uri, data: data));
     return resp.data;
   }
 
@@ -99,25 +142,26 @@ class ApiClient {
     String? host,
   }) async {
     final uri = buildApiUri(path, host: host, query: query);
-    final resp = await _dio.deleteUri<dynamic>(uri, data: data);
+    final resp = await _track('DELETE', uri, () => _dio.deleteUri<dynamic>(uri, data: data));
     return resp.data;
   }
 
   /// 抓取原始 HTML (bgm.tv 页面, 浏览器 UA + 站点 Cookie)
   /// 供超展开等页面解析使用 (原项目 fetchHTML 等价)
   Future<String> fetchHtml(String url) async {
-    final resp = await _dio.getUri<String>(
-      Uri.parse(url),
-      options: Options(
-        responseType: ResponseType.plain,
-        headers: {
-          'User-Agent':
-              'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
-          'Referer': kHost,
-          'Accept-Language': 'zh-CN,zh;q=0.9',
-        },
-      ),
-    );
+    final uri = Uri.parse(url);
+    final resp = await _track('GET', uri, () => _dio.getUri<String>(
+          uri,
+          options: Options(
+            responseType: ResponseType.plain,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+              'Referer': kHost,
+              'Accept-Language': 'zh-CN,zh;q=0.9',
+            },
+          ),
+        ));
     return resp.data ?? '';
   }
 }
@@ -137,6 +181,13 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     tokenProvider: () => ref.read(authTokenProvider),
     cookieProvider: () => ref.read(siteCookiesProvider).cookieHeader,
+    onLog: (line) {
+      // 调试模式 (设置 → 调试) 开启时记录到文件 + 控制台
+      if (SettingsStore.instance.debugLog) {
+        unawaited(DebugLog.instance.write(line));
+        debugPrint(line);
+      }
+    },
   );
 });
 
