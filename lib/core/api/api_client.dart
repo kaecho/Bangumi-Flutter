@@ -51,7 +51,7 @@ class ApiClient {
     String? host,
     bool auth = false,
   }) async {
-    final uri = Uri.parse('${host ?? kApiHost}$path').replace(queryParameters: query);
+    final uri = buildApiUri(path, host: host, query: query);
     try {
       final resp = await _dio.getUri<dynamic>(uri);
       return resp.data;
@@ -74,7 +74,7 @@ class ApiClient {
     String? host,
     bool auth = false,
   }) async {
-    final uri = Uri.parse('${host ?? kApiHost}$path').replace(queryParameters: query);
+    final uri = buildApiUri(path, host: host, query: query);
     final resp = await _dio.postUri<dynamic>(uri, data: data);
     return resp.data;
   }
@@ -86,7 +86,7 @@ class ApiClient {
     Map<String, dynamic>? query,
     String? host,
   }) async {
-    final uri = Uri.parse('${host ?? kApiHost}$path').replace(queryParameters: query);
+    final uri = buildApiUri(path, host: host, query: query);
     final resp = await _dio.putUri<dynamic>(uri, data: data);
     return resp.data;
   }
@@ -98,7 +98,7 @@ class ApiClient {
     Map<String, dynamic>? query,
     String? host,
   }) async {
-    final uri = Uri.parse('${host ?? kApiHost}$path').replace(queryParameters: query);
+    final uri = buildApiUri(path, host: host, query: query);
     final resp = await _dio.deleteUri<dynamic>(uri, data: data);
     return resp.data;
   }
@@ -120,6 +120,17 @@ class ApiClient {
     );
     return resp.data ?? '';
   }
+}
+
+/// 构建 API 请求 URI:
+/// - [path] 为绝对 URL (https://…) 时直接使用 (不再拼接 base, 否则 host 会重复)
+/// - 相对路径拼接 [host] ?? [kApiHost]
+/// - [query] 合并进最终 URL
+Uri buildApiUri(String path, {String? host, Map<String, dynamic>? query}) {
+  final base = host ?? kApiHost;
+  final uri = path.startsWith('http') ? Uri.parse(path) : Uri.parse('$base$path');
+  if (query == null || query.isEmpty) return uri;
+  return uri.replace(queryParameters: query);
 }
 
 final apiClientProvider = Provider<ApiClient>((ref) {
