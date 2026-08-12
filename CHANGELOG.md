@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 1.0.2 - 2026-08-12
+
+### 新增
+
+- 自建设计系统 (Design System): 间距/圆角/颜色/字阶 token (`AppGap` / `AppRadius` / `AppPalette` / `AppThemeData` ThemeExtension, 经 `context.ds` 访问)
+- 全局组件主题: 底部导航 / Chip / 输入框 / 弹窗 / 底部弹窗 / Tab / 列表项, 统一视觉语言
+- 默认主题色改为 bgm.tv 品牌粉 (设置中可切回蓝/绿/紫等预设)
+- Widgetbook 设计系统目录 (`flutter run -t widgetbook/main.dart`): 颜色 / 字阶 / 间距 / 组件用例, 支持明暗主题切换
+- 62 个页面迁移到设计 token, 移除手写字号/颜色散落
+
+### 修复
+
+- 登录失效: API 请求对绝对 URL 重复拼接 host (`api.bgmapi.comhttps//...`), OAuth 换 token 与 `/v0/me` 全部落空 — 修复为绝对路径直接使用, 相对路径才拼接 base
+
 ## 1.0.1 - 2026-08-11
 
 ### 新增
