@@ -8,6 +8,7 @@ import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import 'widgets/discovery_html.dart';
+import '../../design_system/design_system.dart';
 
 /// 维基人列表
 ///
@@ -97,7 +98,7 @@ class WikiScreen extends ConsumerWidget {
           ),
           subtitle: Text(
             '${entry.username} · ${entry.time}',
-            style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
+            style: context.ds.meta,
           ),
           onTap: entry.href.isEmpty
               ? null

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 圣殿 (我的圣殿)
 class TinygrailTempleScreen extends ConsumerWidget {
@@ -73,7 +74,7 @@ class _MyTempleList extends ConsumerWidget {
                     title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
                       'Lv.${item.level} · 献祭 ${tgAmount(item.sacrifices)} · 星之力 ${item.userStarForces}',
-                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      style: context.ds.meta,
                     ),
                     trailing: Text('精炼 ${item.refine}', style: const TextStyle(fontWeight: FontWeight.w600)),
                   );

@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../shared/widgets/app_bar.dart';
 import 'widgets/paged.dart';
+import '../../design_system/design_system.dart';
 
 /// 机核资讯文章 (Anitama 数据源)
 class NewsArticle {
@@ -145,7 +146,7 @@ class _NewsRow extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '${article.likes} 赞 · ${article.comments} 评论 · ${article.publishedAt}',
-                    style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
+                    style: context.ds.meta,
                   ),
                 ],
               ),

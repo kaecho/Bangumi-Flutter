@@ -5,6 +5,7 @@ import '../../core/utils/format.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 初始股份 (ICO 参与者, 参数 icoId 或 monoId)
 class TinygrailInitialScreen extends ConsumerWidget {
@@ -33,7 +34,7 @@ class TinygrailInitialScreen extends ConsumerWidget {
                     title: Text(item.nickName.isEmpty ? item.name : item.nickName),
                     subtitle: Text(
                       friendlyTime(item.begin),
-                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      style: context.ds.meta,
                     ),
                     trailing: Text('${tgAmount(item.amount)} 股', style: const TextStyle(fontWeight: FontWeight.w600)),
                   );

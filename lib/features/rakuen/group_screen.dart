@@ -9,6 +9,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'rakuen_providers.dart';
 import 'widgets/topic_row.dart';
+import '../../design_system/design_system.dart';
 
 /// 小组 (小组信息 + 讨论/成员)
 /// 路由: /rakuen/group/:name
@@ -121,7 +122,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
                         if (info.members > 0)
                           Text(
                             '${info.members} 位成员',
-                            style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
+                            style: context.ds.meta,
                           ),
                       ],
                     ),

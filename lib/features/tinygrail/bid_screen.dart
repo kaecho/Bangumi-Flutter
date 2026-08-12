@@ -6,6 +6,7 @@ import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
+import '../../design_system/design_system.dart';
 
 /// 我的挂单 (买单/卖单, 可撤单)
 class TinygrailBidScreen extends ConsumerStatefulWidget {
@@ -104,7 +105,7 @@ class _OrderList extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text('¥${tgPrice(c.price)}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                            Text('${c.amount}股', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                            Text('${c.amount}股', style: context.ds.meta),
                           ],
                         ),
                         TextButton(onPressed: () => onCancel(c), child: const Text('撤单', style: TextStyle(fontSize: 11))),

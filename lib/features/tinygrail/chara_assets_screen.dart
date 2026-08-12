@@ -6,6 +6,7 @@ import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
+import '../../design_system/design_system.dart';
 
 /// 角色资产 (我的持仓 + ICO + 圣殿)
 class TinygrailCharaAssetsScreen extends ConsumerWidget {
@@ -111,7 +112,7 @@ class _AssetTab extends ConsumerWidget {
                         Text('持 ${c.state} 股', style: const TextStyle(fontWeight: FontWeight.w600)),
                         Text(
                           '献祭 ${tgAmount(c.sacrifices)}',
-                          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          style: context.ds.meta,
                         ),
                       ],
                     ),
@@ -148,7 +149,7 @@ class _TempleTab extends ConsumerWidget {
                     title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
                       'Lv.${item.level} · 献祭 ${tgAmount(item.sacrifices)}',
-                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      style: context.ds.meta,
                     ),
                     trailing: Text('精炼 ${item.refine}', style: const TextStyle(fontWeight: FontWeight.w600)),
                   );

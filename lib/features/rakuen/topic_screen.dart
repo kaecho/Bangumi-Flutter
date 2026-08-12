@@ -13,6 +13,7 @@ import 'html_parse.dart';
 import 'rakuen_providers.dart';
 import 'rakuen_settings.dart';
 import 'widgets/floor_view.dart';
+import '../../design_system/design_system.dart';
 
 /// 帖子详情 (超展开核心页面)
 /// 路由: /rakuen/topic/:type/:id  (type: group|subject|ep|prsn|crt)
@@ -228,14 +229,14 @@ class _TopicBody extends StatelessWidget {
                         if (data.time.isNotEmpty)
                           Text(
                             data.time,
-                            style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                            style: context.ds.tiny,
                           ),
                       ],
                     ),
                   ),
                   Text(
                     '${data.floors.length + 1} 楼',
-                    style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                    style: context.ds.meta,
                   ),
                 ],
               ),

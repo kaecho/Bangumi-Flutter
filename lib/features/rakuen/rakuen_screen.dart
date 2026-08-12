@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/html/bgm_html_parser.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../design_system/design_system.dart';
 
 /// 超展开板块 (移植自原项目 MODEL_RAKUEN_SCOPE)
 const kRakuenScopes = [
@@ -312,14 +313,14 @@ class _TopicRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           topic.userName,
-                          style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                          style: context.ds.meta,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Text(
                         topic.time,
-                        style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                        style: context.ds.tiny,
                       ),
                     ],
                   ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../design_system/design_system.dart';
 
 /// 源头类型
 const kOriginTypes = [
@@ -189,7 +190,7 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                   child: Text(
                     '自定义数据源, 供条目页跳转使用',
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                    style: context.ds.caption,
                   ),
                 ),
                 for (final (type, label) in kOriginTypes)

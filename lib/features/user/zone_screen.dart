@@ -18,6 +18,7 @@ import 'catalogs_screen.dart';
 import 'friends_screen.dart';
 import 'user_models.dart';
 import 'user_timeline_screen.dart';
+import '../../design_system/design_system.dart';
 
 /// 用户信息 (旧版 API /user/{uid})
 final zoneUserProvider = FutureProvider.family<User, String>((ref, userId) async {
@@ -207,7 +208,6 @@ class _ZoneHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final stats = ref.watch(zoneStatsProvider(userId));
     final me = ref.watch(currentUserProvider);
     final isMe = me != null && userPathId(me) == userId;
@@ -227,11 +227,11 @@ class _ZoneHeader extends ConsumerWidget {
                   child: Image.network(
                     user.avatarUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(color: theme.colorScheme.primaryContainer),
+                    errorBuilder: (_, _, _) => Container(color: context.ds.accentSoft),
                   ),
                 )
               else
-                Container(color: theme.colorScheme.primaryContainer),
+                Container(color: context.ds.accentSoft),
               Container(color: Colors.black.withValues(alpha: 0.25)),
               Positioned(
                 left: 16,
@@ -289,7 +289,7 @@ class _ZoneHeader extends ConsumerWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 user.sign,
-                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                style: context.ds.caption,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -341,7 +341,7 @@ class _ZoneHeader extends ConsumerWidget {
                                         statusLabel,
                                         style: TextStyle(
                                           fontSize: 10,
-                                          color: theme.colorScheme.onSurfaceVariant,
+                                          color: context.ds.textSecondary,
                                         ),
                                       ),
                                     ],
@@ -452,7 +452,6 @@ class _ZoneCollectionsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final async = ref.watch(
       zoneCollectionsProvider((userId: userId, type: type, status: status)),
     );
@@ -534,7 +533,7 @@ class _ZoneCollectionsTab extends ConsumerWidget {
                     ),
                     subtitle: Text(
                       '${CollectionStatus.text(item.type)} · 第${item.epStatus}话',
-                      style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.caption,
                     ),
                     onTap: () => context.push('/subject/${item.subject.id}'),
                   );

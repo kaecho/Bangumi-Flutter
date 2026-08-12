@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../design_system/design_system.dart';
 
 /// 通用 HTML 渲染 (帖子/日志/楼层内容)
 ///
@@ -201,10 +202,10 @@ class _BgmImageExtension extends HtmlExtension {
                     ),
                   );
                 },
-                errorBuilder: (context, error, stack) => const SizedBox(
+                errorBuilder: (context, error, stack) => SizedBox(
                   width: 24,
                   height: 24,
-                  child: Icon(Icons.broken_image_outlined, size: 18, color: Colors.grey),
+                  child: Icon(Icons.broken_image_outlined, size: 18, color: context.ds.textHint),
                 ),
               ),
             ),

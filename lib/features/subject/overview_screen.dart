@@ -6,6 +6,7 @@ import '../../shared/models/ep.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 条目概览 (书籍/音乐: 卷/碟 分组章节)
 /// 路由: /subject/:id/overview
@@ -57,7 +58,7 @@ class OverviewScreen extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 '共 ${eps.total} 章节${value.subject.volums > 0 ? ' · ${value.subject.volums} 卷' : ''}',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: context.ds.caption,
               ),
               const SizedBox(height: 12),
               for (final entry in sorted)
@@ -96,7 +97,7 @@ class OverviewScreen extends ConsumerWidget {
                               if (ep.duration.isNotEmpty)
                                 Text(
                                   ep.duration,
-                                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                  style: context.ds.meta,
                                 ),
                             ],
                           ),

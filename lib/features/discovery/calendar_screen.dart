@@ -9,6 +9,7 @@ import '../../shared/models/timeline.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../design_system/design_system.dart';
 
 /// 每日放送
 ///
@@ -91,7 +92,7 @@ class _DaySection extends ConsumerWidget {
               const SizedBox(width: 8),
               Text(
                 _sectionDate(day.weekday),
-                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                style: context.ds.caption,
               ),
             ],
           ),
@@ -101,7 +102,7 @@ class _DaySection extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Text(
               '暂无放送',
-              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+              style: context.ds.caption,
             ),
           )
         else

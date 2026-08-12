@@ -8,6 +8,7 @@ import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 评分分布
 /// 路由: /subject/:id/rating
@@ -100,7 +101,7 @@ class _RatingViewState extends ConsumerState<RatingView> {
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Text(
                       '${stats.total} 人评分${stats.rank > 0 ? ' · 排名 ${stats.rank}' : ''}',
-                      style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.caption,
                     ),
                   ),
                 ],

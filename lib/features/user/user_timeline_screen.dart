@@ -11,6 +11,7 @@ import '../../shared/models/timeline.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'user_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 用户时光机数据 (按日期分组 + 分页)
 class UserTimelineData {
@@ -156,7 +157,6 @@ class _UserTimelineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final subject = item.subject;
     return InkWell(
       onTap: () {
@@ -189,7 +189,7 @@ class _UserTimelineRow extends StatelessWidget {
                       if (item.createdAt.isNotEmpty)
                         Text(
                           friendlyTime(item.createdAt),
-                          style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                          style: context.ds.tiny,
                         ),
                     ],
                   ),
@@ -197,14 +197,14 @@ class _UserTimelineRow extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       subject.displayName,
-                      style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.caption,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (subject.rating?.score != null && subject.rating!.score > 0)
                       Text(
                         '${subject.rating!.score}分',
-                        style: const TextStyle(fontSize: 11, color: Colors.orange),
+                        style: TextStyle(fontSize: 11, color: context.ds.star),
                       ),
                   ],
                 ],

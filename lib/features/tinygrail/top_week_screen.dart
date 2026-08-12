@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 每周萌王 (周榜 + 历史)
 class TinygrailTopWeekScreen extends ConsumerStatefulWidget {
@@ -98,14 +99,13 @@ class _TopWeekTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return ListTile(
       onTap: () => context.push('/tinygrail/chara/${item.id}'),
       leading: Text('#${item.rank}', style: const TextStyle(fontWeight: FontWeight.w700)),
       title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
         'Lv.${item.level} · 价格 ¥${tgPrice(item.price)} · 股息 ${item.rate.toStringAsFixed(2)}',
-        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+        style: context.ds.meta,
       ),
       trailing: Text(
         '额外 ${tgAmount(item.extra)}',

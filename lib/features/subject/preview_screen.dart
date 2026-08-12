@@ -7,6 +7,7 @@ import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 番剧截屏预览
 /// 路由: /subject/:id/preview
@@ -71,8 +72,8 @@ class PreviewScreen extends ConsumerWidget {
                             ),
                       errorBuilder: (_, _, _) => Container(
                         color: Colors.black12,
-                        child: const Center(
-                          child: Icon(Icons.broken_image_outlined, color: Colors.grey),
+                        child: Center(
+                          child: Icon(Icons.broken_image_outlined, color: context.ds.textHint),
                         ),
                       ),
                     ),

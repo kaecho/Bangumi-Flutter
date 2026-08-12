@@ -9,6 +9,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'widgets/paged.dart';
 import 'widgets/subject_card.dart';
+import '../../design_system/design_system.dart';
 
 /// 目录详情信息
 class IndexInfo {
@@ -151,7 +152,7 @@ class _IndexHeader extends StatelessWidget {
               info.desc,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+              style: context.ds.caption,
             ),
           const SizedBox(height: 6),
           Row(
@@ -165,7 +166,7 @@ class _IndexHeader extends StatelessWidget {
                   '${info.username} · ${info.total} 条目 · 更新 ${info.updatedAt}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
+                  style: context.ds.meta,
                 ),
               ),
             ],

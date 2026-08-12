@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 进阶推荐条目 (含第一档买卖价与评分)
 class AdvanceItem {
@@ -64,7 +65,7 @@ class AdvanceListScreen extends ConsumerWidget {
                       title: Text(chara.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text(
                         '现价 ¥${tgPrice(chara.current)} · Lv.${chara.level} · 股息 ${chara.rate.toStringAsFixed(2)}',
-                        style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        style: context.ds.meta,
                       ),
                       trailing: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -77,7 +78,7 @@ class AdvanceListScreen extends ConsumerWidget {
                           if (item.firstPrice > 0)
                             Text(
                               '一档 ¥${tgPrice(item.firstPrice)} (${item.firstAmount})',
-                              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              style: context.ds.meta,
                             ),
                         ],
                       ),

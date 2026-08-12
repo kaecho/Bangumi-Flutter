@@ -7,6 +7,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 声优 (条目内各角色的配音演员)
 /// 路由: /subject/:id/voices
@@ -68,14 +69,14 @@ class VoicesScreen extends ConsumerWidget {
                             ),
                             Text(
                               '配音角色: $charName',
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              style: context.ds.meta,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
-                      const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                      Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
                     ],
                   ),
                 ),

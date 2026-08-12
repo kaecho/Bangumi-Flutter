@@ -9,6 +9,7 @@ import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 条目信息
 /// 路由: /subject/:id/info
@@ -89,7 +90,6 @@ class _InfoHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final subject = detail.subject;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,13 +107,13 @@ class _InfoHeader extends StatelessWidget {
               if (subject.name.isNotEmpty && subject.name != subject.nameCn)
                 Text(
                   subject.name,
-                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                  style: context.ds.caption,
                 ),
               const SizedBox(height: 6),
               Text(
                 '${detail.typeText}${subject.rank > 0 ? ' · 排名 ${subject.rank}' : ''}'
                 '${subject.airDate.isNotEmpty ? ' · ${subject.airDate}' : ''}',
-                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                style: context.ds.caption,
               ),
               if (subject.rating != null && subject.rating!.score > 0) ...[
                 const SizedBox(height: 6),
@@ -133,7 +133,6 @@ class _InfoboxRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -143,7 +142,7 @@ class _InfoboxRow extends StatelessWidget {
             width: 96,
             child: Text(
               item.key,
-              style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+              style: context.ds.label.copyWith(color: context.ds.textSecondary),
             ),
           ),
           Expanded(

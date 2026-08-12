@@ -7,6 +7,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 制作人员
 /// 路由: /subject/:id/persons
@@ -85,7 +86,7 @@ class _PersonCard extends StatelessWidget {
           if (person.career.isNotEmpty)
             Text(
               person.career.join(' / '),
-              style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant),
+              style: context.ds.tiny,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

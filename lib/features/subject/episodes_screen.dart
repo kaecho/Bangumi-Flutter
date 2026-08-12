@@ -8,6 +8,7 @@ import '../../shared/models/ep.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 章节列表
 /// 路由: /subject/:id/episodes
@@ -249,7 +250,7 @@ class _EpRow extends ConsumerWidget {
                         if (ep.duration.isNotEmpty) '时长 ${ep.duration}',
                         if (ep.comment > 0) '${ep.comment} 条吐槽',
                       ].join(' · '),
-                      style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.meta,
                     ),
                   if (ep.desc.isNotEmpty)
                     Text(

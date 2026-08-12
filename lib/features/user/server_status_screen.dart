@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../design_system/design_system.dart';
 
 /// 探针目标 (移植自原项目 server-status utils)
 const kPingTargets = [
@@ -35,7 +36,7 @@ class PingResult {
 
   Color color(BuildContext context) {
     if (statusCode == 200 || statusCode == 204) return Colors.green;
-    if (statusCode != 0) return Colors.orange;
+    if (statusCode != 0) return context.ds.star;
     return Theme.of(context).colorScheme.error;
   }
 }
@@ -107,7 +108,6 @@ class _ServerStatusScreenState extends ConsumerState<ServerStatusScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('服务器状态'),
@@ -123,13 +123,13 @@ class _ServerStatusScreenState extends ConsumerState<ServerStatusScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.monitor_heart_outlined, size: 48, color: Colors.grey),
+                  Icon(Icons.monitor_heart_outlined, size: 48, color: context.ds.textHint),
                   const SizedBox(height: 12),
                   const Text('点击右上角开始检测'),
                   const SizedBox(height: 8),
                   Text(
                     '同时检测 api.bgm.tv 与 bgm-status.ry.mk',
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                    style: context.ds.caption,
                   ),
                 ],
               ),
@@ -145,7 +145,7 @@ class _ServerStatusScreenState extends ConsumerState<ServerStatusScreen> {
                     title: Text('${r.title} (${r.desc})'),
                     subtitle: Text(
                       '${r.url}\n${r.statusCode == 200 || r.statusCode == 204 ? '${r.elapsedMs}ms' : r.statusText}',
-                      style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.meta,
                     ),
                   ),
                 );

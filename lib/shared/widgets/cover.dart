@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../design_system/design_system.dart';
+
 /// 封面图 (带缓存 + 占位/错误处理)
 ///
 /// [url] 支持 bgm.tv 图片地址, 自动转换为对应尺寸
@@ -18,7 +20,7 @@ class Cover extends StatelessWidget {
     required this.url,
     required this.width,
     required this.height,
-    this.radius = 4,
+    this.radius = AppRadius.s,
     this.fit = BoxFit.cover,
     this.placeholder,
     this.fadeIn = true,
@@ -49,14 +51,14 @@ class Cover extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.06),
+        color: AppPalette.placeholderBg,
         borderRadius: BorderRadius.circular(radius),
       ),
       child: placeholder ??
           Icon(
             Icons.movie_outlined,
             size: width * 0.3,
-            color: Colors.black.withValues(alpha: 0.2),
+            color: AppPalette.placeholderIcon,
           ),
     );
   }
@@ -72,17 +74,18 @@ class Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ds = context.ds;
     return ClipRRect(
       borderRadius: BorderRadius.circular(size / 2),
       child: url.isEmpty
           ? Container(
               width: size,
               height: size,
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+              color: ds.accentSoft,
               alignment: Alignment.center,
               child: Text(
                 name != null && name!.isNotEmpty ? name!.characters.first : '?',
-                style: TextStyle(fontSize: size * 0.4, color: Theme.of(context).colorScheme.primary),
+                style: TextStyle(fontSize: size * 0.4, color: ds.accent),
               ),
             )
           : CachedNetworkImage(
@@ -93,7 +96,7 @@ class Avatar extends StatelessWidget {
               errorWidget: (_, _, _) => Container(
                 width: size,
                 height: size,
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                color: ds.accentSoft,
               ),
             ),
     );

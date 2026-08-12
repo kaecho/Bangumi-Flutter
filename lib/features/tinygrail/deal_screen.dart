@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 成交记录 (指定角色)
 class TinygrailDealScreen extends ConsumerWidget {
@@ -90,14 +91,14 @@ class _LogLine extends StatelessWidget {
             '¥${tgPrice(log.price)} × ${log.amount}',
             style: TextStyle(
               fontSize: 13,
-              color: isBid ? Colors.red : Colors.green,
+              color: isBid ? context.ds.rise : context.ds.fall,
               fontWeight: FontWeight.w600,
             ),
           ),
           const Spacer(),
           Text(
             log.time.replaceFirst('T', ' '),
-            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: context.ds.meta,
           ),
         ],
       ),

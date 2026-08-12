@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../app/theme.dart';
 import '../../core/storage/settings_store.dart';
+import '../../design_system/colors.dart';
 
 /// 首页 Tab 开关项 (与原项目 homeRenderTabs 一致)
 const kHomeRenderTabOptions = [
@@ -150,7 +150,7 @@ class _ColorTile extends StatelessWidget {
         spacing: 10,
         runSpacing: 8,
         children: [
-          for (final color in AppTheme.accentColors)
+          for (final color in AppPalette.accentColors)
             InkWell(
               onTap: () => store.setPrimaryColor(color),
               borderRadius: BorderRadius.circular(18),

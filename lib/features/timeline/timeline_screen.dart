@@ -9,6 +9,7 @@ import '../../core/utils/format.dart';
 import '../../shared/models/timeline.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../design_system/design_system.dart';
 
 /// 时间线类型 (移植自原项目 MODEL_TIMELINE_TYPE)
 const kTimelineTabs = [
@@ -217,14 +218,14 @@ class _TimelineItemView extends StatelessWidget {
                       Expanded(
                         child: Text(
                           _statusText(item),
-                          style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                          style: context.ds.caption,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Text(
                         friendlyTime(item.createdAt),
-                        style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                        style: context.ds.tiny,
                       ),
                     ],
                   ),
@@ -252,7 +253,7 @@ class _TimelineItemView extends StatelessWidget {
                               if (item.subject!.rating != null && item.subject!.rating!.score > 0)
                                 Text(
                                   '${item.subject!.rating!.score}分',
-                                  style: const TextStyle(fontSize: 11, color: Colors.orange),
+                                  style: TextStyle(fontSize: 11, color: context.ds.star),
                                 ),
                             ],
                           ),
@@ -306,7 +307,7 @@ class _TimelineLoginGate extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.lock_outline, size: 48, color: Colors.grey),
+          Icon(Icons.lock_outline, size: 48, color: context.ds.textHint),
           const SizedBox(height: 12),
           const Text('登录后查看时间线'),
           const SizedBox(height: 12),

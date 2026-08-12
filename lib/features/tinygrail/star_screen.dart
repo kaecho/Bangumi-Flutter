@@ -6,6 +6,7 @@ import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
+import '../../design_system/design_system.dart';
 
 /// 圣星 (通天塔): 排行榜
 class TinygrailStarScreen extends ConsumerWidget {
@@ -38,7 +39,7 @@ class TinygrailStarScreen extends ConsumerWidget {
                           Text('#${index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
                           Text(
                             '星之力 ${chara.starForces}',
-                            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            style: context.ds.meta,
                           ),
                         ],
                       ),

@@ -5,6 +5,7 @@ import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 维基编辑历史
 /// 路由: /subject/:id/wiki
@@ -75,7 +76,7 @@ class _WikiRow extends StatelessWidget {
             edit.time,
             if (edit.summary.isNotEmpty) edit.summary,
           ].join(' · '),
-          style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+          style: context.ds.meta,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
@@ -83,7 +84,7 @@ class _WikiRow extends StatelessWidget {
       trailing: edit.rev > 0
           ? Text(
               '#${edit.rev}',
-              style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+              style: context.ds.meta,
             )
           : null,
     );

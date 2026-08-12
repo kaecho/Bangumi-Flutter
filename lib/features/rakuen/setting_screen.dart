@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'rakuen_settings.dart';
+import '../../design_system/design_system.dart';
 
 /// 超展开设置 (屏蔽规则 / 楼层样式 / 引用折叠)
 /// 路由: /rakuen/setting
@@ -232,7 +233,7 @@ class _SegmentedItem<T> extends StatelessWidget {
           if (subtitle != null)
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Text(subtitle!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              child: Text(subtitle!, style: context.ds.caption),
             ),
           const SizedBox(height: 8),
           SegmentedButton<T>(
@@ -280,7 +281,7 @@ class _BlockListEditor extends StatelessWidget {
           Text(title, style: const TextStyle(fontSize: 14)),
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            child: Text(subtitle, style: context.ds.caption),
           ),
           const SizedBox(height: 6),
           Row(

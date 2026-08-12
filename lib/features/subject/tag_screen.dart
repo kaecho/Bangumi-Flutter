@@ -6,6 +6,7 @@ import '../../shared/models/subject.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 条目标签
 /// 路由: /subject/:id/tag
@@ -61,7 +62,6 @@ class _TagRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return InkWell(
       onTap: () => context.push(
         '/subject/$subjectId/typerank?tag=${Uri.encodeComponent(tag.name)}&type=$type',
@@ -75,9 +75,9 @@ class _TagRow extends StatelessWidget {
             ),
             Text(
               '${tag.count}',
-              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+              style: context.ds.caption,
             ),
-            const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
           ],
         ),
       ),

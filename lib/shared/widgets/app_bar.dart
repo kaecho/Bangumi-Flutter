@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../design_system/design_system.dart';
+
 /// 自定义 AppBar (毛玻璃效果, 移植自原项目 header-v2)
 class BgmAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -26,22 +28,18 @@ class BgmAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ds = context.ds;
     return AppBar(
-      backgroundColor: backgroundColor ??
-          (transparent ? Colors.transparent : theme.scaffoldBackgroundColor),
+      backgroundColor:
+          backgroundColor ?? (transparent ? Colors.transparent : ds.surfaceBase),
       elevation: 0,
-      leading: leading ??
-          (showBackButton
-              ? BackButton(color: theme.colorScheme.onSurface)
-              : null),
+      leading:
+          leading ??
+          (showBackButton ? BackButton(color: ds.textPrimary) : null),
       titleSpacing: 0,
-      title: titleWidget ??
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+      title:
+          titleWidget ??
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       actions: actions,
     );
   }
@@ -61,7 +59,7 @@ class BgmPage extends StatelessWidget {
       content = SafeArea(child: content);
     }
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: context.ds.surfaceBase,
       body: content,
     );
   }

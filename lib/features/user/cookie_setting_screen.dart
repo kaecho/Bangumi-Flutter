@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/auth/site_cookies.dart';
+import '../../design_system/design_system.dart';
 
 /// 站点 Cookie 设置页
 ///
@@ -142,7 +143,7 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
                     hasCookies ? Icons.check_circle : Icons.info_outline,
                     size: 20,
                     color: hasCookies
-                        ? Colors.green
+                        ? context.ds.success
                         : theme.colorScheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 8),

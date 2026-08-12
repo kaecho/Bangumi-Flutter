@@ -8,6 +8,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../shared/models/collection.dart';
 import '../../shared/models/user.dart';
 import '../../shared/widgets/cover.dart';
+import '../../design_system/design_system.dart';
 
 /// 用户空间菜单 (原项目 user/v2 菜单)
 const kUserMenus = [
@@ -96,7 +97,7 @@ class _UserProfile extends ConsumerWidget {
                       const SizedBox(height: 4),
                       Text(
                         user.sign,
-                        style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                        style: context.ds.caption,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -142,7 +143,7 @@ class _UserProfile extends ConsumerWidget {
                               const SizedBox(height: 2),
                               Text(
                                 label,
-                                style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                                style: context.ds.meta,
                               ),
                             ],
                           ),
@@ -179,7 +180,7 @@ class _UserProfile extends ConsumerWidget {
           child: Column(
             children: [
               ListTile(
-                leading: const Icon(Icons.timeline, size: 22, color: Colors.orange),
+                leading: Icon(Icons.timeline, size: 22, color: context.ds.star),
                 title: const Text('时光机', style: TextStyle(fontSize: 14)),
                 trailing: const Icon(Icons.chevron_right, size: 18),
                 onTap: () {
@@ -214,7 +215,7 @@ class _LoginGate extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.account_circle_outlined, size: 56, color: Colors.grey),
+          Icon(Icons.account_circle_outlined, size: 56, color: context.ds.textHint),
           const SizedBox(height: 12),
           const Text('登录后同步你的收藏与进度'),
           const SizedBox(height: 16),

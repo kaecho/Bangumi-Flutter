@@ -6,6 +6,7 @@ import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
+import '../../design_system/design_system.dart';
 
 /// 献祭 (资产重组): 我的角色列表 + 献祭/星之力操作
 class TinygrailSacrificeScreen extends ConsumerWidget {
@@ -69,7 +70,7 @@ class _SacrificeBody extends ConsumerWidget {
                         Text('持 ${c.state} 股', style: const TextStyle(fontWeight: FontWeight.w600)),
                         Text(
                           '献祭 ${tgAmount(c.sacrifices)}',
-                          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          style: context.ds.meta,
                         ),
                       ],
                     ),

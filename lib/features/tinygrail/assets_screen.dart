@@ -6,6 +6,7 @@ import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
+import '../../design_system/design_system.dart';
 
 /// 我的资产 (持仓 + ICO)
 class TinygrailAssetsScreen extends ConsumerWidget {
@@ -132,7 +133,7 @@ class _Stat extends StatelessWidget {
         children: [
           Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(label, style: context.ds.meta),
         ],
       ),
     );

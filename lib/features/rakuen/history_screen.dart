@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/utils/format.dart';
 import 'rakuen_models.dart';
 import 'rakuen_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 浏览历史 (本地记录)
 /// 路由: /rakuen/history
@@ -105,14 +106,14 @@ class _HistoryRow extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Text(
                         '${item.replies} 回复',
-                        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                        style: context.ds.meta,
                       ),
                       const Spacer(),
                       Text(
                         friendlyTimeOf(
                           DateTime.fromMillisecondsSinceEpoch(item.time * 1000),
                         ),
-                        style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                        style: context.ds.tiny,
                       ),
                     ],
                   ),

@@ -6,6 +6,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 角色行: 头像 + 名称/等级 + 现价 + 涨跌幅
 class CharaTile extends StatelessWidget {
@@ -19,9 +20,9 @@ class CharaTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = chara.fluctuation < 0
-        ? Colors.green
+        ? context.ds.fall
         : chara.fluctuation > 0
-            ? Colors.red
+            ? context.ds.rise
             : theme.colorScheme.onSurfaceVariant;
     final icon = chara.icon.replaceFirst('//', 'https://');
     return ListTile(
@@ -53,7 +54,7 @@ class CharaTile extends StatelessWidget {
       ),
       subtitle: Text(
         '发行 ${tgAmount(chara.total)} · 市场 ${tgAmount(chara.marketValue)}',
-        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+        style: context.ds.meta,
       ),
       trailing: trailing ??
           Column(
@@ -230,7 +231,7 @@ class UserTile extends StatelessWidget {
             )
           : Avatar(url: avatar.replaceFirst('//', 'https://'), size: 40, name: name),
       title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+      subtitle: Text(subtitle, style: context.ds.meta),
       trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
     );
   }

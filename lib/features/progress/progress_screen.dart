@@ -8,6 +8,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../shared/models/collection.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../design_system/design_system.dart';
 
 /// 首页 Tab 类型 (与原项目 TABS_ITEM 一致)
 const kProgressTabs = [
@@ -230,7 +231,6 @@ class _ProgressItemView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final subject = item.subject;
     final isBook = subject.type == 'book';
 
@@ -257,11 +257,11 @@ class _ProgressItemView extends StatelessWidget {
                   if (subject.rating != null && subject.rating!.score > 0)
                     Row(
                       children: [
-                        const Icon(Icons.star, size: 13, color: Colors.orange),
+                        Icon(Icons.star, size: 13, color: context.ds.star),
                         const SizedBox(width: 2),
                         Text(
                           subject.rating!.score.toStringAsFixed(1),
-                          style: const TextStyle(fontSize: 12, color: Colors.orange),
+                          style: TextStyle(fontSize: 12, color: context.ds.star),
                         ),
                       ],
                     ),
@@ -270,7 +270,7 @@ class _ProgressItemView extends StatelessWidget {
                     isBook
                         ? '看到第 ${item.epStatus} 话 / 共 ${subject.eps} 话'
                         : '看到第 ${item.epStatus} 话 / 共 ${subject.eps} 话',
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                    style: context.ds.caption,
                   ),
                   const SizedBox(height: 6),
                   Row(
@@ -342,14 +342,13 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withValues(alpha: 0.08),
+          color: context.ds.accentSoft,
           borderRadius: BorderRadius.circular(4),
         ),
         child: Row(
@@ -357,9 +356,9 @@ class _StatusChip extends StatelessWidget {
           children: [
             Text(
               text,
-              style: TextStyle(fontSize: 11, color: theme.colorScheme.primary),
+              style: context.ds.meta.copyWith(color: context.ds.accent),
             ),
-            Icon(Icons.arrow_drop_down, size: 14, color: theme.colorScheme.primary),
+            Icon(Icons.arrow_drop_down, size: 14, color: context.ds.accent),
           ],
         ),
       ),
@@ -376,7 +375,7 @@ class _ProgressLoginGate extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.manage_search, size: 48, color: Colors.grey),
+          Icon(Icons.manage_search, size: 48, color: context.ds.textHint),
           const SizedBox(height: 12),
           const Text('登录后管理你的追番进度'),
           const SizedBox(height: 12),

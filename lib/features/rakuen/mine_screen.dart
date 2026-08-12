@@ -11,6 +11,7 @@ import 'html_parse.dart';
 import 'rakuen_providers.dart';
 import 'widgets/login_gate.dart';
 import 'widgets/topic_row.dart';
+import '../../design_system/design_system.dart';
 
 /// 我的 (我的主题/日志/动态)
 /// 路由: /rakuen/mine
@@ -111,7 +112,6 @@ class _MineBlogs extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(mineBlogsProvider(uid));
-    final theme = Theme.of(context);
     return async.when(
       loading: () => const Loading(height: double.infinity),
       error: (e, _) => _ErrorRetry(onRetry: () => ref.invalidate(mineBlogsProvider(uid))),
@@ -145,13 +145,13 @@ class _MineBlogs extends ConsumerWidget {
                                 '${blog.replies} 回复',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: theme.colorScheme.onSurfaceVariant,
+                                  color: context.ds.textSecondary,
                                 ),
                               ),
                               const Spacer(),
                               Text(
                                 friendlyTime(blog.createdAt),
-                                style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                                style: context.ds.tiny,
                               ),
                             ],
                           ),
@@ -199,7 +199,6 @@ class _TimelineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
@@ -220,7 +219,7 @@ class _TimelineRow extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   '${_timelineTypeText(item.type)} · ${friendlyTime(item.createdAt)}',
-                  style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                  style: context.ds.tiny,
                 ),
               ],
             ),

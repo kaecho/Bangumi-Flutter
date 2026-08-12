@@ -7,6 +7,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 关联条目
 /// 路由: /subject/:id/link
@@ -90,7 +91,7 @@ class _RelationRow extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
           ],
         ),
       ),

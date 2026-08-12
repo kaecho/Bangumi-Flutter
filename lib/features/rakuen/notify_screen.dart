@@ -8,6 +8,7 @@ import '../../shared/models/group.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'rakuen_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 电波提醒
 /// 路由: /rakuen/notify
@@ -163,7 +164,7 @@ class _NotifyRow extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       item.content,
-                      style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.caption,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -172,7 +173,7 @@ class _NotifyRow extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       friendlyTime(item.createdAt),
-                      style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                      style: context.ds.tiny,
                     ),
                   ],
                 ],

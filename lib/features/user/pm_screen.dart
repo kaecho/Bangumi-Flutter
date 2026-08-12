@@ -12,6 +12,7 @@ import '../../core/utils/format.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'user_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 收件箱 (bgm.tv/pm/inbox.chii, 主站 HTML)
 final pmInboxProvider = FutureProvider<List<PmItem>>((ref) async {
@@ -52,7 +53,7 @@ class _PmLoginGate extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.mail_outline, size: 48, color: Colors.grey),
+          Icon(Icons.mail_outline, size: 48, color: context.ds.textHint),
           const SizedBox(height: 12),
           const Text('短信需要登录后才能查看'),
           const SizedBox(height: 16),

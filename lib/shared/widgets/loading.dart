@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design_system/design_system.dart';
+
 /// 空状态
 class Empty extends StatelessWidget {
   final String text;
@@ -16,19 +18,16 @@ class Empty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ds = context.ds;
     return SizedBox(
       height: height,
       width: double.infinity,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 44, color: theme.colorScheme.outlineVariant),
-          const SizedBox(height: 10),
-          Text(
-            text,
-            style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
-          ),
+          Icon(icon, size: 44, color: ds.textHint.withValues(alpha: 0.6)),
+          const SizedBox(height: AppGap.x5),
+          Text(text, style: ds.label.copyWith(color: ds.textSecondary)),
         ],
       ),
     );
@@ -45,6 +44,7 @@ class Loading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ds = context.ds;
     return Center(
       child: SizedBox(
         height: height,
@@ -55,11 +55,11 @@ class Loading extends StatelessWidget {
             SizedBox(
               width: size,
               height: size,
-              child: CircularProgressIndicator(strokeWidth: 2.5, color: Theme.of(context).colorScheme.primary),
+              child: const CircularProgressIndicator(strokeWidth: 2.5),
             ),
             if (text != null) ...[
-              const SizedBox(height: 10),
-              Text(text!, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              const SizedBox(height: AppGap.x5),
+              Text(text!, style: ds.caption),
             ],
           ],
         ),
@@ -74,7 +74,12 @@ class Skeleton extends StatelessWidget {
   final double height;
   final double radius;
 
-  const Skeleton({super.key, required this.width, required this.height, this.radius = 4});
+  const Skeleton({
+    super.key,
+    required this.width,
+    required this.height,
+    this.radius = AppRadius.s,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +87,7 @@ class Skeleton extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: context.ds.textHint.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(radius),
       ),
     );

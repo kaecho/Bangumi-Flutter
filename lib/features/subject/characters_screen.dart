@@ -7,6 +7,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 角色列表
 /// 路由: /subject/:id/characters
@@ -85,7 +86,7 @@ class _CharacterCard extends StatelessWidget {
           if (character.actors.isNotEmpty)
             Text(
               'CV: ${character.actors.map((a) => a.displayName).join(' / ')}',
-              style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant),
+              style: context.ds.tiny,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

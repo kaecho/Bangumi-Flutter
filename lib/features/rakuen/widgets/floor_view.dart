@@ -5,6 +5,7 @@ import '../../../core/html/bgm_html_parser.dart' as core;
 import '../../rakuen/rakuen_settings.dart';
 import '../../../shared/widgets/bgm_html.dart';
 import '../../../core/utils/format.dart';
+import '../../../design_system/design_system.dart';
 
 /// 帖子楼层视图 (主楼层 + 子回复)
 class FloorView extends StatelessWidget {
@@ -110,7 +111,7 @@ class FloorView extends StatelessWidget {
                           const SizedBox(width: 6),
                           Text(
                             friendlyTime(floor.time),
-                            style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                            style: context.ds.tiny,
                           ),
                         ],
                       ],
@@ -120,7 +121,7 @@ class FloorView extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
                           floor.userSign,
-                          style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                          style: context.ds.tiny,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

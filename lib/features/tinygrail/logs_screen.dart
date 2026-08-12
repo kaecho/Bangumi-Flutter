@@ -5,6 +5,7 @@ import '../../core/utils/format.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 资金日志 (交易记录)
 class TinygrailLogsScreen extends ConsumerStatefulWidget {
@@ -45,7 +46,6 @@ class _TinygrailLogsScreenState extends ConsumerState<TinygrailLogsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('资金日志')),
       body: _list.isEmpty
@@ -66,12 +66,12 @@ class _TinygrailLogsScreenState extends ConsumerState<TinygrailLogsScreen> {
                     dense: true,
                     leading: Icon(
                       change > 0 ? Icons.add_circle_outline : Icons.remove_circle_outline,
-                      color: change > 0 ? Colors.red : Colors.green,
+                      color: change > 0 ? context.ds.rise : context.ds.fall,
                     ),
                     title: Text(item.desc, maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
                       friendlyTime(item.time),
-                      style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.meta,
                     ),
                     trailing: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -81,12 +81,12 @@ class _TinygrailLogsScreenState extends ConsumerState<TinygrailLogsScreen> {
                           '${change > 0 ? '+' : ''}${tgMoney(change)}',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: change > 0 ? Colors.red : Colors.green,
+                            color: change > 0 ? context.ds.rise : context.ds.fall,
                           ),
                         ),
                         Text(
                           '余额 ${tgMoney(item.balance)}',
-                          style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                          style: context.ds.meta,
                         ),
                       ],
                     ),

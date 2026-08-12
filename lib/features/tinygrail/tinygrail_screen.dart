@@ -7,6 +7,7 @@ import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../design_system/design_system.dart';
 
 /// 小圣杯角色资产
 class TinygrailChara {
@@ -204,7 +205,7 @@ class _StatItem extends StatelessWidget {
         children: [
           Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(label, style: context.ds.meta),
         ],
       ),
     );

@@ -14,6 +14,7 @@ import '../../shared/widgets/score.dart';
 import 'collection_sheet.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 条目详情主页面
 /// 路由: /subject/:id
@@ -47,7 +48,7 @@ class SubjectScreen extends ConsumerWidget {
           ),
         ),
         data: (value) => ListView(
-          padding: const EdgeInsets.only(bottom: 32),
+          padding: const EdgeInsets.only(bottom: AppGap.x10),
           children: [
             _SubjectHeader(subjectId: id, detail: value),
             _SummarySection(summary: value.subject.summary),
@@ -77,7 +78,6 @@ class _SubjectHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final subject = detail.subject;
-    final theme = Theme.of(context);
     final isLogin = ref.watch(isLoggedInProvider);
     final collection = ref.watch(collectionProvider(subjectId));
     final epStatus = ref.watch(epStatusProvider(subjectId));
@@ -88,19 +88,19 @@ class _SubjectHeader extends ConsumerWidget {
     final watchedEps = eps == null ? 0 : epStatus.valueOrNull?.progressOf(eps.eps) ?? 0;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x6, AppGap.x8, AppGap.x6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Cover(url: subject.images.large, width: 110, height: 150, radius: 6),
-          const SizedBox(width: 14),
+          Cover(url: subject.images.large, width: 110, height: 150, radius: AppRadius.m),
+          const SizedBox(width: AppGap.x7),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   subject.displayName,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                  style: context.ds.title,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -108,7 +108,7 @@ class _SubjectHeader extends ConsumerWidget {
                   const SizedBox(height: 2),
                   Text(
                     subject.name,
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                    style: context.ds.caption,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -139,10 +139,7 @@ class _SubjectHeader extends ConsumerWidget {
                     onTap: () => context.push('/subject/$subjectId/rating'),
                     child: Text(
                       subject.collectionText,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                      style: context.ds.meta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -215,14 +212,13 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(4),
+        color: context.ds.textHint.withValues(alpha: 0.12),
+        borderRadius: AppRadius.sAll,
       ),
-      child: Text(text, style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant)),
+      child: Text(text, style: context.ds.tiny),
     );
   }
 }
@@ -237,11 +233,10 @@ class _ProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final ratio = total > 0 ? watched / total : 0.0;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: AppRadius.sAll,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -250,13 +245,13 @@ class _ProgressBar extends StatelessWidget {
             child: LinearProgressIndicator(
               value: ratio.clamp(0.0, 1.0),
               minHeight: 4,
-              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              backgroundColor: context.ds.textHint.withValues(alpha: 0.12),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             '看到第 $watched 话 / 共 $total 话 · 点击设置进度',
-            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+            style: context.ds.meta,
           ),
         ],
       ),
@@ -293,7 +288,7 @@ class _BatchProgressDialogState extends ConsumerState<_BatchProgressDialog> {
         children: [
           Text(
             '看到第 ${_value.round()} 话 / 共 ${widget.total} 话',
-            style: const TextStyle(fontSize: 14),
+            style: context.ds.body,
           ),
           Slider(
             value: _value.clamp(0, widget.total.toDouble()),
@@ -351,17 +346,16 @@ class _SummarySectionState extends State<_SummarySection> {
   @override
   Widget build(BuildContext context) {
     if (widget.summary.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
     final summary = widget.summary.replaceAll('\r\n', '\n').trim();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x4, AppGap.x8, AppGap.x2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SectionHeader(title: '简介'),
           Text(
             summary,
-            style: const TextStyle(fontSize: 13, height: 1.5),
+            style: context.ds.label.copyWith(height: 1.5),
             maxLines: _expanded ? null : 4,
             overflow: _expanded ? null : TextOverflow.ellipsis,
           ),
@@ -372,7 +366,7 @@ class _SummarySectionState extends State<_SummarySection> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   _expanded ? '收起' : '展开',
-                  style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
+                  style: context.ds.caption.copyWith(color: context.ds.accent),
                 ),
               ),
             ),
@@ -389,7 +383,6 @@ class _EpSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final epsAsync = ref.watch(epListProvider(subjectId));
     final eps = epsAsync.valueOrNull;
     if (eps == null || eps.eps.isEmpty) return const SizedBox.shrink();
@@ -401,13 +394,13 @@ class _EpSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+          padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x6, AppGap.x4, AppGap.x2),
           child: Row(
             children: [
               const Expanded(child: SectionHeader(title: '章节')),
               TextButton(
                 onPressed: () => context.push('/subject/$subjectId/episodes'),
-                child: const Text('全部', style: TextStyle(fontSize: 13)),
+                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -416,12 +409,12 @@ class _EpSection extends ConsumerWidget {
           _EpRow(subjectId: subjectId, ep: ep, watched: epStatus?.isWatched(ep.id) ?? false),
         if (eps.eps.length > shown.length)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: AppGap.x8),
             child: TextButton(
               onPressed: () => context.push('/subject/$subjectId/episodes'),
               child: Text(
                 '查看全部 ${eps.eps.length} 话',
-                style: TextStyle(fontSize: 13, color: theme.colorScheme.primary),
+                style: context.ds.label.copyWith(color: context.ds.accent),
               ),
             ),
           ),
@@ -440,9 +433,8 @@ class _EpRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final isLogin = ref.watch(isLoggedInProvider);
-    final color = watched ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant;
+    final color = watched ? context.ds.accent : context.ds.textSecondary;
     return InkWell(
       onTap: () => context.push('/subject/$subjectId/ep/${ep.id}/comments'),
       child: Padding(
@@ -456,7 +448,7 @@ class _EpRow extends ConsumerWidget {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: watched ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+                  color: watched ? context.ds.accent : context.ds.textPrimary,
                 ),
               ),
             ),
@@ -468,7 +460,7 @@ class _EpRow extends ConsumerWidget {
                     ep.displayName.isEmpty ? '第 ${ep.sort} 话' : ep.displayName,
                     style: TextStyle(
                       fontSize: 13,
-                      color: watched ? color : theme.colorScheme.onSurface,
+                      color: watched ? color : context.ds.textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -476,7 +468,7 @@ class _EpRow extends ConsumerWidget {
                   if (ep.airdate.isNotEmpty)
                     Text(
                       '${ep.airdate}${ep.duration.isNotEmpty ? ' · ${ep.duration}' : ''}',
-                      style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.meta,
                     ),
                 ],
               ),
@@ -488,7 +480,7 @@ class _EpRow extends ConsumerWidget {
                 icon: Icon(
                   watched ? Icons.check_circle : Icons.radio_button_unchecked,
                   size: 20,
-                  color: watched ? theme.colorScheme.primary : theme.colorScheme.outline,
+                  color: watched ? context.ds.accent : context.ds.textHint,
                 ),
                 onPressed: () async {
                   try {
@@ -503,7 +495,7 @@ class _EpRow extends ConsumerWidget {
                   }
                 },
               ),
-            const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
           ],
         ),
       ),
@@ -522,7 +514,7 @@ class _TagSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final shown = tags.take(10).toList();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x5, AppGap.x8, AppGap.x2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -531,7 +523,7 @@ class _TagSection extends ConsumerWidget {
               const Expanded(child: SectionHeader(title: '标签')),
               TextButton(
                 onPressed: () => context.push('/subject/$subjectId/tag'),
-                child: const Text('全部', style: TextStyle(fontSize: 13)),
+                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -561,7 +553,6 @@ class _CharacterSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final chars = ref.watch(subjectCharactersProvider(subjectId)).valueOrNull;
     if (chars == null || chars.isEmpty) return const SizedBox.shrink();
 
@@ -569,13 +560,13 @@ class _CharacterSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+          padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x6, AppGap.x4, AppGap.x2),
           child: Row(
             children: [
               const Expanded(child: SectionHeader(title: '角色')),
               TextButton(
                 onPressed: () => context.push('/subject/$subjectId/characters'),
-                child: const Text('全部', style: TextStyle(fontSize: 13)),
+                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -583,7 +574,7 @@ class _CharacterSection extends ConsumerWidget {
         SizedBox(
           height: 170,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: AppGap.x8),
             scrollDirection: Axis.horizontal,
             itemCount: chars.take(12).length,
             separatorBuilder: (_, _) => const SizedBox(width: 12),
@@ -599,17 +590,14 @@ class _CharacterSection extends ConsumerWidget {
                       const SizedBox(height: 6),
                       Text(
                         c.displayName,
-                        style: const TextStyle(fontSize: 12),
+                        style: context.ds.caption.copyWith(color: context.ds.textPrimary),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (c.actors.isNotEmpty)
                         Text(
                           'CV: ${c.actors.first.displayName}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                          style: context.ds.tiny,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -632,7 +620,6 @@ class _PersonSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final persons = ref.watch(subjectPersonsProvider(subjectId)).valueOrNull;
     if (persons == null || persons.isEmpty) return const SizedBox.shrink();
 
@@ -640,13 +627,13 @@ class _PersonSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+          padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x6, AppGap.x4, AppGap.x2),
           child: Row(
             children: [
               const Expanded(child: SectionHeader(title: '制作人员')),
               TextButton(
                 onPressed: () => context.push('/subject/$subjectId/persons'),
-                child: const Text('全部', style: TextStyle(fontSize: 13)),
+                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -654,7 +641,7 @@ class _PersonSection extends ConsumerWidget {
         SizedBox(
           height: 150,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: AppGap.x8),
             scrollDirection: Axis.horizontal,
             itemCount: persons.take(12).length,
             separatorBuilder: (_, _) => const SizedBox(width: 12),
@@ -670,17 +657,14 @@ class _PersonSection extends ConsumerWidget {
                       const SizedBox(height: 6),
                       Text(
                         p.displayName,
-                        style: const TextStyle(fontSize: 12),
+                        style: context.ds.caption.copyWith(color: context.ds.textPrimary),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (p.relation.isNotEmpty)
                         Text(
                           p.relation,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                          style: context.ds.tiny,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -703,7 +687,6 @@ class _RelationSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final relations = ref.watch(subjectRelationsProvider(subjectId)).valueOrNull;
     if (relations == null || relations.isEmpty) return const SizedBox.shrink();
 
@@ -711,13 +694,13 @@ class _RelationSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+          padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x6, AppGap.x4, AppGap.x2),
           child: Row(
             children: [
               const Expanded(child: SectionHeader(title: '相关条目')),
               TextButton(
                 onPressed: () => context.push('/subject/$subjectId/link'),
-                child: const Text('全部', style: TextStyle(fontSize: 13)),
+                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -725,7 +708,7 @@ class _RelationSection extends ConsumerWidget {
         SizedBox(
           height: 170,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: AppGap.x8),
             scrollDirection: Axis.horizontal,
             itemCount: relations.take(12).length,
             separatorBuilder: (_, _) => const SizedBox(width: 12),
@@ -741,17 +724,14 @@ class _RelationSection extends ConsumerWidget {
                       const SizedBox(height: 6),
                       Text(
                         r.displayName,
-                        style: const TextStyle(fontSize: 12),
+                        style: context.ds.caption.copyWith(color: context.ds.textPrimary),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (r.relation.isNotEmpty)
                         Text(
                           r.relation,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: theme.colorScheme.primary,
-                          ),
+                          style: context.ds.tiny.copyWith(color: context.ds.accent),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -774,12 +754,11 @@ class _CommentSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final comments = ref.watch(subjectCommentsProvider((id: subjectId, page: 1))).valueOrNull;
     if (comments == null || comments.items.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x6, AppGap.x8, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -788,7 +767,7 @@ class _CommentSection extends ConsumerWidget {
               const Expanded(child: SectionHeader(title: '吐槽箱')),
               TextButton(
                 onPressed: () => context.push('/subject/$subjectId/comments'),
-                child: const Text('全部', style: TextStyle(fontSize: 13)),
+                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -809,10 +788,7 @@ class _CommentSection extends ConsumerWidget {
                             Flexible(
                               child: Text(
                                 c.userName,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: theme.colorScheme.primary,
-                                ),
+                                style: context.ds.meta.copyWith(color: context.ds.accent),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -825,7 +801,7 @@ class _CommentSection extends ConsumerWidget {
                         const SizedBox(height: 2),
                         Text(
                           c.content,
-                          style: const TextStyle(fontSize: 13, height: 1.4),
+                          style: context.ds.label.copyWith(height: 1.4),
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                         ),

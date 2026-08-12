@@ -11,6 +11,7 @@ import '../../shared/widgets/loading.dart';
 import 'rakuen_providers.dart';
 import 'rakuen_settings.dart';
 import 'widgets/floor_view.dart';
+import '../../design_system/design_system.dart';
 
 /// 日志详情
 /// 路由: /rakuen/blog/:id
@@ -117,7 +118,7 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
                             if (data.time.isNotEmpty)
                               Text(
                                 data.time,
-                                style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                                style: context.ds.tiny,
                               ),
                           ],
                         ),

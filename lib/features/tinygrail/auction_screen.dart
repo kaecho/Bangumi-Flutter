@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 拍卖 (我的拍卖 + 竞拍)
 class TinygrailAuctionScreen extends ConsumerWidget {
@@ -33,7 +34,7 @@ class TinygrailAuctionScreen extends ConsumerWidget {
                       title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text(
                         '竞拍 ${item.auctionState}人/${item.auctionType}股 · ${_stateText(item.state)}',
-                        style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        style: context.ds.meta,
                       ),
                       trailing: Text(
                         '${item.amount}股 ¥${tgPrice(item.price)}',

@@ -8,6 +8,7 @@ import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 角色 / 人物详情
 /// 路由: /mono/character/:id, /mono/person/:id
@@ -147,7 +148,7 @@ class _MonoChip extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant),
+        style: context.ds.tiny,
       ),
     );
   }
@@ -294,9 +295,9 @@ class _MonoWorks extends ConsumerWidget {
                     if (item.score > 0)
                       Text(
                         item.score.toStringAsFixed(1),
-                        style: const TextStyle(fontSize: 12, color: Colors.orange),
+                        style: TextStyle(fontSize: 12, color: context.ds.star),
                       ),
-                    const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                    Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
                   ],
                 ),
               ),

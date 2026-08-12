@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../design_system/design_system.dart';
 
 /// 用户协议 (移植自原项目 screens/rakuen/ugc-agree)
 /// 路由: /rakuen/ugc-agree
@@ -9,7 +10,6 @@ class UgcAgreeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     const sectionStyle = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.6);
     const bodyStyle = TextStyle(fontSize: 13.5, height: 1.7);
 
@@ -66,7 +66,7 @@ class UgcAgreeScreen extends StatelessWidget {
           const SizedBox(height: 24),
           Text(
             '指导原则的编写参考了豆瓣以及XQ网站，最后更新日期为：2008-08-06 20:32',
-            style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
+            style: context.ds.meta,
           ),
         ],
       ),

@@ -6,6 +6,7 @@ import '../../core/utils/format.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 圣星记录
 class TinygrailStarLogsScreen extends ConsumerStatefulWidget {
@@ -46,7 +47,6 @@ class _TinygrailStarLogsScreenState extends ConsumerState<TinygrailStarLogsScree
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('圣星记录')),
       body: _list.isEmpty
@@ -68,7 +68,7 @@ class _TinygrailStarLogsScreenState extends ConsumerState<TinygrailStarLogsScree
                     title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
                       '${item.userName} · 星之力 +${item.amount} · ${friendlyTime(item.time)}',
-                      style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.meta,
                     ),
                   );
                 },

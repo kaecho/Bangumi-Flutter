@@ -7,6 +7,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 包含该条目的目录
 /// 路由: /subject/:id/catalogs
@@ -55,7 +56,6 @@ class _CatalogRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return ListTile(
       leading: Avatar(url: item.userAvatar, size: 40),
       title: Text(
@@ -72,13 +72,13 @@ class _CatalogRow extends StatelessWidget {
             if (item.collected > 0) '${item.collected} 收藏',
             if (item.updatedAt.isNotEmpty) '更新于 ${item.updatedAt}',
           ].join(' · '),
-          style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+          style: context.ds.meta,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
       ),
       onTap: () => openCatalog(context, item),
-      trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+      trailing: Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
     );
   }
 

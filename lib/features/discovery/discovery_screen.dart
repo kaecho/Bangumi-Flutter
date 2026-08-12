@@ -12,6 +12,7 @@ import '../../shared/models/subject.dart';
 import '../../shared/models/timeline.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../design_system/design_system.dart';
 
 /// 发现页菜单项 (移植自原项目 constants/constants/data.ts MENU_MAP)
 class DiscoveryMenuItem {
@@ -119,14 +120,14 @@ class DiscoveryScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(todayOnAirProvider),
         child: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: AppGap.listBottom,
           children: [
             // 菜单宫格
             GridView.count(
               crossAxisCount: 5,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: AppGap.x4, vertical: AppGap.x4),
               children: [
                 for (final menu in menus)
                   _MenuCell(
@@ -167,10 +168,9 @@ class _MenuCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: AppRadius.lAll,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -178,26 +178,22 @@ class _MenuCell extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
+              color: context.ds.accentSoft,
+              borderRadius: BorderRadius.circular(AppGap.x5),
             ),
             child: menu.text != null
                 ? Center(
                     child: Text(
                       menu.text!,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.primary,
-                      ),
+                      style: context.ds.display.copyWith(fontSize: 18, color: context.ds.accent),
                     ),
                   )
-                : Icon(menu.icon, size: 22, color: theme.colorScheme.primary),
+                : Icon(menu.icon, size: 22, color: context.ds.accent),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: AppGap.x2),
           Text(
             menu.name,
-            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+            style: context.ds.meta,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -217,17 +213,17 @@ class _TodaySection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+          padding: const EdgeInsets.fromLTRB(AppGap.x7, AppGap.x6, AppGap.x7, AppGap.x2),
           child: Row(
             children: [
               Text(
                 '今日放送 (${kWeekdayCn[DateTime.now().weekday % 7]})',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                style: context.ds.section,
               ),
               const Spacer(),
               TextButton(
                 onPressed: () => context.push('/calendar'),
-                child: const Text('全部', style: TextStyle(fontSize: 12)),
+                child: Text('全部', style: context.ds.caption.copyWith(color: context.ds.accent)),
               ),
             ],
           ),
@@ -237,9 +233,9 @@ class _TodaySection extends ConsumerWidget {
             height: 170,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: AppGap.pageH,
               itemCount: subjects.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: AppGap.x5),
               itemBuilder: (context, index) {
                 final s = subjects[index];
                 return _TodayCard(subject: s);
@@ -271,21 +267,21 @@ class _TodayCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Cover(url: subject.images.common, width: 100, height: 130, radius: 6),
-            const SizedBox(height: 4),
+            Cover(url: subject.images.common, width: 100, height: 130, radius: AppRadius.m),
+            const SizedBox(height: AppGap.x2),
             Text(
               subject.displayName,
-              style: const TextStyle(fontSize: 11),
+              style: context.ds.meta.copyWith(color: context.ds.textPrimary),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
             if (subject.rating != null && subject.rating!.score > 0)
               Row(
                 children: [
-                  const Icon(Icons.star, size: 11, color: Colors.orange),
+                  Icon(Icons.star, size: 11, color: context.ds.star),
                   Text(
                     subject.rating!.score.toStringAsFixed(1),
-                    style: const TextStyle(fontSize: 10, color: Colors.orange),
+                    style: context.ds.tiny.copyWith(color: context.ds.star),
                   ),
                 ],
               ),
@@ -309,10 +305,10 @@ Future<void> showClipboardModal(BuildContext context) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('剪贴板', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppGap.x2),
             Text(
               '粘贴 bgm.tv 链接, 自动识别并打开对应页面 (条目/帖子/用户/角色...)',
-              style: TextStyle(fontSize: 12, color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+              style: context.ds.caption,
             ),
             const SizedBox(height: 12),
             TextField(
@@ -396,7 +392,7 @@ class _MenuSettingSheetState extends ConsumerState<_MenuSettingSheet> {
             child: GridView.count(
               crossAxisCount: 4,
               shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: AppGap.pageH,
               children: [
                 for (final menu in kDiscoveryMenus)
                   FilterChip(

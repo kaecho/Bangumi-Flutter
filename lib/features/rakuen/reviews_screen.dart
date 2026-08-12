@@ -7,6 +7,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'rakuen_models.dart';
 import 'rakuen_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 条目评论/长评
 /// 路由: /rakuen/reviews/:subjectId
@@ -95,7 +96,6 @@ class _ReviewRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return InkWell(
       onTap: () {
         if (review.id > 0) context.push('/rakuen/blog/${review.id}');
@@ -121,7 +121,7 @@ class _ReviewRow extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       review.content,
-                      style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                      style: context.ds.caption,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -131,18 +131,18 @@ class _ReviewRow extends StatelessWidget {
                     children: [
                       Text(
                         review.user?.displayName ?? '',
-                        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                        style: context.ds.meta,
                       ),
                       const Spacer(),
                       if (review.replies > 0)
                         Text(
                           '${review.replies} 回复',
-                          style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
+                          style: context.ds.meta,
                         ),
                       const SizedBox(width: 8),
                       Text(
                         friendlyTime(review.createdAt),
-                        style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                        style: context.ds.tiny,
                       ),
                     ],
                   ),

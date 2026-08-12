@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/cover.dart';
 import '../../rakuen/html_parse.dart';
 import '../../../core/utils/format.dart';
+import '../../../design_system/design_system.dart';
 
 /// 帖子列表行 (小组/板块/搜索通用)
 class RakuenTopicRow extends StatelessWidget {
@@ -68,7 +69,7 @@ class RakuenTopicRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           topic.userName,
-                          style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                          style: context.ds.meta,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -79,7 +80,7 @@ class RakuenTopicRow extends StatelessWidget {
                                   topic.time.contains(RegExp(r'^\d{4}-\d'))
                               ? topic.time
                               : friendlyTime(topic.time),
-                          style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                          style: context.ds.tiny,
                         ),
                     ],
                   ),

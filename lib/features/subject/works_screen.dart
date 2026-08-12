@@ -7,6 +7,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../design_system/design_system.dart';
 
 /// 作品列表 (人物的出演作品)
 /// 路由: /subject/:id/works (id 为人物 ID)
@@ -86,12 +87,12 @@ class _WorkRow extends StatelessWidget {
                   if (item.score > 0)
                     Text(
                       '${item.score.toStringAsFixed(1)} 分',
-                      style: const TextStyle(fontSize: 11, color: Colors.orange),
+                      style: TextStyle(fontSize: 11, color: context.ds.star),
                     ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
           ],
         ),
       ),

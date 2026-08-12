@@ -8,6 +8,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import '../../design_system/design_system.dart';
 
 /// 角色详情 (K线 + 深度 + 买卖 + 奖池 + 交易记录)
 class TinygrailCharaScreen extends ConsumerWidget {
@@ -79,12 +80,11 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final color = chara.fluctuation < 0
-        ? Colors.green
+        ? context.ds.fall
         : chara.fluctuation > 0
-            ? Colors.red
-            : theme.colorScheme.onSurface;
+            ? context.ds.rise
+            : context.ds.textPrimary;
     final icon = chara.icon.replaceFirst('//', 'https://');
     return Card(
       child: Padding(
@@ -99,11 +99,11 @@ class _Header extends StatelessWidget {
               placeholder: Container(
                 width: 56,
                 height: 56,
-                color: theme.colorScheme.surfaceContainerHighest,
+                color: context.ds.textHint.withValues(alpha: 0.12),
                 alignment: Alignment.center,
                 child: Text(
                   chara.name.isEmpty ? '?' : chara.name.characters.first,
-                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  style: TextStyle(color: context.ds.textSecondary),
                 ),
               ),
             ),
@@ -116,7 +116,7 @@ class _Header extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     'Lv.${chara.level} · 发行 ${tgAmount(chara.total)} · 股东 ${chara.users}',
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                    style: context.ds.caption,
                   ),
                 ],
               ),
@@ -461,7 +461,7 @@ class _DepthRow extends StatelessWidget {
             child: Text(
               price == 0 ? '--' : '¥${tgPrice((price * 100).round())}',
               style: TextStyle(
-                color: isBid ? Colors.red : Colors.green,
+                color: isBid ? context.ds.rise : context.ds.fall,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
@@ -471,12 +471,12 @@ class _DepthRow extends StatelessWidget {
             child: LinearProgressIndicator(
               value: 0.5,
               minHeight: 6,
-              color: isBid ? Colors.red.withValues(alpha: 0.5) : Colors.green.withValues(alpha: 0.5),
+              color: isBid ? context.ds.rise.withValues(alpha: 0.5) : context.ds.fall.withValues(alpha: 0.5),
               backgroundColor: theme.colorScheme.surfaceContainerHighest,
             ),
           ),
           const SizedBox(width: 8),
-          Text('$amount', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+          Text('$amount', style: context.ds.caption),
         ],
       ),
     );
@@ -613,11 +613,10 @@ class _LogRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     if (items.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Text('$label: -', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+        child: Text('$label: -', style: context.ds.caption),
       );
     }
     return Column(
@@ -638,7 +637,7 @@ class _LogRow extends StatelessWidget {
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
-                Text(friendlyTime(item.time), style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+                Text(friendlyTime(item.time), style: context.ds.meta),
                 if (cancelId != null)
                   TextButton(
                     onPressed: () => cancelId!(item.id),
