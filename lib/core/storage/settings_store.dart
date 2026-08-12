@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../design_system/colors.dart';
+
 /// 应用设置 (键值对, shared_preferences)
 ///
 /// ChangeNotifier: 所有 setter 修改后调用 [notifyListeners],
@@ -28,10 +30,10 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 主题色 (默认 Bangumi 蓝)
+  /// 主题色 (默认 bgm 粉, 见 [AppPalette.defaultAccent])
   Color get primaryColor {
     final v = _prefs.getInt('setting_primary_color');
-    if (v == null) return const Color(0xFF1E90FF);
+    if (v == null) return AppPalette.defaultAccent;
     return Color(v);
   }
 
