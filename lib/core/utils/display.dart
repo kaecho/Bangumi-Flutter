@@ -88,23 +88,67 @@ bool isSensitiveSubject({
   return isSensitiveText('$name $nameCn $extra');
 }
 
-/// 封面图质量: 把 lain `/pic/cover/{l|m|c|s|g}/` 改成设置档
-String applyCoverQuality(String url, String quality) {
+/// 封面图质量: 统一成 lain `/r/{size}/pic/cover/l/` (原项目 getCover400)
+///
+/// v0 / 主站新图是 `/r/400/pic/cover/l/`. 旧逻辑把中间的 `l` 改成 `m`,
+/// CDN 会 400: please use `/r/{n}/pic/cover/l/` path instead.
+
+
+String applyCoverQuality(String url, String quality, {double? displayWidth}) {
   if (url.isEmpty) return url;
-  const map = {
-    'grid': 'g',
-    'small': 's',
-    'medium': 'm',
-    'common': 'c',
-    'large': 'l',
-  };
-  final letter = map[quality];
-  if (letter == null) return url;
-  return url.replaceFirstMapped(
+  var src = url.trim();
+  if (src.startsWith('"') || src.startsWith("'")) {
+    src = src.substring(1);
+  }
+  if (src.endsWith('"') || src.endsWith("'")) {
+    src = src.substring(0, src.length - 1);
+  }
+  if (src.startsWith('//')) src = 'https:$src';
+  if (src.startsWith('http://')) {
+    src = src.replaceFirst('http://', 'https://');
+  }
+  if (!src.contains('lain.bgm.tv') || !src.contains('/pic/cover/')) {
+    return src;
+  }
+
+  var size = coverQualityPixelSize(quality);
+  final tile = coverTilePixelSize(displayWidth);
+  if (tile > size) size = tile;
+
+  src = src.replaceFirst(
+    RegExp(r'/r/\d+(?:x\d+)?/pic/cover/[lmcsg]/'),
+    '/pic/cover/l/',
+  );
+  return src.replaceFirst(
     RegExp(r'/pic/cover/[lmcsg]/'),
-    (m) => '/pic/cover/$letter/',
+    '/r/$size/pic/cover/l/',
   );
 }
+
+/// 设置档对应的 lain r 边长
+int coverQualityPixelSize(String quality) => switch (quality) {
+  'grid' => 100,
+  'small' => 200,
+  'medium' => 400,
+  'common' => 400,
+  'large' => 800,
+  _ => 400,
+};
+
+/// 按控件宽度 (约 2x) 决定最小边长, 对齐原项目 getCover400
+///
+/// `double.infinity` / NaN 不当成超大图, 避免网格/hero Cover 全升到 r/800。
+int coverTilePixelSize(double? width) {
+  if (width == null || !width.isFinite || width <= 0) return 0;
+  final need = width * 2;
+  if (need <= 100) return 100;
+  if (need <= 200) return 200;
+  if (need <= 400) return 400;
+  if (need <= 600) return 600;
+  return 800;
+}
+
+
 
 /// 原项目章节热力图透明度: (comment - min/1.68) / max
 double heatMapOpacity(int comment, {required int min, required int max}) {

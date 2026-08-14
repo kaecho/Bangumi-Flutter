@@ -7,7 +7,8 @@ import '../../core/utils/display.dart';
 import '../../core/api/api_endpoints.dart';
 
 /// 当前应用版本 (与 pubspec.yaml version 保持一致)
-const String kAppVersion = '1.0.3+4';
+const String kAppVersion = '1.0.4+5';
+
 
 /// GitHub Release 信息
 class GitHubRelease {

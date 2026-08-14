@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:bangumi/features/rakuen/html_parse.dart';
 import 'package:bangumi/features/rakuen/rakuen_models.dart';
 import 'package:bangumi/features/rakuen/rakuen_settings.dart';
+import 'package:bangumi/features/rakuen/widgets/fixed_textarea.dart';
 import 'package:bangumi/shared/widgets/bgm_html.dart';
+
 
 void main() {
   group('topicIdFromHref', () {
@@ -37,9 +39,15 @@ void main() {
   <div class="inner"><strong><a href="/user/100" class="l">作者</a></strong><span class="sign tip_j">(签名)</span>
   <div class="topic_content"><p>主楼内容</p></div></div>
 </div>
+<form id="ReplyForm" action="/group/topic/1/new_reply">
+  <input type="hidden" name="formhash" value="abc123" />
+  <input type="hidden" name="lastview" value="1700000000" />
+</form>
 <div id="comment_list">
   <div id="post_2" class="row row_reply">
-    <div class="post_actions re_info"><div class="action"><small><a href="#post_2">#2</a> - 2024-1-2 11:00</small></div></div>
+    <div class="post_actions re_info"><div class="action"><small><a href="#post_2">#2</a> - 2024-1-2 11:00</small>
+      <a class="icon" onclick="subReply('group', 1, 2, 0, 100, 200, 0)"></a>
+    </div></div>
     <a href="/user/200" class="avatar"><span class="avatarNeue avatarSize40" style="background-image:url('//lain.bgm.tv/pic/b.jpg')"></span></a>
     <div class="inner"><span class="userInfo"><strong><a href="/user/200" class="l">回复者</a></strong><span class="sign tip_j">(回)</span></span>
       <div class="reply_content"><div class="message">楼层内容</div></div>
@@ -65,16 +73,20 @@ void main() {
       expect(data.userId, '100');
       expect(data.time, '2024-1-1 10:00');
       expect(data.contentHtml, contains('主楼内容'));
+      expect(data.formhash, 'abc123');
+      expect(data.lastview, '1700000000');
       expect(data.floors, hasLength(1));
 
       final floor = data.floors.first;
       expect(floor.userName, '回复者');
       expect(floor.userId, '200');
       expect(floor.floor, contains('#2'));
+      expect(floor.replySub, contains("subReply('group'"));
       expect(floor.messageHtml, contains('楼层内容'));
       expect(floor.subReplies, hasLength(1));
       expect(floor.subReplies.first.userName, '子回复者');
       expect(floor.subReplies.first.messageHtml, contains('子回复内容'));
+      expect(floor.subReplies.first.floor, '#2-1');
     });
   });
 
@@ -231,4 +243,39 @@ void main() {
       expect(find.textContaining('文字'), findsOneWidget);
     });
   });
+
+
+  group('insertBbcode / quoteReply', () {
+    test('选中文字包 BBCode', () {
+      final r = insertBbcode(
+        'hello',
+        const TextSelection(baseOffset: 0, extentOffset: 5),
+        r'[b]$TEXT$[/b]',
+      );
+      expect(r.value, '[b]hello[/b]');
+      expect(r.cursor, 8);
+    });
+
+    test('引用去掉旧 quote 再截断', () {
+      final text = quoteReplyContent(
+        userName: '甲',
+        messageHtml: '<div class="quote"><q>旧</q></div>你好世界',
+        content: '回复',
+      );
+      expect(text, contains('[quote][b]甲[/b] 说: 你好世界[/quote]'));
+      expect(text, endsWith('回复'));
+    });
+
+    test('解析 subReply onclick', () {
+      final p = parseReplySub(
+        "subReply('group', 468754, 4007985, 0, 859738, 1184949, 0)",
+      );
+      expect(p, isNotNull);
+      expect(p!.type, 'group');
+      expect(p.topicId, '468754');
+      expect(p.related, '4007985');
+      expect(p.postUid, '1184949');
+    });
+  });
 }
+

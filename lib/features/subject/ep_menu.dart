@@ -40,21 +40,49 @@ Future<void> showEpActionMenu(
           ListTile(
             leading: const Icon(Icons.arrow_upward),
             title: Text(watched ? '撤销看过' : '标记看过'),
-            onTap: () async {
-              Navigator.of(ctx).pop();
-              try {
-                await setEpStatusAction(ref, ep.id, !watched);
-                ref.invalidate(epStatusProvider(subjectId));
-                onChanged?.call();
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('操作失败: ${apiErrorMessage(e)}')),
-                  );
-                }
-              }
-            },
+            onTap: () => unawaited(
+              _runEpStatus(
+                context,
+                ctx,
+                ref,
+                subjectId: subjectId,
+                epId: ep.id,
+                status: watched ? 'remove' : 'watched',
+                onChanged: onChanged,
+              ),
+            ),
           ),
+          ListTile(
+            leading: const Icon(Icons.bookmark_outline),
+            title: const Text('想看'),
+            onTap: () => unawaited(
+              _runEpStatus(
+                context,
+                ctx,
+                ref,
+                subjectId: subjectId,
+                epId: ep.id,
+                status: 'queue',
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: const Text('抛弃'),
+            onTap: () => unawaited(
+              _runEpStatus(
+                context,
+                ctx,
+                ref,
+                subjectId: subjectId,
+                epId: ep.id,
+                status: 'drop',
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+
           if (ep.type == 0)
             ListTile(
               leading: const Icon(Icons.checklist),
@@ -158,3 +186,27 @@ Future<void> showEpActionMenu(
     ),
   );
 }
+
+Future<void> _runEpStatus(
+  BuildContext context,
+  BuildContext sheetCtx,
+  WidgetRef ref, {
+  required int subjectId,
+  required int epId,
+  required String status,
+  VoidCallback? onChanged,
+}) async {
+  Navigator.of(sheetCtx).pop();
+  try {
+    await setEpStatusAction(ref, epId, status);
+    ref.invalidate(epStatusProvider(subjectId));
+    onChanged?.call();
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('操作失败: ${apiErrorMessage(e)}')),
+      );
+    }
+  }
+}
+

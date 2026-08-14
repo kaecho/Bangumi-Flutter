@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/site_cookies.dart';
 import '../../core/utils/display.dart';
 
 import '../../shared/widgets/bgm_html.dart';
@@ -13,6 +14,7 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'rakuen_providers.dart';
 import 'rakuen_settings.dart';
+import 'widgets/fixed_textarea.dart';
 import 'widgets/floor_view.dart';
 import '../../design_system/design_system.dart';
 
@@ -31,6 +33,7 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
   final _replyController = TextEditingController();
   final _expandedSubs = <String>{};
   bool _sending = false;
+  ReplyTarget? _replyTarget;
 
   @override
   void dispose() {
@@ -39,20 +42,60 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
   }
 
   Future<void> _sendReply() async {
-    final text = _replyController.text.trim();
+    var text = _replyController.text.trim();
     if (text.isEmpty) return;
-    if (!ref.read(isLoggedInProvider)) {
+    if (!ref.read(canActAsLoggedInProvider)) {
       await context.push('/login');
       return;
     }
+    final page = ref.read(blogDetailProvider(widget.id)).valueOrNull;
     setState(() => _sending = true);
     try {
-      final client = ref.read(apiClientProvider);
-      await client.post(
-        apiBlogNewReply('${widget.id}'),
-        data: {'content': text},
+      var gh = page?.formhash ?? '';
+      if (gh.isEmpty) {
+        try {
+          gh = await ref.read(formhashProvider.future);
+        } catch (_) {}
+      }
+      if (gh.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('评论需要站点 Cookie 登录')),
+          );
+        }
+        return;
+      }
+      final target = _replyTarget;
+      if (target != null && target.messageHtml.isNotEmpty) {
+        text = quoteReplyContent(
+          userName: target.userName,
+          messageHtml: target.messageHtml,
+          content: text,
+        );
+      }
+      final parsed = target == null ? null : parseReplySub(target.replySub);
+      final lastview = page?.lastview.isNotEmpty == true
+          ? page!.lastview
+          : '${DateTime.now().millisecondsSinceEpoch ~/ 1000}';
+      await ref.read(apiClientProvider).post(
+        htmlBlogReply(widget.id),
+        host: kHost,
+        form: true,
+        data: {
+          'content': text,
+          'formhash': gh,
+          'related_photo': 0,
+          'lastview': lastview,
+          'submit': 'submit',
+          if (parsed != null) ...{
+            'related': parsed.related,
+            'sub_reply_uid': parsed.subReplyUid,
+            'post_uid': parsed.postUid,
+          },
+        },
       );
       _replyController.clear();
+      _replyTarget = null;
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -114,13 +157,11 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
               PopupMenuItem(value: 'copy', child: Text('复制链接')),
-
               PopupMenuItem(value: 'share', child: Text('复制分享')),
             ],
           ),
         ],
       ),
-
       body: async.when(
         loading: () => const Loading(height: double.infinity),
         error: (e, _) => Center(
@@ -200,76 +241,37 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
                 floor: floor,
                 floorLabel: floor.floor.isNotEmpty
                     ? floor.floor
-                    : '${index + 1}',
-                isAuthor: false,
+                    : '#${index + 1}',
+                isAuthor: data.userId.isNotEmpty && floor.userId == data.userId,
                 settings: settings,
-                onReply: (name) {
-                  _replyController.text = '@$name ';
-                  _replyController.selection = TextSelection.collapsed(
-                    offset: _replyController.text.length,
-                  );
-                },
+                onReply: (target) => setState(() {
+                  _replyTarget = target;
+                  final prefix = '@${target.userName} ';
+                  if (!_replyController.text.startsWith(prefix)) {
+                    _replyController.text = prefix + _replyController.text;
+                  }
+                }),
+                topicId: 'blog/${widget.id}',
                 expanded: _expandedSubs.contains(floor.id),
-                onExpand: () => setState(() => _expandedSubs.add(floor.id)),
+                onExpand: () => setState(() {
+                  if (!_expandedSubs.remove(floor.id)) {
+                    _expandedSubs.add(floor.id);
+                  }
+                }),
               ),
           ],
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            border: Border(top: BorderSide(color: theme.dividerColor)),
-          ),
-          child: ref.watch(isLoggedInProvider)
-              ? Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _replyController,
-                        minLines: 1,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          hintText: '评论...',
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: _sending ? null : _sendReply,
-                      icon: _sending
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.send),
-                      tooltip: '发送',
-                      color: theme.colorScheme.primary,
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '登录后评论',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: theme.colorScheme.outline,
-                        ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => context.push('/login'),
-                      child: const Text('去登录'),
-                    ),
-                  ],
-                ),
-        ),
+      bottomNavigationBar: FixedTextarea(
+        controller: _replyController,
+        sending: _sending,
+        loggedIn: ref.watch(canActAsLoggedInProvider),
+        hint: '评论...',
+        target: _replyTarget,
+        historyKey: 'blog_reply_${widget.id}',
+        onSend: _sendReply,
+        onLogin: () => context.push('/login'),
+        onClearTarget: () => setState(() => _replyTarget = null),
       ),
     );
   }

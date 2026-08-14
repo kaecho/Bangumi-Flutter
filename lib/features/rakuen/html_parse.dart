@@ -60,6 +60,11 @@ class TopicPageData {
   final String contentHtml;
   final List<core.RakuenFloor> floors;
   final int pageTotal;
+  final String formhash;
+  final String lastview;
+  final int likeType;
+  final String tip;
+  final String close;
 
   const TopicPageData({
     this.title = '',
@@ -73,6 +78,11 @@ class TopicPageData {
     this.contentHtml = '',
     this.floors = const [],
     this.pageTotal = 1,
+    this.formhash = '',
+    this.lastview = '',
+    this.likeType = 8,
+    this.tip = '',
+    this.close = '',
   });
 
   bool get isEmpty => title.isEmpty && floors.isEmpty;
@@ -87,6 +97,8 @@ class BlogPageData {
   final String time;
   final String contentHtml;
   final List<core.RakuenFloor> floors;
+  final String formhash;
+  final String lastview;
 
   const BlogPageData({
     this.title = '',
@@ -96,6 +108,8 @@ class BlogPageData {
     this.time = '',
     this.contentHtml = '',
     this.floors = const [],
+    this.formhash = '',
+    this.lastview = '',
   });
 }
 
@@ -205,6 +219,7 @@ core.RakuenFloor _parseFloor(Element row) {
       row.querySelector('.inner .userInfo strong a.l') ??
       row.querySelector('.inner strong a.l') ??
       row.querySelector('a.l');
+  final avatarLink = row.querySelector('a.avatar');
   final message = row.querySelector('.inner .reply_content > .message');
   final sign =
       row.querySelector('.inner .sign.tip_j') ??
@@ -222,60 +237,64 @@ core.RakuenFloor _parseFloor(Element row) {
         sub.querySelector('.inner strong.userName a.l') ??
         sub.querySelector('.inner strong a.l') ??
         sub.querySelector('a.l');
+    final subAvatar = sub.querySelector('a.avatar');
     subReplies.add(
       core.RakuenFloor(
         id: (sub.attributes['id'] ?? '').replaceFirst('post_', ''),
-        floor: parts.isNotEmpty ? parts[0].trim() : '',
+        floor: core.normalizeFloorLabel(
+          parts.isNotEmpty ? parts[0].trim() : '',
+        ),
         time: parts.length > 1 ? parts[1].trim() : '',
         avatar: _bgImage(sub.querySelector('span.avatarNeue')) ?? '',
-        userId: core.matchAttr(subUser, 'href', RegExp(r'/user/(\d+)')),
+        userId: _userId(subAvatar, subUser),
         userName: core.htmlDecode(core.cText(subUser ?? sub)),
         userSign: core.htmlDecode(
-          core.cText(sub.querySelector('.sign.tip_j') ?? sub),
+          core.cText(sub.querySelector('.sign.tip_j')),
         ),
         messageHtml: sub.querySelector('.cmt_sub_content')?.innerHtml ?? '',
-        likes:
-            int.tryParse(
-              RegExp(r'(\d+)')
-                      .firstMatch(
-                        core.cText(
-                          sub.querySelector('.likes_grid') ??
-                              sub.querySelector('.ico_like'),
-                        ),
-                      )
-                      ?.group(1) ??
-                  '',
-            ) ??
-            0,
+        likes: _likesOf(sub),
+        replySub: core.matchReplySub(sub),
+        erase: core.matchEraseHref(sub),
       ),
     );
   }
 
   return core.RakuenFloor(
     id: (row.attributes['id'] ?? '').replaceFirst('post_', ''),
-    floor: info.isNotEmpty ? info[0].trim() : '',
+    floor: core.normalizeFloorLabel(info.isNotEmpty ? info[0].trim() : ''),
     time: info.length > 1 ? info[1].trim() : '',
     avatar: _bgImage(row.querySelector('span.avatarNeue')) ?? '',
-    userId: core.matchAttr(userLink, 'href', RegExp(r'/user/(\d+)')),
+    userId: _userId(avatarLink, userLink),
     userName: core.htmlDecode(core.cText(userLink ?? row)),
-    userSign: core.htmlDecode(core.cText(sign ?? row)),
+    userSign: core.htmlDecode(core.cText(sign)),
     messageHtml: message?.innerHtml ?? '',
-    likes:
-        int.tryParse(
-          RegExp(r'(\d+)')
-                  .firstMatch(
-                    core.cText(
-                      row.querySelector('.likes_grid') ??
-                          row.querySelector('.ico_like'),
-                    ),
-                  )
-                  ?.group(1) ??
-              '',
-        ) ??
-        0,
+    likes: _likesOf(row),
+    replySub: core.matchReplySub(row),
+    erase: core.matchEraseHref(row),
     subReplies: subReplies,
   );
 }
+
+String _userId(Element? avatar, Element? name) {
+  final fromAvatar = core.matchUserIdFromHref(avatar?.attributes['href']);
+  if (fromAvatar.isNotEmpty) return fromAvatar;
+  return core.matchUserIdFromHref(name?.attributes['href']);
+}
+
+int _likesOf(Element row) =>
+    int.tryParse(
+      RegExp(r'(\d+)')
+              .firstMatch(
+                core.cText(
+                  row.querySelector('.likes_grid') ??
+                      row.querySelector('.ico_like'),
+                ),
+              )
+              ?.group(1) ??
+          '',
+    ) ??
+    0;
+
 
 /// 解析帖子页 (主楼 + 楼层)
 /// 兼容 group/subject/ep 帖子页 (div.postTopic) 与 prsn/crt 页面 (仅楼层)
@@ -322,7 +341,7 @@ TopicPageData parseTopicPage(String html) {
         ? reInfo.text.trim().split(' - ')
         : const <String>[];
     userName = core.htmlDecode(core.cText(userLink ?? postTopic));
-    userId = core.matchAttr(userLink, 'href', RegExp(r'/user/(\d+)'));
+    userId = core.matchUserIdFromHref(userLink?.attributes['href']);
     avatar = _bgImage(postTopic.querySelector('span.avatarNeue')) ?? '';
     time = t.length > 1 ? t[1].trim() : '';
     contentHtml = postTopic.querySelector('.topic_content')?.innerHtml ?? '';
@@ -330,6 +349,20 @@ TopicPageData parseTopicPage(String html) {
     // prsn/crt 页面: 主楼为空, 标题取页面 h1
     title = _h1Title(h1);
   }
+
+  final formhash =
+      doc.querySelector('input[name=formhash]')?.attributes['value'] ?? '';
+  final lastview =
+      doc.querySelector('input[name=lastview]')?.attributes['value'] ?? '';
+  final likeType = int.tryParse(
+        doc.querySelector('a.like_dropdown')?.attributes['data-like-type'] ??
+            '',
+      ) ??
+      8;
+  final tip = (doc.querySelector('#reply_wrapper span.tip.rr')?.text ?? '')
+      .trim();
+  final close = (doc.querySelector('div.row_state span.tip_j')?.text ?? '')
+      .trim();
 
   return TopicPageData(
     title: title,
@@ -343,6 +376,11 @@ TopicPageData parseTopicPage(String html) {
     contentHtml: contentHtml,
     floors: parseTopicFloors(html),
     pageTotal: _pageTotalFrom(html),
+    formhash: formhash,
+    lastview: lastview,
+    likeType: likeType,
+    tip: tip,
+    close: close,
   );
 }
 
@@ -376,11 +414,15 @@ BlogPageData parseBlogPage(String html) {
   return BlogPageData(
     title: title,
     userName: core.htmlDecode(core.cText(userLink ?? doc)),
-    userId: core.matchAttr(userLink, 'href', RegExp(r'/user/(\d+)')),
+    userId: core.matchUserIdFromHref(userLink?.attributes['href']),
     avatar: _bgImage(doc.querySelector('#viewEntry .author img')) ?? '',
     time: time,
     contentHtml: content,
     floors: parseTopicFloors(html),
+    formhash:
+        doc.querySelector('input[name=formhash]')?.attributes['value'] ?? '',
+    lastview:
+        doc.querySelector('input[name=lastview]')?.attributes['value'] ?? '',
   );
 }
 

@@ -15,6 +15,18 @@ const String kApiP1 = 'https://next.bgm.tv/p1';
 /// 主站
 const String kHost = 'https://bgm.tv';
 
+/// API 默认 UA (bangumi API 约定用应用标识, 不影响 v0 JSON)
+const String kApiUserAgent =
+    'Bangumi/Flutter (https://github.com/kaecho/Bangumi-Flutter)';
+
+/// 主站 HTML / Cookie 写操作 UA
+///
+/// 2026-08 实测: 站点会按 UA 验 chii_auth。
+/// 桌面 Chrome 能认记住登录; Android Chrome 126 / 自定义 UA 会被踢成游客。
+const String kSiteUserAgent =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
+
+
 /// 原项目语雀指南
 const String kZhinanHost = 'https://www.yuque.com/chenzhenyu-k0epm/znygb4';
 String htmlSingleDoc(String page) => '$kZhinanHost/$page?singleDoc';
@@ -75,7 +87,9 @@ String apiSubjectReviews(int subjectId) =>
 String apiSubjectBlogs(int subjectId) => '$kApiHost/subject/$subjectId/blogs';
 String apiSubjectUpdateWatched(int subjectId) =>
     '$kApiHost/subject/$subjectId/update/watched_eps';
-String apiEpStatus(int epId, int status) => '$kApiHost/ep/$epId/status/$status';
+String apiEpStatus(int epId, String status) =>
+    '$kApiHost/ep/$epId/status/$status';
+
 
 /// v0 条目 (详情含 infobox/tags/eps)
 String apiV0Subject(int subjectId) =>
@@ -761,11 +775,38 @@ String apiUserTimelineHtml(
   int page = 1,
 }) => '$kHost/user/$userId/timeline?type=$type&page=$page&ajax=1';
 
-/// 时间胶囊 HTML (原项目 HTML_TIMELINE: 好友/全站走 /timeline)
+/// 时间胶囊 HTML (原项目 HTML_TIMELINE)
+///
+/// 好友/默认: `/timeline` (带 Cookie); 全站同 URL, 调用方走无 Cookie 请求。
+
 String htmlTimeline({String type = '', int page = 1}) {
   final t = type == 'all' ? '' : type;
   return '$kHost/timeline?type=$t&page=$page';
 }
+
+/// 回复吐槽 (原项目 HTML_ACTION_TIMELINE_REPLY)
+String htmlTimelineReply(int id) => '/timeline/$id/new_reply?ajax=1';
+
+/// 回复帖子 (原项目 HTML_ACTION_RAKUEN_REPLY)
+String htmlTopicReply(String topicId) {
+  final type = topicId.split('/').first;
+  final id = topicId.split('/').last;
+  final path = switch (type) {
+    'group' => 'group/topic',
+    'subject' => 'subject/topic',
+    'ep' => 'subject/ep',
+    'crt' => 'character',
+    'prsn' => 'person',
+    'blog' => 'blog/entry',
+    _ => 'group/topic',
+  };
+  return '$kHost/$path/$id/new_reply?ajax=1';
+}
+
+/// 回复日志 (原项目 HTML_ACTION_BLOG_REPLY)
+String htmlBlogReply(int blogId) => '$kHost/blog/entry/$blogId/new_reply?ajax=1';
+
+
 
 String apiUserHomeHtml(String userId) => '$kHost/user/$userId';
 
@@ -797,9 +838,13 @@ String apiPmComposeParamsHtml(String userId) =>
 String apiPmCreateHtml() => '$kHost/pm/create.chii';
 
 /// 图片: 条目封面
+///
+/// v0 `/r/{n}/pic/cover/l/` 不能再插入 size 字母, 否则 CDN 400.
 String coverUrl(String url, {String size = 'm'}) {
   if (url.isEmpty) return '';
+  if (RegExp(r'/r/\d+/pic/cover/').hasMatch(url)) return url;
   return url
-      .replaceAll('/pic/cover/', '/pic/cover/$size/')
-      .replaceAll('/pic/crt/', '/pic/crt/$size/');
+      .replaceAll(RegExp(r'/pic/cover/[lmcsg]/'), '/pic/cover/$size/')
+      .replaceAll(RegExp(r'/pic/crt/[lmcsg]/'), '/pic/crt/$size/');
 }
+

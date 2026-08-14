@@ -144,7 +144,7 @@ class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
           ),
           _SwitchItem(
             title: '长楼层漂浮收起',
-            subtitle: '展开后右下角再显示收起按钮',
+            subtitle: '子楼层展开后右下角显示收起按钮',
             value: settings.showFixedToggleFloorBtn,
             onChanged: (v) => ref
                 .read(rakuenSettingsProvider.notifier)

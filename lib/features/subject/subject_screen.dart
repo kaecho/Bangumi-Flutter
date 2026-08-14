@@ -1594,7 +1594,12 @@ class _EpRow extends ConsumerWidget {
                 ),
                 onPressed: () async {
                   try {
-                    await setEpStatusAction(ref, ep.id, !watched);
+                    await setEpStatusAction(
+                      ref,
+                      ep.id,
+                      watched ? 'remove' : 'watched',
+                    );
+
                     ref.invalidate(epStatusProvider(subjectId));
                   } catch (e) {
                     if (context.mounted) {
@@ -1895,7 +1900,9 @@ class _RelationSection extends ConsumerWidget {
                   child: Column(
                     children: [
                       Cover(
-                        url: r.images.grid,
+                        url: r.images.common.isNotEmpty
+                            ? r.images.common
+                            : r.images.large,
                         width: 88,
                         height: 110,
                         radius: 6,

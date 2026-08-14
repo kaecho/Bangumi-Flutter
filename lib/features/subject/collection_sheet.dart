@@ -26,6 +26,7 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
   late final TextEditingController _commentController;
   late final TextEditingController _tagsController;
   bool _submitting = false;
+  int _privacy = 0;
 
   @override
   void initState() {
@@ -37,7 +38,9 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
     _tagsController = TextEditingController(
       text: current?.tags.join(' ') ?? '',
     );
+    _privacy = SettingsStore.instance.collectionPrivacy;
   }
+
 
   @override
   void dispose() {
@@ -149,6 +152,30 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
               ),
             ),
             const SizedBox(height: 16),
+            if (SettingsStore.instance.collectionCommentHistory.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PopupMenuButton<String>(
+                  tooltip: '吐槽历史',
+                  onSelected: (v) => _commentController.text = v,
+                  itemBuilder: (_) => [
+                    for (final h
+                        in SettingsStore.instance.collectionCommentHistory)
+                      PopupMenuItem(
+                        value: h,
+                        child: Text(h, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  child: Text(
+                    '吐槽历史',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 if (hasCollection) ...[
@@ -165,6 +192,11 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
                   const Spacer(),
                 ] else
                   const Spacer(),
+                TextButton(
+                  onPressed: () => setState(() => _privacy = _privacy == 1 ? 0 : 1),
+                  child: Text(_privacy == 1 ? '私密' : '公开'),
+                ),
+                const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _submitting ? null : _submit,
                   child: _submitting
@@ -177,6 +209,7 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
                 ),
               ],
             ),
+
           ],
         ),
       ),
@@ -190,14 +223,19 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
           .split(RegExp(r'\s+'))
           .where((s) => s.isNotEmpty)
           .toList();
+      final comment = _commentController.text.trim();
       await updateCollectionAction(
         ref,
         widget.subjectId,
         type: _type,
         rate: _rate.round(),
-        comment: _commentController.text.trim(),
+        comment: comment,
         tags: tags,
+        privacy: _privacy,
       );
+      await SettingsStore.instance.setCollectionPrivacy(_privacy);
+      await SettingsStore.instance.pushCollectionComment(comment);
+
       invalidateSubjectState(ref, widget.subjectId);
       SettingsStore.instance.haptic(2);
       await _maybeAutoComplete();

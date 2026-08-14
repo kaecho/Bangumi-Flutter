@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/site_cookies.dart';
 import '../../core/html/bgm_html_parser.dart' as core;
 import '../../core/utils/display.dart';
 import '../../shared/models/user.dart';
@@ -20,10 +21,12 @@ import 'html_parse.dart';
 import 'rakuen_models.dart';
 import 'rakuen_providers.dart';
 import 'rakuen_settings.dart';
+import 'widgets/fixed_textarea.dart';
 import 'widgets/floor_view.dart';
 import '../subject/subject_providers.dart';
 import '../../design_system/design_system.dart';
 import '../../shared/models/ep.dart';
+
 
 String _userPathId(User user) =>
     user.username.isEmpty ? '${user.id}' : user.username;
@@ -53,6 +56,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
   _FloorFilter _filter = _FloorFilter.all;
   bool _reverse = false;
   bool _sending = false;
+  ReplyTarget? _replyTarget;
 
   String get _topicId => widget.topicId;
 
@@ -64,17 +68,69 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
   }
 
   Future<void> _sendReply() async {
-    final text = _replyController.text.trim();
+    var text = _replyController.text.trim();
     if (text.isEmpty) return;
     if (!ref.read(canActAsLoggedInProvider)) {
       await context.push('/login');
       return;
     }
+    final data = ref.read(topicDetailProvider(_topicId)).valueOrNull;
+    if (data != null && (data.close.isNotEmpty || data.tip.contains('半公开'))) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data.close.isNotEmpty ? data.close : data.tip)),
+        );
+      }
+      return;
+    }
     setState(() => _sending = true);
     try {
-      final client = ref.read(apiClientProvider);
-      await client.post(apiTopicNewReply(_topicId), data: {'content': text});
+      var gh = data?.formhash ?? '';
+      if (gh.isEmpty) {
+        try {
+          gh = await ref.read(formhashProvider.future);
+        } catch (_) {}
+      }
+      if (gh.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('回帖需要站点 Cookie 登录')),
+          );
+        }
+        return;
+      }
+      final target = _replyTarget;
+      if (target != null && target.messageHtml.isNotEmpty) {
+        text = quoteReplyContent(
+          userName: target.userName,
+          messageHtml: target.messageHtml,
+          content: text,
+        );
+      }
+      final parsed = target == null ? null : parseReplySub(target.replySub);
+      final lastview = data?.lastview.isNotEmpty == true
+          ? data!.lastview
+          : '${DateTime.now().millisecondsSinceEpoch ~/ 1000}';
+      await ref.read(apiClientProvider).post(
+        htmlTopicReply(_topicId),
+        host: kHost,
+        form: true,
+        data: {
+          'content': text,
+          'formhash': gh,
+          'related_photo': 0,
+          'lastview': lastview,
+          'submit': 'submit',
+          if (parsed != null) ...{
+            'related': parsed.related,
+            'sub_reply_uid': parsed.subReplyUid,
+            'post_uid': parsed.postUid,
+          },
+        },
+      );
       _replyController.clear();
+      if (mounted) setState(() => _replyTarget = null);
+
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -91,6 +147,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
       if (mounted) setState(() => _sending = false);
     }
   }
+
 
   void _jumpFloor(int direction) {
     if (!_scrollController.hasClients) return;
@@ -278,7 +335,10 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
                 expandedHtml: _expandedHtml,
                 scrollController: _scrollController,
                 onFilter: (v) => setState(() => _filter = v),
-                onExpandFloor: (id) => setState(() => _expandedSubs.add(id)),
+                onExpandFloor: (id) => setState(() {
+                  if (!_expandedSubs.remove(id)) _expandedSubs.add(id);
+                  _visibleLongFloorId = _expandedSubs.contains(id) ? id : null;
+                }),
                 onHtmlToggle: (id) => setState(() {
                   if (!_expandedHtml.remove(id)) {
                     _expandedHtml.add(id);
@@ -289,17 +349,15 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
                         : _expandedHtml.last;
                   }
                 }),
-
-                onReply: (name) {
-                  _replyController.text = '@$name ';
-                  _replyController.selection = TextSelection.collapsed(
-                    offset: _replyController.text.length,
-                  );
-                  _scrollController.animateTo(
-                    _scrollController.position.maxScrollExtent,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut,
-                  );
+                onReply: (target) {
+                  setState(() => _replyTarget = target);
+                  final prefix = '@${target.userName} ';
+                  if (!_replyController.text.startsWith(prefix)) {
+                    _replyController.text = prefix + _replyController.text;
+                    _replyController.selection = TextSelection.collapsed(
+                      offset: _replyController.text.length,
+                    );
+                  }
                 },
                 onLoadMore: () =>
                     ref.read(topicDetailProvider(_topicId).notifier).loadMore(),
@@ -339,7 +397,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
             ),
           if (settings.showFixedToggleFloorBtn &&
               _visibleLongFloorId != null &&
-              _expandedHtml.contains(_visibleLongFloorId))
+              _expandedSubs.contains(_visibleLongFloorId))
             Positioned(
               right: 16,
               bottom: 16,
@@ -347,12 +405,8 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
                 heroTag: 'collapse-floor',
                 onPressed: () => setState(() {
                   final id = _visibleLongFloorId;
-                  if (id != null) {
-                    _expandedHtml.remove(id);
-                    _visibleLongFloorId = _expandedHtml.isEmpty
-                        ? null
-                        : _expandedHtml.last;
-                  }
+                  if (id != null) _expandedSubs.remove(id);
+                  _visibleLongFloorId = null;
                 }),
                 icon: const Icon(Icons.keyboard_arrow_up),
                 label: const Text('收起楼层'),
@@ -360,14 +414,45 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
             ),
         ],
       ),
-      bottomNavigationBar: _ReplyBar(
-        controller: _replyController,
-        sending: _sending,
-        onSend: _sendReply,
-        onPrevFloor: () => _jumpFloor(-1),
-        onNextFloor: () => _jumpFloor(1),
-        showSlider: settings.scrollDirection == 'bottom',
-      ),
+      bottomNavigationBar: () {
+        final page = async.valueOrNull;
+        if (page != null &&
+            (page.close.isNotEmpty || page.tip.contains('半公开'))) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                page.close.isNotEmpty ? page.close : page.tip,
+                style: context.ds.caption,
+              ),
+            ),
+          );
+        }
+        return FixedTextarea(
+          controller: _replyController,
+          sending: _sending,
+          loggedIn: ref.watch(canActAsLoggedInProvider),
+          target: _replyTarget,
+          historyKey: 'topic_reply_$_topicId',
+          onSend: _sendReply,
+          onLogin: () => context.push('/login'),
+          onClearTarget: () => setState(() => _replyTarget = null),
+          leading: settings.scrollDirection == 'bottom'
+              ? [
+                  IconButton(
+                    tooltip: '上一楼',
+                    onPressed: () => _jumpFloor(-1),
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                  ),
+                  IconButton(
+                    tooltip: '下一楼',
+                    onPressed: () => _jumpFloor(1),
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                  ),
+                ]
+              : const [],
+        );
+      }(),
     );
   }
 }
@@ -384,7 +469,7 @@ class _TopicBody extends ConsumerWidget {
   final ValueChanged<_FloorFilter> onFilter;
   final ValueChanged<String> onExpandFloor;
   final ValueChanged<String> onHtmlToggle;
-  final ValueChanged<String> onReply;
+  final ValueChanged<ReplyTarget> onReply;
   final VoidCallback onLoadMore;
 
   const _TopicBody({
@@ -663,16 +748,18 @@ class _TopicBody extends ConsumerWidget {
         for (final (index, floor) in floors.indexed)
           FloorView(
             floor: floor,
-            floorLabel: floor.floor.isNotEmpty ? floor.floor : '${index + 2}',
+            floorLabel: floor.floor.isNotEmpty ? floor.floor : '#${index + 2}',
             isAuthor: data.userId.isNotEmpty && floor.userId == data.userId,
             settings: settings,
             onReply: onReply,
             topicId: topicId,
+            likeType: data.likeType,
             expanded: expandedSubs.contains(floor.id),
             onExpand: () => onExpandFloor(floor.id),
             htmlExpanded: expandedHtml.contains(floor.id),
             onHtmlToggle: () => onHtmlToggle(floor.id),
           ),
+
 
         if (data.pageTotal > 1)
           Center(
@@ -815,105 +902,3 @@ class _EpNavButton extends StatelessWidget {
   }
 }
 
-/// 底部回复框
-class _ReplyBar extends ConsumerWidget {
-  final TextEditingController controller;
-  final bool sending;
-  final VoidCallback onSend;
-  final VoidCallback onPrevFloor;
-  final VoidCallback onNextFloor;
-  final bool showSlider;
-
-  const _ReplyBar({
-    required this.controller,
-    required this.sending,
-    required this.onSend,
-    required this.onPrevFloor,
-    required this.onNextFloor,
-    this.showSlider = true,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isLogin = ref.watch(canActAsLoggedInProvider);
-    final theme = Theme.of(context);
-    final settings = ref.watch(rakuenSettingsProvider);
-    var slider = showSlider
-        ? [
-            IconButton(
-              tooltip: '上一楼',
-              onPressed: onPrevFloor,
-              icon: const Icon(Icons.keyboard_arrow_up),
-            ),
-            IconButton(
-              tooltip: '下一楼',
-              onPressed: onNextFloor,
-              icon: const Icon(Icons.keyboard_arrow_down),
-            ),
-          ]
-        : const <Widget>[];
-    if (settings.switchSlider && slider.length == 2) {
-      slider = [slider[1], slider[0]];
-    }
-
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          border: Border(top: BorderSide(color: theme.dividerColor)),
-        ),
-        child: isLogin
-            ? Row(
-                children: [
-                  ...slider,
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      minLines: 1,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: '回复楼主...',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      textInputAction: TextInputAction.newline,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: sending ? null : onSend,
-                    icon: sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send),
-                    tooltip: '发送',
-                    color: theme.colorScheme.primary,
-                  ),
-                ],
-              )
-            : Row(
-                children: [
-                  ...slider,
-                  Expanded(
-                    child: Text(
-                      '登录后回复',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.outline,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => context.push('/login'),
-                    child: const Text('去登录'),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-}

@@ -15,6 +15,7 @@ import '../../../core/utils/display.dart';
 import '../../../core/utils/format.dart';
 import '../../../design_system/design_system.dart';
 import '../../../shared/widgets/score.dart';
+import 'fixed_textarea.dart';
 
 /// 帖子楼层视图 (主楼层 + 子回复)
 class FloorView extends ConsumerWidget {
@@ -22,11 +23,12 @@ class FloorView extends ConsumerWidget {
   final String floorLabel;
   final bool isAuthor;
   final RakuenSettingsState settings;
-  final void Function(String userName)? onReply;
+  final void Function(ReplyTarget target)? onReply;
   final bool isSub;
 
   /// 主题 ID (用于贴贴/复制链接; 为空时隐藏贴贴与链接菜单)
   final String topicId;
+  final int likeType;
 
   /// 是否已手动展开全部子回复
   final bool expanded;
@@ -45,6 +47,7 @@ class FloorView extends ConsumerWidget {
     this.onReply,
     this.isSub = false,
     this.topicId = '',
+    this.likeType = 8,
     this.expanded = false,
     this.onExpand,
     this.htmlExpanded = false,
@@ -75,13 +78,15 @@ class FloorView extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    final subExpand = int.tryParse(settings.subExpand) ?? 0;
-    final showAllSubs =
-        expanded || subExpand == 0 || floor.subReplies.length <= subExpand;
+    // 原版: 0=一直折叠; 2/4/8=超过后折叠溢出
+    final subExpand = int.tryParse(settings.subExpand) ?? 4;
+    final limit = subExpand <= 0 ? 0 : subExpand;
+    final showAllSubs = expanded || floor.subReplies.length <= limit;
     final visibleSubs = showAllSubs
         ? floor.subReplies
-        : floor.subReplies.take(subExpand).toList();
+        : floor.subReplies.take(limit).toList();
     final hiddenSubs = floor.subReplies.length - visibleSubs.length;
+
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -232,7 +237,13 @@ class FloorView extends ConsumerWidget {
 
                     if (onReply != null)
                       InkWell(
-                        onTap: () => onReply!(floor.userName),
+                        onTap: () => onReply!(
+                          ReplyTarget(
+                            userName: floor.userName,
+                            messageHtml: floor.messageHtml,
+                            replySub: floor.replySub,
+                          ),
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(4),
                           child: Icon(
@@ -267,13 +278,20 @@ class FloorView extends ConsumerWidget {
                         floorLabel: sub.floor.isNotEmpty
                             ? sub.floor
                             : '${floorLabel.isEmpty ? '' : floorLabel}-${i + 1}',
-                        isAuthor: isAuthor,
+                        isAuthor: isAuthor && sub.userId == floor.userId,
+
                         settings: settings,
                         isSub: true,
                         onReply: onReply,
+                        topicId: topicId,
+                        likeType: likeType,
                       ),
-                    if (hiddenSubs > 0)
-                      _ExpandSubsButton(count: hiddenSubs, onTap: onExpand),
+                    if (floor.subReplies.length > limit)
+                      _ExpandSubsButton(
+                        count: hiddenSubs,
+                        expanded: expanded,
+                        onTap: onExpand,
+                      ),
                   ],
                 ),
               ),
@@ -362,7 +380,13 @@ class FloorView extends ConsumerWidget {
 
     switch (action) {
       case 'reply':
-        onReply?.call(floor.userName);
+        onReply?.call(
+          ReplyTarget(
+            userName: floor.userName,
+            messageHtml: floor.messageHtml,
+            replySub: floor.replySub,
+          ),
+        );
       case 'like':
         await _likeFloor(ref);
       case 'copy':
@@ -379,7 +403,7 @@ class FloorView extends ConsumerWidget {
         }
       case 'copyLink':
         await Clipboard.setData(
-          ClipboardData(text: '$kHost/topic/$topicId#post_${floor.id}'),
+          ClipboardData(text: htmlTopicPage(topicId, postId: floor.id)),
         );
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -402,20 +426,22 @@ class FloorView extends ConsumerWidget {
     }
   }
 
-  /// 贴贴: POST /like?type=8&main_id={topicId}&id={floorId}
+  /// 贴贴: POST /like?type=&main_id={数字id}&id={floorId}
   Future<void> _likeFloor(WidgetRef ref) async {
     final gh = await _formhash(ref);
     if (gh.isEmpty) return;
+    final mainId = int.tryParse(topicId.split('/').last) ?? 0;
     try {
       await ref
           .read(apiClientProvider)
-          .get(
+          .post(
             apiLike(
-              8,
-              int.tryParse(topicId) ?? 0,
+              likeType,
+              mainId,
               id: int.tryParse(floor.id) ?? 0,
               gh: gh,
             ),
+            host: kHost,
           );
     } catch (e) {
       // 贴贴失败静默 (原项目乐观更新)
@@ -505,9 +531,14 @@ class _FloorBadge extends StatelessWidget {
 
 class _ExpandSubsButton extends StatelessWidget {
   final int count;
+  final bool expanded;
   final VoidCallback? onTap;
 
-  const _ExpandSubsButton({required this.count, this.onTap});
+  const _ExpandSubsButton({
+    required this.count,
+    this.expanded = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -517,7 +548,7 @@ class _ExpandSubsButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Text(
-          '展开 $count 条回复',
+          expanded ? '收起楼层' : '展开 $count 条回复',
           style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
         ),
       ),

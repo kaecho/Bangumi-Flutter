@@ -391,6 +391,16 @@ Every row in this matrix must exist as a route by the end of the rewrite.
 - **进度列表筛选** - 对齐原版 Filter: 输入框在列表顶部常驻, 空时显示数量, 不占 AppBar 标题
 - **超展开主类型 TabBar** - 对齐原版 RAKUEN_TYPE 顶栏页签, 板块/二级筛选仍在下方
 
+第五轮对齐 (Cookie 排错 + 站点写操作, 2026-08-14):
+
+- **站点 Cookie 检测** — 游客首页也有 `/login` 链接, 旧判定会误报已登录; 现认 `CHOBITS_UID=0`。`normalizeCookieTime` 对齐原版: `=0` 改 2592000, 缺失则补上。
+- **章节状态** — `POST /ep/{id}/status/{watched|queue|drop|remove}` (原版 MODEL_EP_STATUS); 长按菜单补「想看 / 抛弃」。
+- **收藏管理** — 公开/私密 (`privacy` 0|1) + 吐槽历史 (最多 10 条)。
+- **时间线** — Cookie 或 OAuth 均可进; 全站请求 `skipCookies` (原版 `!` 前缀); 「自己」在仅 Cookie 时从 HTML 解用户名。
+- **吐槽回复** — `POST /timeline/{id}/new_reply?ajax=1` (formhash + content)。
+- **短信新会话** — 可填标题, 空则默认「短信」。
+
+
 
 
 

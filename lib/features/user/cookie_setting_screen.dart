@@ -1,9 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/api_endpoints.dart';
 import '../../core/auth/site_cookies.dart';
 import '../../design_system/design_system.dart';
+
 
 /// 站点 Cookie 设置页
 ///
@@ -14,7 +18,8 @@ class CookieSettingScreen extends ConsumerStatefulWidget {
   const CookieSettingScreen({super.key});
 
   @override
-  ConsumerState<CookieSettingScreen> createState() => _CookieSettingScreenState();
+  ConsumerState<CookieSettingScreen> createState() =>
+      _CookieSettingScreenState();
 }
 
 class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
@@ -49,9 +54,11 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
     // 支持浏览器导出的 JSON cookie 数组
     if (input.startsWith('[')) {
       try {
-        final decoded = Uri.decodeComponent(input);
-        final list = (decoded as List).cast<Map<String, dynamic>>();
-        await store.setFromJson(list);
+        final decoded = jsonDecode(input);
+        if (decoded is! List) {
+          throw const FormatException('root is not a list');
+        }
+        await store.setFromJson(decoded);
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -62,6 +69,7 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
     } else {
       await store.setCookieHeader(normalizeCookieTime(input));
     }
+
     if (!mounted) return;
     setState(() => _saved = true);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -69,18 +77,28 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
     );
   }
 
-  /// 用保存的 cookie 请求 /notify, 验证登录态
+  /// 用保存的 cookie 请求 /settings/privacy, 验证登录态
+  ///
+  /// /notify 登录后几乎没有 CHOBITS_UID, 不能当判定页。
   Future<void> _test() async {
     setState(() => _statusText = '检测中...');
     final client = ref.read(apiClientProvider);
     try {
-      final html = await client.fetchHtml('https://bgm.tv/notify');
+      final html = await client.fetchHtml('$kHost/settings/privacy');
       if (htmlRequiresLogin(html)) {
-        setState(() => _statusText = '检测结果: Cookie 无效 (页面要求登录)');
-      } else if (html.contains('没有新提醒') || html.contains('提醒')) {
-        setState(() => _statusText = '检测结果: Cookie 有效 ✓ (已登录)');
+        setState(
+          () => _statusText =
+              '检测结果: Cookie 无效 (未登录或已过期)。'
+              '请在浏览器勾选「记住登录」后再导出; '
+              'session 且 chii_cookietime=0 的 chii_auth 换设备无法使用。',
+        );
       } else {
-        setState(() => _statusText = '检测结果: 已登录 (页面正常返回)');
+        final name = parseLoggedInUsername(html);
+        setState(
+          () => _statusText = name.isEmpty
+              ? '检测结果: Cookie 有效 ✓ (已登录)'
+              : '检测结果: Cookie 有效 ✓ ($name)',
+        );
       }
     } catch (e) {
       setState(() => _statusText = '检测失败: $e');
@@ -97,9 +115,13 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'bgm.tv 站点 Cookie 用于站点认证功能: 短信、电波提醒、点赞、'
-            '时间线、好友申请等。登录 App 后会自动捕获; 也可以手动粘贴浏览器导出的 Cookie。',
-            style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+            'bgm.tv 站点 Cookie 用于短信、电波提醒、点赞、时间线回复等。'
+            '请在电脑浏览器打开 bgm.tv, 勾选「记住登录」后再导出。'
+            '可直接粘贴 Cookie-Editor 的 JSON, 或一行 header。',
+            style: TextStyle(
+              fontSize: 13,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 16),
           TextField(

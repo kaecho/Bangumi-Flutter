@@ -112,11 +112,13 @@ class BgmHtml extends StatelessWidget {
       },
       extensions: [
         if (matchLink) _BgmLinkCardExtension(),
+        const _BgmMaskExtension(),
         _BgmImageExtension(
           onImageTap: (url) => _openImage(context, url),
           emojiSize: emojiSize,
         ),
       ],
+
 
       onLinkTap: (url, attributes, element) {
         if (url == null || url.isEmpty) return;
@@ -309,3 +311,63 @@ class _BgmLinkCardExtension extends HtmlExtension {
     );
   }
 }
+
+/// [mask] / span.text_mask / 深色底剧透, 点击展开
+class _BgmMaskExtension extends HtmlExtension {
+  const _BgmMaskExtension();
+
+  @override
+  Set<String> get supportedTags => {'span', 'mask'};
+
+  @override
+  bool matches(ExtensionContext context) {
+    final tag = context.elementName.toLowerCase();
+    if (tag == 'mask') return true;
+    final cls = context.classes.join(' ').toLowerCase();
+    if (cls.contains('text_mask') || cls.contains('mask')) return true;
+    final style = (context.attributes['style'] ?? '').toLowerCase();
+    return style.contains('#555') || style.contains('background-color:#555');
+  }
+
+  @override
+  InlineSpan build(ExtensionContext context) {
+    final text = context.element?.text ?? '';
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.baseline,
+      baseline: TextBaseline.alphabetic,
+      child: _MaskText(text: text),
+    );
+  }
+}
+
+class _MaskText extends StatefulWidget {
+  final String text;
+  const _MaskText({required this.text});
+
+  @override
+  State<_MaskText> createState() => _MaskTextState();
+}
+
+class _MaskTextState extends State<_MaskText> {
+  bool _show = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => setState(() => _show = !_show),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+        color: _show ? Colors.transparent : const Color(0xFF555555),
+        child: Text(
+          widget.text.isEmpty ? '剧透' : widget.text,
+          style: TextStyle(
+            color: _show
+                ? Theme.of(context).colorScheme.onSurface
+                : const Color(0xFF555555),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

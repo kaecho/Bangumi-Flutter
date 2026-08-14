@@ -87,13 +87,69 @@ final sayDetailProvider = FutureProvider.family<SayDetail, int>((
 
 /// 吐槽详情页
 /// 路由: /timeline/say/:id
-class SayScreen extends ConsumerWidget {
+class SayScreen extends ConsumerStatefulWidget {
   final int id;
 
   const SayScreen({super.key, required this.id});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SayScreen> createState() => _SayScreenState();
+}
+
+class _SayScreenState extends ConsumerState<SayScreen> {
+  final _reply = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _reply.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendReply() async {
+    final text = _reply.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      String gh;
+      try {
+        gh = await ref.read(formhashProvider.future);
+      } catch (_) {
+        gh = '';
+      }
+      if (gh.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('回复吐槽需要站点 Cookie 登录')),
+          );
+        }
+        return;
+      }
+      await ref.read(apiClientProvider).post(
+        htmlTimelineReply(widget.id),
+        host: kHost,
+        data: {'content': text, 'formhash': gh, 'submit': 'submit'},
+      );
+      if (!mounted) return;
+      _reply.clear();
+      ref.invalidate(sayDetailProvider(widget.id));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已回复')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('回复失败: ${apiErrorMessage(e)}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final id = widget.id;
     final detail = ref.watch(sayDetailProvider(id));
     return Scaffold(
       appBar: AppBar(
@@ -110,7 +166,6 @@ class SayScreen extends ConsumerWidget {
         actions: [
           IconButton(
             tooltip: '浏览器查看',
-
             icon: const Icon(Icons.open_in_browser),
             onPressed: () {
               final say = detail.valueOrNull?.say;
@@ -123,7 +178,6 @@ class SayScreen extends ConsumerWidget {
           ),
         ],
       ),
-
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -143,37 +197,71 @@ class SayScreen extends ConsumerWidget {
             ],
           ),
         ),
-        data: (value) => ListView(
-          padding: const EdgeInsets.all(16),
+        data: (value) => Column(
           children: [
-            _SayHeader(say: value.say, id: id),
-            const SizedBox(height: 16),
-            const Divider(),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                '评论 (${value.comments.length})',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _SayHeader(say: value.say, id: id),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      '评论 (${value.comments.length})',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (value.comments.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text('暂无评论', style: TextStyle(fontSize: 13)),
+                      ),
+                    )
+                  else
+                    ...value.comments.map((c) => _CommentTile(comment: c)),
+                ],
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _reply,
+                        minLines: 1,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          hintText: '回复吐槽, 长按头像@某人',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _sending ? null : _sendReply,
+                      child: const Text('回复'),
+                    ),
+                  ],
                 ),
               ),
             ),
-            if (value.comments.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text('暂无评论', style: TextStyle(fontSize: 13)),
-                ),
-              )
-            else
-              ...value.comments.map((c) => _CommentTile(comment: c)),
           ],
         ),
       ),
     );
   }
 }
+
 
 /// 吐槽本体 + 点赞按钮
 class _SayHeader extends ConsumerStatefulWidget {

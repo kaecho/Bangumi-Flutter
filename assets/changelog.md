@@ -1,8 +1,28 @@
 # CHANGELOG
 
+## 1.0.4 - 2026-08-14
+
+### 新增
+
+- 超展开回帖对齐原版: 楼层号 `#N` / `#N-M`、子楼层折叠/收起、BBCode 编辑器 (加粗/斜体/下划/删除/剧透/链接/图片/图床/BGM/历史)
+- 回帖走主站 `/{type}/{id}/new_reply?ajax=1` + formhash + 引用 `[quote]` (日志同样)
+- `[mask]` 剧透点击展开
+- 章节长按菜单补「想看 / 抛弃」(queue/drop/remove)
+- 收藏管理: 公开/私密 + 吐槽历史
+- 短信新会话可填标题
+
+### 修复
+
+- 进度/发现/关联条目封面: 默认画质不再把 `/r/400/pic/cover/l/` 改成非法 `/m/` (CDN 400)
+- 封面统一走 lain `/r/{100|200|400|800}/pic/cover/l/` (对齐原版 getCover400)
+- 主站 HTML 请求改桌面 Chrome UA, Cookie 不再被按 UA 踢成游客
+- Cookie 检测改打 `/settings/privacy`; JSON 导出用 `jsonDecode`
+- 时间线: Cookie 登录可进; 全站请求不带 Cookie; 吐槽可回复
+
 ## 1.0.3 - 2026-08-14
 
 ### 新增
+
 
 - 应用图标对齐原版娘口三三 (Android 自适应/圆角 + iOS + Web)
 - 发现/进度/超展开/空间/小圣杯继续 1:1 对齐原版布局与交互

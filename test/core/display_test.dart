@@ -52,13 +52,54 @@ void main() {
       );
       expect(
         applyCoverQuality('https://lain.bgm.tv/pic/cover/l/ab/cd.jpg', 'grid'),
-        'https://lain.bgm.tv/pic/cover/g/ab/cd.jpg',
+        'https://lain.bgm.tv/r/100/pic/cover/l/ab/cd.jpg',
       );
       expect(
         applyCoverQuality('https://lain.bgm.tv/pic/user/l/icon.jpg', 'small'),
         'https://lain.bgm.tv/pic/user/l/icon.jpg',
       );
     });
+
+    test('v0 /r/400/pic/cover/l 不被改成非法 /m/', () {
+      const src =
+          'https://lain.bgm.tv/r/400/pic/cover/l/14/a1/545008_pNnzQ.jpg';
+      expect(
+        applyCoverQuality(src, 'medium'),
+        'https://lain.bgm.tv/r/400/pic/cover/l/14/a1/545008_pNnzQ.jpg',
+      );
+      expect(applyCoverQuality(src, 'medium'), isNot(contains('/cover/m/')));
+      expect(
+        applyCoverQuality(src, 'large'),
+        'https://lain.bgm.tv/r/800/pic/cover/l/14/a1/545008_pNnzQ.jpg',
+      );
+    });
+
+    test('旧 /pic/cover/c 与 grid 按档位升级到 r/N/l', () {
+      expect(
+        applyCoverQuality(
+          'http://lain.bgm.tv/pic/cover/c/ab/cd.jpg',
+          'medium',
+        ),
+        'https://lain.bgm.tv/r/400/pic/cover/l/ab/cd.jpg',
+      );
+      expect(
+        applyCoverQuality(
+          '//lain.bgm.tv/r/100/pic/cover/l/ab/cd.jpg',
+          'medium',
+          displayWidth: 88,
+        ),
+        'https://lain.bgm.tv/r/400/pic/cover/l/ab/cd.jpg',
+      );
+      expect(
+        applyCoverQuality(
+          'https://lain.bgm.tv/r/400/pic/cover/l/ab/cd.jpg',
+          'medium',
+          displayWidth: double.infinity,
+        ),
+        'https://lain.bgm.tv/r/400/pic/cover/l/ab/cd.jpg',
+      );
+    });
+
   });
 
   group('Subject.nsfw', () {

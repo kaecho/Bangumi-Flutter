@@ -40,7 +40,11 @@ class Cover extends StatelessWidget {
       builder: (context, _) {
         if (url.isEmpty) return _buildPlaceholder();
         final store = SettingsStore.instance;
-        final imageUrl = applyCoverQuality(url, store.imageQuality);
+        final imageUrl = applyCoverQuality(
+          url,
+          store.imageQuality,
+          displayWidth: width,
+        );
         final image = ClipRRect(
           borderRadius: BorderRadius.circular(radius),
           child: CachedNetworkImage(
@@ -52,10 +56,12 @@ class Cover extends StatelessWidget {
                 ? const Duration(milliseconds: 150)
                 : Duration.zero,
             fadeOutDuration: Duration.zero,
+            httpHeaders: const {'Referer': 'https://bgm.tv/'},
             placeholder: (_, _) => _buildPlaceholder(),
             errorWidget: (_, _, _) => _buildPlaceholder(),
           ),
         );
+
         if (!store.coverThings || type == null || type!.isEmpty) return image;
         final color = switch (type) {
           'book' => const Color(0xFF8D6E63),

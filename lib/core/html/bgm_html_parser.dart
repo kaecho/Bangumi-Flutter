@@ -55,6 +55,38 @@ String cText(Object? el) {
 /// 节点 attribute 值
 String cData(Element? el, String attr) => el?.attributes[attr] ?? '';
 
+/// 从 /user/{id} 抽用户 id (数字或 slug, 对齐原项目 matchUserId)
+String matchUserIdFromHref(String? href) {
+  if (href == null || href.isEmpty) return '';
+  final m = RegExp(r'/user/([^/?#]+)').firstMatch(href);
+  return m?.group(1) ?? '';
+}
+
+/// 楼层回复 onclick: subReply('group', topicId, related, ...)
+String matchReplySub(Element row) {
+  final a =
+      row.querySelector('a.icon[onclick]') ??
+      row.querySelector('[onclick*="subReply"]');
+  return a?.attributes['onclick'] ?? '';
+}
+
+String matchEraseHref(Element row) =>
+    row.querySelector('a.erase_post')?.attributes['href'] ?? '';
+
+/// 楼层号只留 #N / #N-M
+String normalizeFloorLabel(String raw) {
+  final m = RegExp(r'#?\d+(?:-\d+)?').firstMatch(raw);
+  if (m == null) return raw.trim();
+  final v = m.group(0)!;
+  return v.startsWith('#') ? v : '#$v';
+}
+
+int? floorNumber(String raw) {
+  final m = RegExp(r'#?(\d+)').firstMatch(raw);
+  return int.tryParse(m?.group(1) ?? '');
+}
+
+
 /// 匹配 attr 中的内容
 String matchAttr(Element? el, String attr, RegExp regex) {
   final v = cData(el, attr);
@@ -217,6 +249,8 @@ class RakuenFloor {
   final String userSign;
   final String messageHtml;
   final int likes;
+  final String replySub;
+  final String erase;
   final List<RakuenFloor> subReplies;
 
   const RakuenFloor({
@@ -230,6 +264,8 @@ class RakuenFloor {
     this.userSign = '',
     this.messageHtml = '',
     this.likes = 0,
+    this.replySub = '',
+    this.erase = '',
     this.subReplies = const [],
   });
 }
@@ -261,18 +297,24 @@ RakuenFloor _parseFloor(Element row) {
   final split = _splitTimeSource(info.length > 1 ? info[1] : '');
   final name =
       row.querySelector('.inner .userInfo a.l') ?? row.querySelector('a.l');
+  final avatarLink = row.querySelector('a.avatar');
   return RakuenFloor(
     id: cData(row, 'id').replaceFirst('post_', ''),
     time: split.time,
     source: split.source,
-    floor: info.isNotEmpty ? info[0] : '',
+    floor: normalizeFloorLabel(info.isNotEmpty ? info[0] : ''),
     avatar: matchAvatar(row.querySelector('span.avatarNeue')),
-    userId: matchAttr(name, 'href', RegExp(r'/user/(\d+)')),
+    userId:
+        matchUserIdFromHref(cData(avatarLink, 'href')).isNotEmpty
+        ? matchUserIdFromHref(cData(avatarLink, 'href'))
+        : matchUserIdFromHref(cData(name, 'href')),
     userName: htmlDecode(cText(name)),
     userSign: cText(row.querySelector('.inner .sign')),
     messageHtml:
         row.querySelector('.reply_content > .message')?.innerHtml ?? '',
     likes: _parseFloorLikes(row),
+    replySub: matchReplySub(row),
+    erase: matchEraseHref(row),
     subReplies: [
       for (final sub in row.querySelectorAll(
         'div.topic_sub_reply > div.sub_reply_bg',
@@ -289,17 +331,23 @@ RakuenFloor _parseSubFloor(Element row) {
   final split = _splitTimeSource(info.length > 1 ? info[1] : '');
   final name =
       row.querySelector('.inner .userInfo a.l') ?? row.querySelector('a.l');
+  final avatarLink = row.querySelector('a.avatar');
   return RakuenFloor(
     id: cData(row, 'id').replaceFirst('post_', ''),
     time: split.time,
     source: split.source,
-    floor: info.isNotEmpty ? info[0] : '',
+    floor: normalizeFloorLabel(info.isNotEmpty ? info[0] : ''),
     avatar: matchAvatar(row.querySelector('span.avatarNeue')),
-    userId: matchAttr(name, 'href', RegExp(r'/user/(\d+)')),
+    userId:
+        matchUserIdFromHref(cData(avatarLink, 'href')).isNotEmpty
+        ? matchUserIdFromHref(cData(avatarLink, 'href'))
+        : matchUserIdFromHref(cData(name, 'href')),
     userName: htmlDecode(cText(name)),
     userSign: cText(row.querySelector('.inner .sign')),
     messageHtml: row.querySelector('.cmt_sub_content')?.innerHtml ?? '',
     likes: _parseFloorLikes(row),
+    replySub: matchReplySub(row),
+    erase: matchEraseHref(row),
   );
 }
 

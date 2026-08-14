@@ -385,7 +385,12 @@ class _EpRow extends ConsumerWidget {
                 ),
                 onPressed: () async {
                   try {
-                    await setEpStatusAction(ref, ep.id, !watched);
+                    await setEpStatusAction(
+                      ref,
+                      ep.id,
+                      watched ? 'remove' : 'watched',
+                    );
+
                     ref.invalidate(epStatusProvider(subjectId));
                   } catch (e) {
                     if (context.mounted) {

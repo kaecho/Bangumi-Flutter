@@ -912,6 +912,28 @@ class SettingsStore extends ChangeNotifier {
     ]);
     notifyListeners();
   }
+
+  /// 收藏管理: 0=公开 1=私密 (原项目 NAMESPACE_PRIVACY)
+  int get collectionPrivacy => _prefs?.getInt('setting_collection_privacy') ?? 0;
+
+  Future<void> setCollectionPrivacy(int value) async {
+    await _prefs?.setInt('setting_collection_privacy', value == 1 ? 1 : 0);
+    notifyListeners();
+  }
+
+  /// 收藏吐槽历史 (原项目 commentHistory, 最多 10 条)
+  List<String> get collectionCommentHistory =>
+      _prefs?.getStringList('setting_collection_comment_history') ?? const [];
+
+  Future<void> pushCollectionComment(String comment) async {
+    final value = comment.trim();
+    if (value.isEmpty) return;
+    final next = [value, ...collectionCommentHistory.where((e) => e != value)];
+    if (next.length > 10) next.removeRange(10, next.length);
+    await _prefs?.setStringList('setting_collection_comment_history', next);
+    notifyListeners();
+  }
+
 }
 
 /// 全局设置 Provider (ChangeNotifier: 修改后自动刷新依赖方)

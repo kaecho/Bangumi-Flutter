@@ -13,7 +13,8 @@ import '../../core/storage/settings_store.dart';
 import '../../shared/models/user.dart';
 
 /// 应用版本 (与 pubspec.yaml 保持一致)
-const String kAppVersion = '1.0.3+4';
+const String kAppVersion = '1.0.4+5';
+
 
 /// 调试日志: 写入 [DebugLog] (内存尾部 + 文件, 调试模式开启时由 ApiClient 持续追加)
 void debugLog(String message) {

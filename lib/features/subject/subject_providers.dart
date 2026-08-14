@@ -435,7 +435,9 @@ final previewProvider = FutureProvider.family<List<PreviewImage>, int>((
 // 收藏 / 章节进度 动作
 // ---------------------------------------------------------------------------
 
-/// 更新收藏: POST /collection/{id}/update (form: type/rate/comment/tags/ep_status)
+/// 更新收藏: POST /collection/{id}/update
+///
+/// [privacy] 0=公开 1=私密 (原项目 manage-modal)
 Future<void> updateCollectionAction(
   WidgetRef ref,
   int subjectId, {
@@ -444,6 +446,7 @@ Future<void> updateCollectionAction(
   String comment = '',
   List<String> tags = const [],
   int epStatus = 0,
+  int privacy = 0,
 }) async {
   final client = ref.read(apiClientProvider);
   await client.post(
@@ -454,6 +457,7 @@ Future<void> updateCollectionAction(
       'comment': comment,
       'tags': tags.join(' '),
       'ep_status': epStatus,
+      'privacy': privacy,
     }),
   );
 }
@@ -464,11 +468,17 @@ Future<void> removeCollectionAction(WidgetRef ref, int subjectId) async {
   await client.post(apiCollectionAction(subjectId, 'remove'));
 }
 
-/// 单集状态: POST /ep/{id}/status/{1|0}
-Future<void> setEpStatusAction(WidgetRef ref, int epId, bool watched) async {
+/// 单集状态: POST /ep/{id}/status/{watched|queue|drop|remove}
+/// 对齐原项目 MODEL_EP_STATUS / doUpdateEpStatus
+Future<void> setEpStatusAction(
+  WidgetRef ref,
+  int epId,
+  String status,
+) async {
   final client = ref.read(apiClientProvider);
-  await client.post(apiEpStatus(epId, watched ? 1 : 0));
+  await client.post(apiEpStatus(epId, status));
 }
+
 
 /// 批量更新进度: POST /subject/{id}/update/watched_eps
 Future<void> updateWatchedEpsAction(

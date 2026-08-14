@@ -105,6 +105,22 @@ void main() {
     });
   });
 
+  group('apiEpStatus', () {
+    test('对齐原版 watched/queue/drop/remove', () {
+      expect(apiEpStatus(12, 'watched'), 'https://api.bgmapi.com/ep/12/status/watched');
+      expect(apiEpStatus(12, 'queue'), 'https://api.bgmapi.com/ep/12/status/queue');
+      expect(apiEpStatus(12, 'drop'), 'https://api.bgmapi.com/ep/12/status/drop');
+      expect(apiEpStatus(12, 'remove'), 'https://api.bgmapi.com/ep/12/status/remove');
+    });
+  });
+
+  group('htmlTimelineReply', () {
+    test('回复吐槽走主站 ajax', () {
+      expect(htmlTimelineReply(99), '/timeline/99/new_reply?ajax=1');
+    });
+  });
+
+
   group('apiUserCatalogsHtml', () {
     test('创建的走 /index, 收藏的走 /index/collect', () {
       expect(
@@ -200,4 +216,55 @@ void main() {
       expect(htmlBlogList(type: 'book', page: 3), '/book/blog/3.html');
     });
   });
+
+  group('site / api UA', () {
+    test('主站 UA 是桌面 Chrome, 不是 Android 126', () {
+      expect(kSiteUserAgent, contains('Windows NT 10.0'));
+      expect(kSiteUserAgent, contains('Chrome/151'));
+      expect(kSiteUserAgent, isNot(contains('Android 14')));
+    });
+
+    test('API UA 仍是应用标识', () {
+      expect(kApiUserAgent, startsWith('Bangumi/Flutter'));
+    });
+  });
+
+  group('htmlTopicReply / coverUrl', () {
+    test('对齐原版 HTML_ACTION_RAKUEN_REPLY', () {
+      expect(
+        htmlTopicReply('group/468754'),
+        'https://bgm.tv/group/topic/468754/new_reply?ajax=1',
+      );
+      expect(
+        htmlTopicReply('subject/123'),
+        'https://bgm.tv/subject/topic/123/new_reply?ajax=1',
+      );
+      expect(
+        htmlTopicReply('ep/1705009'),
+        'https://bgm.tv/subject/ep/1705009/new_reply?ajax=1',
+      );
+      expect(
+        htmlTopicReply('crt/1'),
+        'https://bgm.tv/character/1/new_reply?ajax=1',
+      );
+      expect(
+        htmlTopicReply('prsn/2'),
+        'https://bgm.tv/person/2/new_reply?ajax=1',
+      );
+      expect(
+        htmlBlogReply(378305),
+        'https://bgm.tv/blog/entry/378305/new_reply?ajax=1',
+      );
+    });
+
+    test('coverUrl 不破坏 r/N/l', () {
+      const src = 'https://lain.bgm.tv/r/400/pic/cover/l/ab/cd.jpg';
+      expect(coverUrl(src), src);
+      expect(
+        coverUrl('https://lain.bgm.tv/pic/cover/l/ab/cd.jpg', size: 'c'),
+        'https://lain.bgm.tv/pic/cover/c/ab/cd.jpg',
+      );
+    });
+  });
 }
+

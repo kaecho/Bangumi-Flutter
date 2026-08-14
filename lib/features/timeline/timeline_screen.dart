@@ -81,8 +81,16 @@ class TimelineNotifier
     final client = ref.read(apiClientProvider);
     if (query.scope == 'me') {
       final me = ref.read(currentUserProvider);
-      if (me == null) return const TimelineData(hasMore: false);
-      final userId = me.username.isEmpty ? '${me.id}' : me.username;
+      var userId = me == null
+          ? ''
+          : (me.username.isEmpty ? '${me.id}' : me.username);
+      if (userId.isEmpty) {
+        try {
+          final html = await client.fetchHtml('$kHost/notify');
+          userId = parseLoggedInUsername(html);
+        } catch (_) {}
+      }
+      if (userId.isEmpty) return const TimelineData(hasMore: false);
       final html = await client.get(
         apiUserTimelineHtml(userId, type: query.type, page: page),
         host: kHost,
@@ -99,6 +107,7 @@ class TimelineNotifier
     final html = await client.get(
       htmlTimeline(type: query.type, page: page),
       host: kHost,
+      skipCookies: query.scope == 'all',
     );
     final groups = parseUserTimeline(html as String);
     final items = [for (final g in groups) ...g.items];
@@ -151,7 +160,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isLogin = ref.watch(isLoggedInProvider);
+    final canAct = ref.watch(canActAsLoggedInProvider);
     final scopeLabel = kTimelineScopes
         .firstWhere((e) => e.$1 == _scope, orElse: () => ('friend', '好友'))
         .$2;
@@ -159,7 +168,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen>
       appBar: AppBar(
         title: const TabLogoTitle('时间线'),
         actions: [
-          if (isLogin)
+          if (canAct)
             IconButton(
               icon: const Icon(Icons.add),
               tooltip: '新吐槽',
@@ -168,7 +177,6 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen>
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(46),
-
           child: Row(
             children: [
               PopupMenuButton<String>(
@@ -201,8 +209,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen>
           ),
         ),
       ),
-
-      body: isLogin
+      body: canAct
           ? TabBarView(
               controller: _tabController,
               children: [
@@ -213,6 +220,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen>
           : const _TimelineLoginGate(),
     );
   }
+
 }
 
 class _TimelineList extends ConsumerStatefulWidget {
@@ -681,7 +689,6 @@ bool _keepTimelineItem(SettingsStore store, TimelineItem item) {
         )) {
       return false;
     }
-    if (isSensitiveText(item.content)) return false;
   }
   return true;
 }
@@ -698,13 +705,23 @@ class _TimelineLoginGate extends ConsumerWidget {
           Icon(Icons.lock_outline, size: 48, color: context.ds.textHint),
           const SizedBox(height: 12),
           const Text('登录后查看时间线'),
+          const SizedBox(height: 8),
+          const Text(
+            'OAuth 或站点 Cookie 均可',
+            style: TextStyle(fontSize: 12),
+          ),
           const SizedBox(height: 12),
           FilledButton(
             onPressed: () => context.push('/login'),
             child: const Text('登录'),
+          ),
+          TextButton(
+            onPressed: () => context.push('/settings/cookies'),
+            child: const Text('站点 Cookie 登录'),
           ),
         ],
       ),
     );
   }
 }
+

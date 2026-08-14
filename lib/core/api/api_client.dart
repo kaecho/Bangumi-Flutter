@@ -37,9 +37,9 @@ class ApiClient {
             receiveTimeout: const Duration(seconds: 20),
             sendTimeout: const Duration(seconds: 15),
             headers: {
-              'User-Agent':
-                  'Bangumi/Flutter (https://github.com/kaecho/Bangumi-Flutter)',
+              'User-Agent': kApiUserAgent,
             },
+
           ),
         )
         ..interceptors.add(
@@ -49,12 +49,21 @@ class ApiClient {
               if (token != null && token.isNotEmpty) {
                 options.headers['Authorization'] = 'Bearer $token';
               }
-              final cookie = _cookieProvider?.call();
-              if (cookie != null && cookie.isNotEmpty) {
-                options.headers['Cookie'] = cookie;
+              final skipCookies = options.extra['skipCookies'] == true;
+              if (!skipCookies) {
+                final cookie = _cookieProvider?.call();
+                if (cookie != null && cookie.isNotEmpty) {
+                  options.headers['Cookie'] = cookie;
+                }
+              }
+              // 主站会按 UA 验 Cookie; API 域名保持应用标识
+              final host = options.uri.host;
+              if (host == 'bgm.tv' || host.endsWith('.bgm.tv')) {
+                options.headers['User-Agent'] = kSiteUserAgent;
               }
               handler.next(options);
             },
+
             onError: (error, handler) {
               if (isWebsiteError(
                 error.requestOptions.uri.host,
@@ -122,15 +131,27 @@ class ApiClient {
   }
 
   /// 发起 GET 请求; [host] 覆盖 baseUrl (小圣杯等第三方域)
+  ///
+  /// [skipCookies] 对齐原版 `!` URL: 全站时间线等不带站点 Cookie。
   Future<dynamic> get(
     String path, {
     Map<String, dynamic>? query,
     String? host,
     bool auth = false,
+    bool skipCookies = false,
   }) async {
     final uri = buildApiUri(path, host: host, query: query);
+    Options? options;
+    if (skipCookies) {
+      options = Options(extra: const {'skipCookies': true});
+    }
     try {
-      final resp = await _track('GET', uri, () => _dio.getUri<dynamic>(uri));
+      final resp = await _track(
+        'GET',
+        uri,
+        () => _dio.getUri<dynamic>(uri, options: options),
+      );
+
       return resp.data;
     } on DioException catch (e) {
       // 主域名失败时降级到备用域名 (仅 bgm 官方 API)
@@ -159,15 +180,22 @@ class ApiClient {
     Map<String, dynamic>? query,
     String? host,
     bool auth = false,
+    bool form = false,
   }) async {
     final uri = buildApiUri(path, host: host, query: query);
+    Object? body = data;
+    Options? options;
+    if (form && data is Map) {
+      body = FormData.fromMap(Map<String, dynamic>.from(data));
+    }
     final resp = await _track(
       'POST',
       uri,
-      () => _dio.postUri<dynamic>(uri, data: data),
+      () => _dio.postUri<dynamic>(uri, data: body, options: options),
     );
     return resp.data;
   }
+
 
   /// 发起 PUT 请求
   Future<dynamic> put(
@@ -213,8 +241,8 @@ class ApiClient {
         options: Options(
           responseType: ResponseType.plain,
           headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+            'User-Agent': kSiteUserAgent,
+
             'Referer': kHost,
             'Accept-Language': 'zh-CN,zh;q=0.9',
           },
@@ -238,8 +266,8 @@ class ApiClient {
         options: Options(
           responseType: ResponseType.plain,
           headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+            'User-Agent': kSiteUserAgent,
+
             'Referer': kHost,
             'Accept-Language': 'zh-CN,zh;q=0.9',
             'Cookie': cookie,
@@ -312,22 +340,32 @@ String buildCookieHeaderFromJson(List<dynamic> cookies) {
 /// 站点以 chii_cookietime=2592000 表示记住登录, 否则会话关闭后失效
 String normalizeCookieTime(String cookie) {
   if (cookie.isEmpty) return '';
-  final parts = cookie
-      .split(';')
-      .map((e) => e.trim())
-      .where((e) => e.isNotEmpty)
-      .toList();
-  final idx = parts.indexWhere((e) => e.startsWith('chii_cookietime='));
-  if (idx >= 0) {
-    parts[idx] = 'chii_cookietime=2592000';
+  if (cookie.contains('chii_cookietime=0')) {
+    return cookie.replaceFirst('chii_cookietime=0', 'chii_cookietime=2592000');
   }
-  return parts.join('; ');
+  if (!cookie.contains('chii_cookietime=2592000')) {
+    return '$cookie; chii_cookietime=2592000';
+  }
+  return cookie;
 }
 
 /// 检查 HTML 是否要求登录 (含 "需要您 登录")
+///
+/// 游客首页也有 `/login` 链接, 不能单看这个字符串。优先认
+/// `CHOBITS_UID = 0` (站点脚本全局), 再认 "需要您 … /login"。
 bool htmlRequiresLogin(String html) {
+  final uid = RegExp(r'CHOBITS_UID = (\d+)').firstMatch(html);
+
+  if (uid != null) return uid.group(1) == '0';
   return html.contains('需要您') && html.contains('/login');
 }
+
+/// 从主站 HTML 抽出已登录用户名 (CHOBITS_USERNAME)
+String parseLoggedInUsername(String html) {
+  final m = RegExp(r"CHOBITS_USERNAME = '([^']*)'").firstMatch(html);
+  return m?.group(1) ?? '';
+}
+
 
 /// 原项目 userStore.websiteError: 主站 502
 bool isWebsiteError(String host, int? status) =>

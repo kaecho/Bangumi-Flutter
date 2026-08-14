@@ -64,8 +64,18 @@ class TopicDetailNotifier extends FamilyAsyncNotifier<TopicPageData, String> {
           contentHtml: current.contentHtml,
           floors: [...current.floors, ...next.floors],
           pageTotal: current.pageTotal,
+          formhash: current.formhash.isNotEmpty
+              ? current.formhash
+              : next.formhash,
+          lastview: current.lastview.isNotEmpty
+              ? current.lastview
+              : next.lastview,
+          likeType: current.likeType,
+          tip: current.tip,
+          close: current.close,
         ),
       );
+
     } catch (_) {}
   }
 

@@ -183,6 +183,7 @@ class PmChatScreen extends ConsumerStatefulWidget {
 
 class _PmChatScreenState extends ConsumerState<PmChatScreen> {
   final _input = TextEditingController();
+  final _title = TextEditingController();
   final _scroll = ScrollController();
   bool _sending = false;
   String _thread = '';
@@ -190,9 +191,11 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
   @override
   void dispose() {
     _input.dispose();
+    _title.dispose();
     _scroll.dispose();
     super.dispose();
   }
+
 
   Future<void> _send(PmForm form, {bool compose = false}) async {
     final text = _input.text.trim();
@@ -209,7 +212,13 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
               : form.msgReceivers,
           'current_msg_id': form.currentMsgId,
           'formhash': form.formhash,
-          'msg_title': form.msgTitle.isEmpty ? '短信' : form.msgTitle,
+          'msg_title': () {
+            final typed = _title.text.trim();
+            if (typed.isNotEmpty) return typed;
+            if (form.msgTitle.isNotEmpty) return form.msgTitle;
+            return '短信';
+          }(),
+
           'msg_body': text,
           if (!compose) 'chat': 'on',
           'submit': compose ? '发送' : '回复',
@@ -322,12 +331,24 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
       error: (_, _) => const Center(child: Text('加载发信表单失败')),
       data: (form) => Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: TextField(
+              controller: _title,
+              decoration: const InputDecoration(
+                hintText: '标题 (可选, 默认「短信」)',
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
           const Expanded(child: Center(child: Text('给 TA 发一条新短信'))),
           _composer(onSend: () => unawaited(_send(form, compose: true))),
         ],
       ),
     );
   }
+
 
   Widget _conversationBody(({int convId, String thread}) query) {
     return Column(

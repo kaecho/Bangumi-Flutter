@@ -1052,8 +1052,11 @@ class _ProgressEpGrid extends ConsumerWidget {
                           await setEpStatusAction(
                             ref,
                             ep.id,
-                            !(status?.isWatched(ep.id) ?? false),
+                            (status?.isWatched(ep.id) ?? false)
+                                ? 'remove'
+                                : 'watched',
                           );
+
                           ref.invalidate(epStatusProvider(subjectId));
                           ref.invalidate(progressProvider(type));
                         } catch (_) {
