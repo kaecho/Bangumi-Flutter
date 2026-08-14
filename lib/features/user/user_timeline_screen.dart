@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/auth/auth_controller.dart';
 import '../../core/utils/format.dart';
+
 import '../../shared/models/timeline.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
@@ -19,15 +21,23 @@ class UserTimelineData {
   final int page;
   final bool hasMore;
 
-  const UserTimelineData({this.groups = const [], this.page = 1, this.hasMore = true});
+  const UserTimelineData({
+    this.groups = const [],
+    this.page = 1,
+    this.hasMore = true,
+  });
 }
 
 /// 用户时光机 (bgm.tv/user/{uid}/timeline, 主站 HTML)
 final userTimelineProvider =
-    AsyncNotifierProvider.family<UserTimelineNotifier, UserTimelineData, String>(
-        UserTimelineNotifier.new);
+    AsyncNotifierProvider.family<
+      UserTimelineNotifier,
+      UserTimelineData,
+      String
+    >(UserTimelineNotifier.new);
 
-class UserTimelineNotifier extends FamilyAsyncNotifier<UserTimelineData, String> {
+class UserTimelineNotifier
+    extends FamilyAsyncNotifier<UserTimelineData, String> {
   @override
   Future<UserTimelineData> build(String userId) async {
     return _fetch(1, userId);
@@ -35,7 +45,10 @@ class UserTimelineNotifier extends FamilyAsyncNotifier<UserTimelineData, String>
 
   Future<UserTimelineData> _fetch(int page, String userId) async {
     final client = ref.read(apiClientProvider);
-    final html = await client.get(apiUserTimelineHtml(userId, page: page), host: kHost);
+    final html = await client.get(
+      apiUserTimelineHtml(userId, page: page),
+      host: kHost,
+    );
     final groups = parseUserTimeline(html as String);
     final count = groups.fold<int>(0, (a, g) => a + g.items.length);
     return UserTimelineData(groups: groups, page: page, hasMore: count >= 30);
@@ -46,16 +59,31 @@ class UserTimelineNotifier extends FamilyAsyncNotifier<UserTimelineData, String>
     if (current == null || !current.hasMore) return;
     try {
       final next = await _fetch(current.page + 1, arg);
-      state = AsyncData(UserTimelineData(
-        groups: [...current.groups, ...next.groups],
-        page: next.page,
-        hasMore: next.hasMore,
-      ));
+      state = AsyncData(
+        UserTimelineData(
+          groups: [...current.groups, ...next.groups],
+          page: next.page,
+          hasMore: next.hasMore,
+        ),
+      );
     } catch (_) {}
   }
 }
 
 /// 时光机 (用户空间独立页)
+/// 我的时光机 (发现页菜单入口, 原项目 UserTimeline)
+class MyUserTimelineScreen extends ConsumerWidget {
+  const MyUserTimelineScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(currentUserProvider);
+    return me == null
+        ? const Scaffold(body: Center(child: Text('请先登录')))
+        : UserTimelineScreen(userId: userPathId(me));
+  }
+}
+
 class UserTimelineScreen extends ConsumerWidget {
   final String userId;
 
@@ -64,7 +92,21 @@ class UserTimelineScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('时光机')),
+      appBar: AppBar(
+        title: const Text('时光机'),
+        actions: [
+          IconButton(
+            tooltip: '说明',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('进度瓷砖会有延迟, 若无数据可过段时间再来')),
+              );
+            },
+          ),
+        ],
+      ),
+
       body: UserTimelineBody(userId: userId, enablePagination: true),
     );
   }
@@ -75,7 +117,11 @@ class UserTimelineBody extends ConsumerStatefulWidget {
   final String userId;
   final bool enablePagination;
 
-  const UserTimelineBody({super.key, required this.userId, this.enablePagination = false});
+  const UserTimelineBody({
+    super.key,
+    required this.userId,
+    this.enablePagination = false,
+  });
 
   @override
   ConsumerState<UserTimelineBody> createState() => _UserTimelineBodyState();
@@ -90,7 +136,9 @@ class _UserTimelineBodyState extends ConsumerState<UserTimelineBody> {
     if (widget.enablePagination) {
       _scroll.addListener(() {
         if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
-          unawaited(ref.read(userTimelineProvider(widget.userId).notifier).loadMore());
+          unawaited(
+            ref.read(userTimelineProvider(widget.userId).notifier).loadMore(),
+          );
         }
       });
     }
@@ -113,7 +161,8 @@ class _UserTimelineBodyState extends ConsumerState<UserTimelineBody> {
           children: [
             const Text('加载失败'),
             TextButton(
-              onPressed: () => ref.invalidate(userTimelineProvider(widget.userId)),
+              onPressed: () =>
+                  ref.invalidate(userTimelineProvider(widget.userId)),
               child: const Text('重试'),
             ),
           ],
@@ -125,19 +174,21 @@ class _UserTimelineBodyState extends ConsumerState<UserTimelineBody> {
         }
         final rows = <Widget>[];
         for (final group in data.groups) {
-          rows.add(Padding(
-            padding: const EdgeInsets.fromLTRB(12, 14, 12, 4),
-            child: Text(
-              group.date,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.primary,
+          rows.add(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 4),
+              child: Text(
+                group.date,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
             ),
-          ));
+          );
           for (final item in group.items) {
-            rows.add(_UserTimelineRow(item: item));
+            rows.add(_UserTimelineRow(item: item, userId: widget.userId));
           }
         }
         return ListView(
@@ -150,14 +201,18 @@ class _UserTimelineBodyState extends ConsumerState<UserTimelineBody> {
   }
 }
 
-class _UserTimelineRow extends StatelessWidget {
+class _UserTimelineRow extends ConsumerWidget {
   final TimelineItem item;
+  final String userId;
 
-  const _UserTimelineRow({required this.item});
+  const _UserTimelineRow({required this.item, required this.userId});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final subject = item.subject;
+    final me = ref.watch(currentUserProvider);
+    final isMe =
+        me != null && (userPathId(me) == userId || '${me.id}' == userId);
     return InkWell(
       onTap: () {
         if (subject != null && subject.id > 0) {
@@ -170,7 +225,12 @@ class _UserTimelineRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (subject != null && subject.images.common.isNotEmpty)
-              Cover(url: subject.images.common, width: 44, height: 60, radius: 4),
+              Cover(
+                url: subject.images.common,
+                width: 44,
+                height: 60,
+                radius: 4,
+              ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -191,6 +251,13 @@ class _UserTimelineRow extends StatelessWidget {
                           friendlyTime(item.createdAt),
                           style: context.ds.tiny,
                         ),
+                      if (isMe && item.clearHref.isNotEmpty)
+                        IconButton(
+                          tooltip: '删除',
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => _delete(context, ref),
+                        ),
                     ],
                   ),
                   if (subject != null) ...[
@@ -201,7 +268,8 @@ class _UserTimelineRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (subject.rating?.score != null && subject.rating!.score > 0)
+                    if (subject.rating?.score != null &&
+                        subject.rating!.score > 0)
                       Text(
                         '${subject.rating!.score}分',
                         style: TextStyle(fontSize: 11, color: context.ds.star),
@@ -214,5 +282,47 @@ class _UserTimelineRow extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除时间线'),
+        content: const Text('确定删除这条动态?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final client = ref.read(apiClientProvider);
+      var href = item.clearHref;
+      if (href.startsWith('/')) href = '$kHost$href';
+      if (!href.contains('ajax=1')) {
+        href = href.contains('?') ? '$href&ajax=1' : '$href?ajax=1';
+      }
+      await client.post(href, host: kHost);
+      ref.invalidate(userTimelineProvider(userId));
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已删除')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('删除失败: $e')));
+      }
+    }
   }
 }

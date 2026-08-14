@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import 'widgets/browser_grid.dart';
 import 'widgets/season_filter.dart';
@@ -32,13 +33,21 @@ class _BrowserScreenState extends State<BrowserScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: BgmAppBar(title: '索引', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '索引',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl('$kHost$_basePath'),
+          ),
+        ],
+      ),
+
       body: Column(
         children: [
-          TypeTabs(
-            value: _type,
-            onChanged: (v) => setState(() => _type = v),
-          ),
+          TypeTabs(value: _type, onChanged: (v) => setState(() => _type = v)),
           if (_type == 'anime')
             SeasonFilter(
               year: _year,
@@ -48,9 +57,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
               onMonth: (v) => setState(() => _month = v),
               onSort: (v) => setState(() => _sort = v),
             ),
-          Expanded(
-            child: BrowserGrid(basePath: _basePath),
-          ),
+          Expanded(child: BrowserGrid(basePath: _basePath)),
         ],
       ),
     );

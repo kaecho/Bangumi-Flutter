@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import 'user_notes.dart';
 
 /// 赞助 (静态感谢页)
 class SponsorScreen extends StatelessWidget {
@@ -8,7 +11,17 @@ class SponsorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('赞助')),
+      appBar: AppBar(
+        title: const Text('支持者'),
+        actions: [
+          IconButton(
+            tooltip: '说明',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => context.push(sponsorNotePath()),
+          ),
+        ],
+      ),
+
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -36,7 +49,10 @@ class SponsorScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  const Text('支付宝 / 微信', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text(
+                    '支付宝 / 微信',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     '收款二维码图片暂未打包, 敬请期待。\n你也可以通过 GitHub Sponsor 支持原项目: github.com/czy0729/Bangumi',

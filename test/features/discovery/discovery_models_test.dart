@@ -35,7 +35,10 @@ void main() {
       expect(s.airDate, '2004-1-1');
       expect(s.rating!.score, closeTo(9.2, 0.001));
       expect(s.rating!.total, 10055);
-      expect(s.images.medium, 'https://lain.bgm.tv/r/400/pic/cover/l/a6/66/326_D8wjw.jpg');
+      expect(
+        s.images.medium,
+        'https://lain.bgm.tv/r/400/pic/cover/l/a6/66/326_D8wjw.jpg',
+      );
     });
 
     test('parseBlogList 解析全站日志', () {
@@ -86,7 +89,10 @@ void main() {
       expect(groups.first.name, 'pixiv');
       expect(groups.first.title, 'pixiv');
       expect(groups.first.members, 16038);
-      expect(groups.first.icon, 'https://lain.bgm.tv/pic/icon/l/000/00/00/84.jpg');
+      expect(
+        groups.first.icon,
+        'https://lain.bgm.tv/pic/icon/l/000/00/00/84.jpg',
+      );
     });
 
     test('parseTopicRows 解析 Dollars 论坛主题', () {
@@ -127,7 +133,9 @@ void main() {
               'images': {'large': 'https://lain.bgm.tv/pic/cover/l/x.jpg'},
               'rank': 42,
               'score': 8.5,
-              'tags': [{'name': '原创', 'count': 1}],
+              'tags': [
+                {'name': '原创', 'count': 1},
+              ],
             },
           },
         ],
@@ -139,33 +147,145 @@ void main() {
       expect(items.first.subject.displayName, '示例动画');
       expect(items.first.subject.rank, 42);
     });
+    test('parseWiki 解析编辑与入库分段', () {
+      const html = '''
+<html><body>
+<ul class="wikiStats"><li><span>编辑</span><span class="num">12</span></li></ul>
+<ul id="wiki_act-all"><li><a href="/subject/1" class="l" target="_blank">条目A</a><small class="grey"><a href="/user/1">Alice</a></small><span class="rr">今天</span></li></ul>
+<ul id="wiki_act-lock"><li><a href="/subject/2" class="l" target="_blank">锁定B</a></li></ul>
+<ul id="latest_2"><li><a href="/subject/3" class="l">新番C</a></li></ul>
+</body></html>
+''';
+      final data = parseWiki(html);
+      expect(data.counts, isNotEmpty);
+      expect(data.all, hasLength(1));
+      expect(data.all.first.name, '条目A');
+      expect(data.lock, hasLength(1));
+      expect(data.of('latest_2').first.name, '新番C');
+    });
+
+    test('parseMonoRecents 解析收藏人物近况', () {
+      const html = '''
+<div id="columnCrtBrowserB">
+<ul id="browserItemList">
+<li id="item_8" class="item">
+  <img class="cover" src="//lain.bgm.tv/pic/cover/s/8.jpg" />
+  <h3><span class="ll subject_type_2"></span><a class="l" href="/subject/8">代码帝国</a> <small class="grey">Code Geass</small></h3>
+  <p class="info">2026-8-1 / 动画</p>
+  <span class="starlight stars9"></span>
+  <span class="rateInfo"><span class="tip_j">(12人评分)</span></span>
+  <div class="actorBadge">
+    <a class="avatar" href="/character/1"><img src="//lain.bgm.tv/pic/crt/s/1.jpg" /></a>
+    <a class="l" href="/character/1">鲁路修</a>
+    <small class="grey">主角</small>
+  </div>
+</li>
+</ul>
+</div>
+<div id="footer"></div>
+''';
+      final items = parseMonoRecents(html);
+      expect(items, hasLength(1));
+      expect(items.first.id, 8);
+      expect(items.first.name, '代码帝国');
+      expect(items.first.nameJp, 'Code Geass');
+      expect(items.first.star, 9);
+      expect(items.first.actors, hasLength(1));
+      expect(items.first.actors.first.$1, 'character/1');
+      expect(items.first.actors.first.$3, '鲁路修');
+    });
+
+    test('parseDollars 解析聊天室条目', () {
+      const html = '''
+<div id="toolBox">在线: 12</div>
+<div id="chatList">
+  <ul>
+    <li id="chat_12345678901">
+      <div class="icon"><img class="avatar" src="//lain.bgm.tv/pic/user/m/000/00/00/1.jpg" /><p>甲</p></div>
+      <div class="content" style="color:#f00"><p>你好</p></div>
+    </li>
+  </ul>
+</div>
+''';
+      final data = parseDollars(html);
+      expect(data.online, '12');
+      expect(data.list, hasLength(1));
+      expect(data.list.first.id, '1234567890');
+      expect(data.list.first.nickname, '甲');
+      expect(data.list.first.msg, '你好');
+      expect(data.list.first.avatar, contains('lain.bgm.tv'));
+    });
+
+    test('parseCatalogDetailExtra 解析收藏与取消链接', () {
+      const html = '''
+<div id="header"><h1>目录</h1></div>
+<div class="grp_box">
+  <a class="btnPink" href="/index/8/erase_collect?gh=abc">取消收藏</a>
+  <div class="tip_j">
+    <span class="tip">创建</span>
+    <span class="tip">更新</span>
+    <span class="tip">12 人收藏</span>
+  </div>
+</div>
+<div class="progress"><small>完成 3/10</small></div>
+<div id="footer"></div>
+''';
+      final extra = parseCatalogDetailExtra(html);
+      expect(extra.collected, isTrue);
+      expect(extra.byeUrl, contains('erase_collect'));
+      expect(extra.collect, contains('12'));
+      expect(extra.progress, contains('3/10'));
+    });
+
+    test('parseChannel 解析好友最近关注', () {
+      const html = '''
+<div class="columns">
+  <ul class="coversSmall">
+    <li>
+      <a href="/subject/12" title="cowboy bebop"><img src="//lain.bgm.tv/pic/cover/s/12.jpg"></a>
+      <p class="info"><a class="l" href="/user/42"><img src="//lain.bgm.tv/pic/user/s/42.jpg">用户A</a> 在看</p>
+    </li>
+    <li>
+      <a href="/subject/13" title="no"><img src="/img/no_img.gif"></a>
+    </li>
+  </ul>
+</div>
+''';
+      final data = parseChannel(html);
+      expect(data.friends, hasLength(1));
+      expect(data.friends.single.id, 12);
+      expect(data.friends.single.userId, '42');
+      expect(data.friends.single.userName, '用户A');
+      expect(data.friends.single.action, '在看');
+      expect(data.friends.single.avatar, contains('42.jpg'));
+    });
   });
 
   group('推荐评分', () {
     test('calcRecommendScore 高分条目得分更高', () {
-      final good = calcRecommendScore(V0CollectionItem(
-        subjectId: 1,
-        type: 2,
-        updatedAt: '2026-08-10T00:00:00.000+08:00',
-        subject: Subject(
-          id: 1,
-          name: 'good',
-          images: const SubjectImages(),
-          rank: 10,
-          rating: const Rating(score: 9.0, total: 100),
-          tags: const [Tag(name: '原创', count: 1)],
+      final good = calcRecommendScore(
+        V0CollectionItem(
+          subjectId: 1,
+          type: 2,
+          updatedAt: '2026-08-10T00:00:00.000+08:00',
+          subject: Subject(
+            id: 1,
+            name: 'good',
+            images: const SubjectImages(),
+            rank: 10,
+            rating: const Rating(score: 9.0, total: 100),
+            tags: const [Tag(name: '原创', count: 1)],
+          ),
         ),
-      ));
-      final poor = calcRecommendScore(V0CollectionItem(
-        subjectId: 2,
-        type: 5,
-        updatedAt: '2020-01-01T00:00:00.000+08:00',
-        subject: const Subject(
-          id: 2,
-          name: 'poor',
-          images: SubjectImages(),
+      );
+      final poor = calcRecommendScore(
+        V0CollectionItem(
+          subjectId: 2,
+          type: 5,
+          updatedAt: '2020-01-01T00:00:00.000+08:00',
+          subject: const Subject(id: 2, name: 'poor', images: SubjectImages()),
         ),
-      ));
+      );
       expect(good, greaterThan(poor));
     });
   });

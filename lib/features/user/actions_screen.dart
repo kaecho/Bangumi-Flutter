@@ -2,8 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../core/utils/display.dart';
+
+import 'user_notes.dart';
 
 /// 操作记录项 (本地快捷操作, 移植自原项目 screens/user/actions)
 class ActionItem {
@@ -19,14 +22,19 @@ class ActionItem {
     this.active = true,
   });
 
-  Map<String, dynamic> toJson() => {'uuid': uuid, 'name': name, 'url': url, 'active': active};
+  Map<String, dynamic> toJson() => {
+    'uuid': uuid,
+    'name': name,
+    'url': url,
+    'active': active,
+  };
 
   factory ActionItem.fromJson(Map<String, dynamic> json) => ActionItem(
-        uuid: json['uuid'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        url: json['url'] as String? ?? '',
-        active: (json['active'] as num?)?.toInt() != 0,
-      );
+    uuid: json['uuid'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    url: json['url'] as String? ?? '',
+    active: (json['active'] as num?)?.toInt() != 0,
+  );
 }
 
 /// 操作记录状态 (hive 持久化)
@@ -59,7 +67,11 @@ class ActionsController extends Notifier<List<ActionItem>> {
   Future<void> add(String name, String url) async {
     state = [
       ...state,
-      ActionItem(uuid: DateTime.now().microsecondsSinceEpoch.toString(), name: name, url: url),
+      ActionItem(
+        uuid: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: name,
+        url: url,
+      ),
     ];
     await _save();
   }
@@ -67,7 +79,10 @@ class ActionsController extends Notifier<List<ActionItem>> {
   Future<void> update(String uuid, String name, String url) async {
     state = [
       for (final item in state)
-        if (item.uuid == uuid) ActionItem(uuid: uuid, name: name, url: url, active: item.active) else item,
+        if (item.uuid == uuid)
+          ActionItem(uuid: uuid, name: name, url: url, active: item.active)
+        else
+          item,
     ];
     await _save();
   }
@@ -80,15 +95,19 @@ class ActionsController extends Notifier<List<ActionItem>> {
   Future<void> toggle(String uuid, bool active) async {
     state = [
       for (final item in state)
-        if (item.uuid == uuid) ActionItem(uuid: uuid, name: item.name, url: item.url, active: active) else item,
+        if (item.uuid == uuid)
+          ActionItem(uuid: uuid, name: item.name, url: item.url, active: active)
+        else
+          item,
     ];
     await _save();
   }
 }
 
-final actionsControllerProvider = NotifierProvider<ActionsController, List<ActionItem>>(
-  ActionsController.new,
-);
+final actionsControllerProvider =
+    NotifierProvider<ActionsController, List<ActionItem>>(
+      ActionsController.new,
+    );
 
 /// 操作记录 (本地快捷操作列表)
 class ActionsScreen extends ConsumerWidget {
@@ -98,7 +117,17 @@ class ActionsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(actionsControllerProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('操作记录')),
+      appBar: AppBar(
+        title: const Text('自定义跳转'),
+        actions: [
+          IconButton(
+            tooltip: '说明',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => context.push(actionsNotePath()),
+          ),
+        ],
+      ),
+
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _edit(context, ref),
         icon: const Icon(Icons.add),
@@ -124,14 +153,15 @@ class ActionsScreen extends ConsumerWidget {
                       ),
                     ),
                     value: item.active,
-                    onChanged: (v) =>
-                        ref.read(actionsControllerProvider.notifier).toggle(item.uuid, v),
+                    onChanged: (v) => ref
+                        .read(actionsControllerProvider.notifier)
+                        .toggle(item.uuid, v),
                     secondary: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
                           icon: const Icon(Icons.open_in_new, size: 18),
-                          onPressed: () => launchUrl(Uri.parse(item.url)),
+                          onPressed: () => openExternalUrl(item.url),
                         ),
                         IconButton(
                           icon: const Icon(Icons.edit_outlined, size: 18),
@@ -139,8 +169,9 @@ class ActionsScreen extends ConsumerWidget {
                         ),
                         IconButton(
                           icon: const Icon(Icons.close, size: 18),
-                          onPressed: () =>
-                              ref.read(actionsControllerProvider.notifier).remove(item.uuid),
+                          onPressed: () => ref
+                              .read(actionsControllerProvider.notifier)
+                              .remove(item.uuid),
                         ),
                       ],
                     ),
@@ -151,7 +182,11 @@ class ActionsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _edit(BuildContext context, WidgetRef ref, {ActionItem? item}) async {
+  Future<void> _edit(
+    BuildContext context,
+    WidgetRef ref, {
+    ActionItem? item,
+  }) async {
     final nameCtrl = TextEditingController(text: item?.name ?? '');
     final urlCtrl = TextEditingController(text: item?.url ?? '');
     final saved = await showDialog<bool>(
@@ -161,16 +196,27 @@ class ActionsScreen extends ConsumerWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: '名称')),
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: '名称'),
+            ),
             const SizedBox(height: 8),
-            TextField(controller: urlCtrl, decoration: const InputDecoration(labelText: '网址')),
+            TextField(
+              controller: urlCtrl,
+              decoration: const InputDecoration(labelText: '网址'),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
             onPressed: () {
-              if (nameCtrl.text.trim().isEmpty || urlCtrl.text.trim().isEmpty) return;
+              if (nameCtrl.text.trim().isEmpty || urlCtrl.text.trim().isEmpty) {
+                return;
+              }
               Navigator.pop(context, true);
             },
             child: const Text('保存'),
@@ -183,7 +229,11 @@ class ActionsScreen extends ConsumerWidget {
     if (item == null) {
       await controller.add(nameCtrl.text.trim(), urlCtrl.text.trim());
     } else {
-      await controller.update(item.uuid, nameCtrl.text.trim(), urlCtrl.text.trim());
+      await controller.update(
+        item.uuid,
+        nameCtrl.text.trim(),
+        urlCtrl.text.trim(),
+      );
     }
   }
 }

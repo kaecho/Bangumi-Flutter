@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/api/api_endpoints.dart';
+import '../../core/storage/settings_store.dart';
+import '../../core/utils/display.dart';
 
 import '../../shared/models/subject.dart' hide Tag;
+
 import '../../shared/widgets/app_bar.dart';
+
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
@@ -22,7 +27,18 @@ class SubjectInfoScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(subjectDetailProvider(id));
     return Scaffold(
-      appBar: BgmAppBar(title: '条目信息', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '条目信息',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl('$kHost/subject/$id'),
+          ),
+        ],
+      ),
+
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -46,13 +62,23 @@ class SubjectInfoScreen extends ConsumerWidget {
             _InfoHeader(detail: value),
             const Divider(height: 32),
             if (value.infobox.isNotEmpty) ...[
-              const Text('信息', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              const Text(
+                '信息',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 8),
-              for (final item in value.infobox) _InfoboxRow(item: item),
+              for (final item
+                  in ref.watch(settingsStoreProvider).subjectPromoteAlias
+                      ? promoteAliasRows(value.infobox, keyOf: (e) => e.key)
+                      : value.infobox)
+                _InfoboxRow(item: item),
               const Divider(height: 32),
             ],
             if (value.subject.summary.isNotEmpty) ...[
-              const Text('简介', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              const Text(
+                '简介',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 8),
               Text(
                 value.subject.summary.replaceAll('\r\n', '\n').trim(),
@@ -61,7 +87,10 @@ class SubjectInfoScreen extends ConsumerWidget {
               const Divider(height: 32),
             ],
             if (value.tags.isNotEmpty) ...[
-              const Text('标签', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              const Text(
+                '标签',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
@@ -102,22 +131,27 @@ class _InfoHeader extends StatelessWidget {
             children: [
               Text(
                 subject.displayName,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               if (subject.name.isNotEmpty && subject.name != subject.nameCn)
-                Text(
-                  subject.name,
-                  style: context.ds.caption,
-                ),
+                Text(subject.name, style: context.ds.caption),
               const SizedBox(height: 6),
               Text(
-                '${detail.typeText}${subject.rank > 0 ? ' · 排名 ${subject.rank}' : ''}'
+                '${detail.typeText}${!SettingsStore.instance.hideScore && subject.rank > 0 ? ' · 排名 ${subject.rank}' : ''}'
                 '${subject.airDate.isNotEmpty ? ' · ${subject.airDate}' : ''}',
                 style: context.ds.caption,
               ),
+
               if (subject.rating != null && subject.rating!.score > 0) ...[
                 const SizedBox(height: 6),
-                Score(score: subject.rating!.score, total: subject.rating!.total, fontSize: 13),
+                Score(
+                  score: subject.rating!.score,
+                  total: subject.rating!.total,
+                  fontSize: 13,
+                ),
               ],
             ],
           ),
@@ -146,7 +180,10 @@ class _InfoboxRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(item.valueText, style: const TextStyle(fontSize: 13, height: 1.5)),
+            child: Text(
+              item.valueText,
+              style: const TextStyle(fontSize: 13, height: 1.5),
+            ),
           ),
         ],
       ),

@@ -10,10 +10,12 @@ class TinygrailLotteryRankScreen extends ConsumerStatefulWidget {
   const TinygrailLotteryRankScreen({super.key});
 
   @override
-  ConsumerState<TinygrailLotteryRankScreen> createState() => _TinygrailLotteryRankScreenState();
+  ConsumerState<TinygrailLotteryRankScreen> createState() =>
+      _TinygrailLotteryRankScreenState();
 }
 
-class _TinygrailLotteryRankScreenState extends ConsumerState<TinygrailLotteryRankScreen> {
+class _TinygrailLotteryRankScreenState
+    extends ConsumerState<TinygrailLotteryRankScreen> {
   bool _loading = false;
   dynamic _result;
   int _count = 0;
@@ -30,16 +32,36 @@ class _TinygrailLotteryRankScreenState extends ConsumerState<TinygrailLotteryRan
     setState(() => _count = count);
   }
 
-  Future<void> _scratch() async {
+  Future<void> _scratch({bool fantasy = false}) async {
     setState(() => _loading = true);
     try {
-      final result = await ref.read(tinygrailApiProvider).doScratch();
+      final result = await ref
+          .read(tinygrailApiProvider)
+          .doScratch(fantasy: fantasy);
       if (!mounted) return;
       setState(() => _result = result);
       await _loadCount();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('刮奖失败: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('刮奖失败: $e')));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _run(String label, Future<dynamic> Function() action) async {
+    setState(() => _loading = true);
+    try {
+      final result = await action();
+      if (!mounted) return;
+      setState(() => _result = result);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$label失败: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -48,8 +70,10 @@ class _TinygrailLotteryRankScreenState extends ConsumerState<TinygrailLotteryRan
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final api = ref.read(tinygrailApiProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('环保刮刮乐')),
+      appBar: AppBar(title: const Text('刮刮乐日榜')),
+
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -58,16 +82,81 @@ class _TinygrailLotteryRankScreenState extends ConsumerState<TinygrailLotteryRan
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  const Text('每日刮刮乐', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const Text(
+                    '每日刮刮乐',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
                   const SizedBox(height: 8),
-                  Text('今日已刮 $_count 次', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                  Text(
+                    '今日已刮 $_count 次',
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  ),
                   const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: _loading ? null : _scratch,
-                    icon: const Icon(Icons.celebration_outlined),
-                    label: _loading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('刮一次'),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: _loading ? null : () => _scratch(),
+                        icon: const Icon(Icons.celebration_outlined),
+                        label: _loading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('环保刮刮乐'),
+                      ),
+                      OutlinedButton(
+                        onPressed: _loading
+                            ? null
+                            : () => _scratch(fantasy: true),
+                        child: const Text('幻想乡刮刮乐'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '签到 / 分红',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.tonal(
+                        onPressed: _loading
+                            ? null
+                            : () => _run('每日签到', api.doBonusDaily),
+                        child: const Text('每日签到'),
+                      ),
+                      FilledButton.tonal(
+                        onPressed: _loading
+                            ? null
+                            : () => _run('每周分红', api.doBonus),
+                        child: const Text('每周分红'),
+                      ),
+                      FilledButton.tonal(
+                        onPressed: _loading
+                            ? null
+                            : () => _run('节日奖励', api.doBonusHoliday),
+                        child: const Text('节日奖励'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -103,7 +192,13 @@ class _ResultView extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('刮奖结果', style: TextStyle(fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
+            Text(
+              '刮奖结果',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
             const SizedBox(height: 8),
             for (final item in items.take(20))
               if (item is Map<String, dynamic>)
@@ -118,7 +213,10 @@ class _ResultView extends StatelessWidget {
         );
       }
       if (map['Message'] != null) {
-        return Text('${map['Message']}', style: TextStyle(color: theme.colorScheme.error));
+        return Text(
+          '${map['Message']}',
+          style: TextStyle(color: theme.colorScheme.error),
+        );
       }
     }
     return Text('$result', style: const TextStyle(fontSize: 13));

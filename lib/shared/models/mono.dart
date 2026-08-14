@@ -1,3 +1,4 @@
+import '../../core/utils/display.dart';
 import 'subject.dart';
 
 /// 角色 / 人物图片
@@ -7,18 +8,25 @@ class MonoImages {
   final String small;
   final String grid;
 
-  const MonoImages({this.large = '', this.medium = '', this.small = '', this.grid = ''});
+  const MonoImages({
+    this.large = '',
+    this.medium = '',
+    this.small = '',
+    this.grid = '',
+  });
 
   factory MonoImages.fromJson(Map<String, dynamic> json) => MonoImages(
-        large: _https(json['large'] as String? ?? ''),
-        medium: _https(json['medium'] as String? ?? ''),
-        small: _https(json['small'] as String? ?? ''),
-        grid: _https(json['grid'] as String? ?? ''),
-      );
+    large: _https(json['large'] as String? ?? ''),
+    medium: _https(json['medium'] as String? ?? ''),
+    small: _https(json['small'] as String? ?? ''),
+    grid: _https(json['grid'] as String? ?? ''),
+  );
 
   static String _https(String url) {
     if (url.startsWith('//')) return 'https:$url';
-    if (url.startsWith('http://')) return url.replaceFirst('http://', 'https://');
+    if (url.startsWith('http://')) {
+      return url.replaceFirst('http://', 'https://');
+    }
     return url;
   }
 }
@@ -52,26 +60,30 @@ class Character {
   });
 
   factory Character.fromJson(Map<String, dynamic> json) => Character(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        url: json['url'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        nameCn: json['name_cn'] as String? ?? '',
-        type: (json['type'] as num?)?.toInt() ?? 1,
-        images: MonoImages.fromJson(json['images'] as Map<String, dynamic>? ?? const {}),
-        summary: json['summary'] as String? ?? '',
-        comments: (json['comments'] as num?)?.toInt() ?? 0,
-        collects: (json['collects'] as num?)?.toInt() ?? 0,
-        subjects: (json['subjects'] as List?)
-                ?.map((e) => Subject.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-        info: (json['info'] as List?)
-                ?.map((e) => MonoInfo.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    url: json['url'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    nameCn: json['name_cn'] as String? ?? '',
+    type: (json['type'] as num?)?.toInt() ?? 1,
+    images: MonoImages.fromJson(
+      json['images'] as Map<String, dynamic>? ?? const {},
+    ),
+    summary: json['summary'] as String? ?? '',
+    comments: (json['comments'] as num?)?.toInt() ?? 0,
+    collects: (json['collects'] as num?)?.toInt() ?? 0,
+    subjects:
+        (json['subjects'] as List?)
+            ?.map((e) => Subject.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+    info:
+        (json['info'] as List?)
+            ?.map((e) => MonoInfo.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 
-  String get displayName => nameCn.isNotEmpty ? nameCn : name;
+  String get displayName => cnjp(name, nameCn);
 }
 
 /// 人物 (现实)
@@ -105,27 +117,33 @@ class Person {
   });
 
   factory Person.fromJson(Map<String, dynamic> json) => Person(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        url: json['url'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        nameCn: json['name_cn'] as String? ?? '',
-        type: (json['type'] as num?)?.toInt() ?? 1,
-        images: MonoImages.fromJson(json['images'] as Map<String, dynamic>? ?? const {}),
-        summary: json['summary'] as String? ?? '',
-        comments: (json['comments'] as num?)?.toInt() ?? 0,
-        collects: (json['collects'] as num?)?.toInt() ?? 0,
-        career: (json['career'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-        subjects: (json['subjects'] as List?)
-                ?.map((e) => Subject.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-        info: (json['info'] as List?)
-                ?.map((e) => MonoInfo.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    url: json['url'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    nameCn: json['name_cn'] as String? ?? '',
+    type: (json['type'] as num?)?.toInt() ?? 1,
+    images: MonoImages.fromJson(
+      json['images'] as Map<String, dynamic>? ?? const {},
+    ),
+    summary: json['summary'] as String? ?? '',
+    comments: (json['comments'] as num?)?.toInt() ?? 0,
+    collects: (json['collects'] as num?)?.toInt() ?? 0,
+    career:
+        (json['career'] as List?)?.map((e) => e.toString()).toList() ??
+        const [],
+    subjects:
+        (json['subjects'] as List?)
+            ?.map((e) => Subject.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+    info:
+        (json['info'] as List?)
+            ?.map((e) => MonoInfo.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 
-  String get displayName => nameCn.isNotEmpty ? nameCn : name;
+  String get displayName => cnjp(name, nameCn);
 }
 
 class MonoInfo {
@@ -135,7 +153,7 @@ class MonoInfo {
   const MonoInfo({this.key = '', this.value = ''});
 
   factory MonoInfo.fromJson(Map<String, dynamic> json) => MonoInfo(
-        key: json['key'] as String? ?? '',
-        value: json['value']?.toString() ?? '',
-      );
+    key: json['key'] as String? ?? '',
+    value: json['value']?.toString() ?? '',
+  );
 }

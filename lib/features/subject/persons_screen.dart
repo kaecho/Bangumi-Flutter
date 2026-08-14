@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+
 import 'subject_models.dart';
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
@@ -20,7 +23,18 @@ class PersonsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final persons = ref.watch(subjectPersonsProvider(id));
     return Scaffold(
-      appBar: BgmAppBar(title: '制作人员', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '制作人员',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(htmlSubjectPersons(id)),
+          ),
+        ],
+      ),
+
       body: persons.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -68,7 +82,12 @@ class _PersonCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Cover(url: person.images.large, width: double.infinity, height: 132, radius: 6),
+          Cover(
+            url: person.images.large,
+            width: double.infinity,
+            height: 132,
+            radius: 6,
+          ),
           const SizedBox(height: 6),
           Text(
             person.displayName,

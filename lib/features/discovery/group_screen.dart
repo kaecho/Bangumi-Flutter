@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/models/group.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
@@ -20,7 +21,9 @@ class GroupList extends PagedNotifier<Group, int> {
 }
 
 final groupListProvider =
-    AsyncNotifierProvider.family<GroupList, PagedData<Group>, int>(GroupList.new);
+    AsyncNotifierProvider.family<GroupList, PagedData<Group>, int>(
+      GroupList.new,
+    );
 
 /// 小组列表
 class GroupScreen extends ConsumerWidget {
@@ -29,7 +32,17 @@ class GroupScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: BgmAppBar(title: '小组', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '小组',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl('$kHost/group/browser'),
+          ),
+        ],
+      ),
       body: PagedGridView<Group, int>(
         provider: groupListProvider,
         arg: 0,
@@ -51,24 +64,19 @@ class _GroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return InkWell(
-      onTap: () => context.push(
-        '/web/${Uri.encodeComponent('https://bgm.tv/group/${group.name}')}',
-      ),
+      onTap: () => context.push('/rakuen/group/${group.name}'),
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.4,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            Cover(
-              url: group.icon,
-              width: 44,
-              height: 44,
-              radius: 22,
-            ),
+            Cover(url: group.icon, width: 44, height: 44, radius: 22),
             const SizedBox(width: 10),
             Expanded(
               child: Column(

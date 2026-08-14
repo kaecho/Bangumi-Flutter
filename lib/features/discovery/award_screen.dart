@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
@@ -15,7 +16,10 @@ import 'yearbook_screen.dart';
 ///
 /// 原项目抓取 https://bgm.tv/award/{year} 页面并在 WebView 中渲染,
 /// 这里解析同一页面的排行块并原生渲染。
-final awardProvider = FutureProvider.family<List<AwardBlock>, int>((ref, year) async {
+final awardProvider = FutureProvider.family<List<AwardBlock>, int>((
+  ref,
+  year,
+) async {
   final client = ref.read(apiClientProvider);
   final body = await client.get(htmlAward(year), host: kHost);
   return parseAward(body as String);
@@ -43,12 +47,19 @@ class _AwardScreenState extends ConsumerState<AwardScreen> {
         actions: [
           PopupMenuButton<int>(
             tooltip: '选择年份',
+
             onSelected: (v) => setState(() => _year = v),
             itemBuilder: (context) => [
               for (final y in kYearbookYears)
                 PopupMenuItem(value: y, child: Text('$y 年')),
             ],
             icon: const Icon(Icons.calendar_month_outlined),
+          ),
+          IconButton(
+            tooltip: '浏览器查看',
+
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl('$kHost${htmlAward(_year)}'),
           ),
         ],
       ),
@@ -134,7 +145,10 @@ class _AwardBlockList extends StatelessWidget {
                     item.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   if (item.subName.isNotEmpty)
                     Text(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/loading.dart';
+
 import 'user_models.dart';
 
 /// 目录类型计数文案
@@ -17,12 +21,80 @@ const kCatalogTypeLabels = {
   '6': '三次元',
 };
 
-/// 用户目录列表 (bgm.tv/user/{uid}/index, 主站 HTML)
-final userCatalogsProvider = FutureProvider.family<List<UserCatalog>, String>((ref, userId) async {
-  final client = ref.read(apiClientProvider);
-  final html = await client.get(apiUserCatalogsHtml(userId), host: kHost);
-  return parseUserCatalogs(html as String);
-});
+class UserCatalogsQuery {
+  final String userId;
+  final bool collect;
+
+  const UserCatalogsQuery(this.userId, {this.collect = false});
+
+  @override
+  bool operator ==(Object other) =>
+      other is UserCatalogsQuery &&
+      other.userId == userId &&
+      other.collect == collect;
+
+  @override
+  int get hashCode => Object.hash(userId, collect);
+}
+
+class UserCatalogsData {
+  final List<UserCatalog> items;
+  final int page;
+  final bool hasMore;
+
+  const UserCatalogsData({
+    this.items = const [],
+    this.page = 1,
+    this.hasMore = true,
+  });
+}
+
+/// 用户目录列表 (bgm.tv/user/{uid}/index[/collect]?page=, 对齐原版 LIMIT=30)
+final userCatalogsProvider =
+    AsyncNotifierProvider.family<
+      UserCatalogsNotifier,
+      UserCatalogsData,
+      UserCatalogsQuery
+    >(UserCatalogsNotifier.new);
+
+class UserCatalogsNotifier
+    extends FamilyAsyncNotifier<UserCatalogsData, UserCatalogsQuery> {
+  static const _limit = 30;
+
+  @override
+  Future<UserCatalogsData> build(UserCatalogsQuery query) async {
+    return _fetch(1, query);
+  }
+
+  Future<UserCatalogsData> _fetch(int page, UserCatalogsQuery query) async {
+    final client = ref.read(apiClientProvider);
+    final html = await client.get(
+      apiUserCatalogsHtml(query.userId, page: page, collect: query.collect),
+      host: kHost,
+    );
+    final items = parseUserCatalogs(html as String);
+    return UserCatalogsData(
+      items: items,
+      page: page,
+      hasMore: items.length >= _limit,
+    );
+  }
+
+  Future<void> loadMore() async {
+    final current = state.valueOrNull;
+    if (current == null || !current.hasMore) return;
+    try {
+      final next = await _fetch(current.page + 1, arg);
+      state = AsyncData(
+        UserCatalogsData(
+          items: [...current.items, ...next.items],
+          page: next.page,
+          hasMore: next.hasMore,
+        ),
+      );
+    } catch (_) {}
+  }
+}
 
 /// 用户目录 (独立页 / 我的目录)
 class UserCatalogsScreen extends ConsumerWidget {
@@ -33,8 +105,18 @@ class UserCatalogsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('目录')),
-      body: UserCatalogsList(userId: userId),
+      appBar: AppBar(
+        title: const Text('TA的目录'),
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(apiUserCatalogsHtml(userId)),
+          ),
+        ],
+      ),
+
+      body: UserCatalogsTabs(userId: userId),
     );
   }
 }
@@ -47,23 +129,100 @@ class MyCatalogsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(currentUserProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('我的目录')),
+      appBar: AppBar(
+        title: const Text('我的目录'),
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () {
+              final me = ref.read(currentUserProvider);
+              if (me == null) return;
+              openExternalUrl(apiUserCatalogsHtml(userPathId(me)));
+            },
+          ),
+        ],
+      ),
+
       body: me == null
           ? const Center(child: Text('请先登录'))
-          : UserCatalogsList(userId: userPathId(me)),
+          : UserCatalogsTabs(userId: userPathId(me)),
+    );
+  }
+}
+
+/// 创建的 / 收藏的 (对齐原版 user/catalogs TABS)
+class UserCatalogsTabs extends StatelessWidget {
+  final String userId;
+
+  const UserCatalogsTabs({super.key, required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const TabBar(
+            tabs: [
+              Tab(text: '创建的'),
+              Tab(text: '收藏的'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                UserCatalogsList(userId: userId),
+                UserCatalogsList(userId: userId, collect: true),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 /// 目录列表 (zone tab 与独立页共用)
-class UserCatalogsList extends ConsumerWidget {
+class UserCatalogsList extends ConsumerStatefulWidget {
   final String userId;
+  final bool collect;
 
-  const UserCatalogsList({super.key, required this.userId});
+  const UserCatalogsList({
+    super.key,
+    required this.userId,
+    this.collect = false,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(userCatalogsProvider(userId));
+  ConsumerState<UserCatalogsList> createState() => _UserCatalogsListState();
+}
+
+class _UserCatalogsListState extends ConsumerState<UserCatalogsList> {
+  final _scroll = ScrollController();
+
+  UserCatalogsQuery get _query =>
+      UserCatalogsQuery(widget.userId, collect: widget.collect);
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(() {
+      if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
+        unawaited(ref.read(userCatalogsProvider(_query).notifier).loadMore());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(userCatalogsProvider(_query));
     return async.when(
       loading: () => const Loading(),
       error: (_, _) => Center(
@@ -72,29 +231,48 @@ class UserCatalogsList extends ConsumerWidget {
           children: [
             const Text('加载失败'),
             TextButton(
-              onPressed: () => ref.invalidate(userCatalogsProvider(userId)),
+              onPressed: () => ref.invalidate(userCatalogsProvider(_query)),
               child: const Text('重试'),
             ),
           ],
         ),
       ),
-      data: (catalogs) {
-        if (catalogs.isEmpty) return const Center(child: Text('暂无目录'));
+      data: (data) {
+        if (data.items.isEmpty) return const Center(child: Text('暂无目录'));
         return ListView.builder(
+          controller: _scroll,
           padding: const EdgeInsets.symmetric(vertical: 6),
-          itemCount: catalogs.length,
+          itemCount: data.items.length + (data.hasMore ? 1 : 0),
           itemBuilder: (context, index) {
-            final catalog = catalogs[index];
+            if (index >= data.items.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              );
+            }
+            final catalog = data.items[index];
             return InkWell(
               onTap: () => context.push('/catalog/${catalog.id}'),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       catalog.title,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -127,7 +305,10 @@ class UserCatalogsList extends ConsumerWidget {
                             ),
                         const Spacer(),
                         Text(
-                          [catalog.created, catalog.updated].where((e) => e.isNotEmpty).join(' / '),
+                          [
+                            catalog.created,
+                            catalog.updated,
+                          ].where((e) => e.isNotEmpty).join(' / '),
                           style: TextStyle(
                             fontSize: 10,
                             color: Theme.of(context).colorScheme.outline,

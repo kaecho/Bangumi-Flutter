@@ -21,7 +21,10 @@ class RakuenLoginGate extends ConsumerWidget {
         children: [
           Icon(Icons.lock_outline, size: 44, color: theme.colorScheme.outline),
           const SizedBox(height: 12),
-          Text(message, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+          Text(
+            message,
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: () => context.push('/login'),

@@ -6,8 +6,10 @@
 library;
 
 import 'package:html/parser.dart' as parser;
+import 'package:html/dom.dart';
 
 import '../../../core/html/bgm_html_parser.dart';
+import '../../../core/utils/display.dart';
 import '../../../shared/models/group.dart';
 import '../../../shared/models/subject.dart';
 
@@ -20,11 +22,11 @@ String _abs(String url) {
 
 /// 条目类型值 → 类型名 (1=book 2=anime 4=game 6=real)
 String _typeName(int type) => switch (type) {
-      1 => 'book',
-      4 => 'game',
-      6 => 'real',
-      _ => 'anime',
-    };
+  1 => 'book',
+  4 => 'game',
+  6 => 'real',
+  _ => 'anime',
+};
 
 /// 浏览器 / 排行榜 / 标签条目页共用的条目列表解析
 ///
@@ -50,25 +52,90 @@ List<Subject> parseSubjectList(String html) {
 
     final infoText = cText(info);
     final epsMatch = RegExp(r'(\d+)话').firstMatch(infoText);
-    final dateMatch = RegExp(r'(\d{4})年(\d{1,2})月(\d{1,2})日').firstMatch(infoText);
+    final dateMatch = RegExp(
+      r'(\d{4})年(\d{1,2})月(\d{1,2})日',
+    ).firstMatch(infoText);
     final totalText = cText(totalEl).replaceAll(RegExp(r'[()人评分]'), '');
 
-    items.add(Subject(
-      id: id,
-      type: typeEl == null ? 'anime' : _typeName(typeEl.className.contains('subject_type_1') ? 1 : (typeEl.className.contains('subject_type_4') ? 4 : (typeEl.className.contains('subject_type_6') ? 6 : 2))),
-      name: jpEl == null ? cText(titleA) : htmlDecode(jpEl.text.trim()),
-      nameCn: cText(titleA),
-      images: SubjectImages(medium: img == null ? '' : _abs(img.attributes['src'] ?? '')),
-      eps: int.tryParse(epsMatch?.group(1) ?? '') ?? 0,
-      airDate: dateMatch == null
-          ? ''
-          : '${dateMatch.group(1)}-${dateMatch.group(2)}-${dateMatch.group(3)}',
-      rank: int.tryParse(cText(rankEl).replaceAll(RegExp(r'[^\d]'), '')) ?? 0,
-      rating: Rating(
+    items.add(
+      Subject(
+        id: id,
+        type: typeEl == null
+            ? 'anime'
+            : _typeName(
+                typeEl.className.contains('subject_type_1')
+                    ? 1
+                    : (typeEl.className.contains('subject_type_4')
+                          ? 4
+                          : (typeEl.className.contains('subject_type_6')
+                                ? 6
+                                : 2)),
+              ),
+        name: jpEl == null ? cText(titleA) : htmlDecode(jpEl.text.trim()),
+        nameCn: cText(titleA),
+        images: SubjectImages(
+          medium: img == null ? '' : _abs(img.attributes['src'] ?? ''),
+        ),
+        eps: int.tryParse(epsMatch?.group(1) ?? '') ?? 0,
+        airDate: dateMatch == null
+            ? ''
+            : '${dateMatch.group(1)}-${dateMatch.group(2)}-${dateMatch.group(3)}',
+        rank: int.tryParse(cText(rankEl).replaceAll(RegExp(r'[^\d]'), '')) ?? 0,
+        rating: Rating(
+          score: double.tryParse(cText(scoreEl)) ?? 0,
+          total: int.tryParse(totalText) ?? 0,
+        ),
+      ),
+    );
+  }
+  return items;
+}
+
+/// 排行榜 / 索引 条目列表 (单独保留 tip / collected 以匹配原项目 cheerioRank)
+///
+/// 与 [parseSubjectList] 同结构但额外解析 `tip` 文案与 `collected` 收藏标记,
+/// 对应原项目 `cheerioRank` (`<ul id="browserItemList">` li.item)。
+List<RankSubject> parseRankList(String html) {
+  final doc = parser.parse(html);
+  final container = doc.querySelector('#browserItemList') ?? doc;
+  final items = <RankSubject>[];
+  for (final li in container.querySelectorAll('li.item')) {
+    final idMatch = RegExp(r'item_(\d+)').firstMatch(li.id);
+    final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
+    final href = cData(li.querySelector('h3 a.l'), 'href');
+    final subjectId = href.isEmpty
+        ? id
+        : int.tryParse(
+                RegExp(r'/subject/(\d+)').firstMatch(href)?.group(1) ?? '',
+              ) ??
+              id;
+    if (subjectId == 0) continue;
+
+    final titleA = li.querySelector('h3 a.l');
+    final jpEl = li.querySelector('h3 small.grey');
+    final img = li.querySelector('img.cover');
+    final cover = img == null ? '' : _abs(cData(img, 'src'));
+    final rankEl = li.querySelector('.rank');
+    final infoEl = li.querySelector('p.info, .info.tip');
+    final scoreEl = li.querySelector('.rateInfo small.fade, .rateInfo .fade');
+    final totalEl = li.querySelector('.rateInfo .tip_j');
+    final collected = li.querySelector('.collectModify .thickbox') != null;
+
+    final tip = htmlDecode(cText(infoEl));
+    final totalText = cText(totalEl).replaceAll(RegExp(r'[()人评分]'), '');
+    items.add(
+      RankSubject(
+        id: subjectId,
+        name: jpEl == null ? cText(titleA) : htmlDecode(jpEl.text.trim()),
+        nameCn: cText(titleA),
+        cover: cover == '/img/info_only.png' ? '' : cover,
+        rank: int.tryParse(cText(rankEl).replaceAll(RegExp(r'[^\d]'), '')) ?? 0,
         score: double.tryParse(cText(scoreEl)) ?? 0,
         total: int.tryParse(totalText) ?? 0,
+        tip: tip,
+        collected: collected,
       ),
-    ));
+    );
   }
   return items;
 }
@@ -88,12 +155,14 @@ List<Group> parseGroupList(String html) {
     final feed = li.querySelector('small.feed');
     final name = (a.attributes['href'] ?? '').replaceFirst('/group/', '');
     final membersText = cText(feed).replaceAll(RegExp(r'[^\d]'), '');
-    groups.add(Group(
-      name: name,
-      title: htmlDecode(a.attributes['title'] ?? ''),
-      icon: img == null ? '' : _abs(img.attributes['src'] ?? ''),
-      members: int.tryParse(membersText) ?? 0,
-    ));
+    groups.add(
+      Group(
+        name: name,
+        title: htmlDecode(a.attributes['title'] ?? ''),
+        icon: img == null ? '' : _abs(img.attributes['src'] ?? ''),
+        members: int.tryParse(membersText) ?? 0,
+      ),
+    );
   }
   return groups;
 }
@@ -138,88 +207,190 @@ List<BlogListRow> parseBlogList(String html) {
   for (final item in list.querySelectorAll('div.item')) {
     final titleA = item.querySelector('h2.title a');
     if (titleA == null) continue;
-    final idMatch = RegExp(r'/blog/(\d+)').firstMatch(titleA.attributes['href'] ?? '');
+    final idMatch = RegExp(
+      r'/blog/(\d+)',
+    ).firstMatch(titleA.attributes['href'] ?? '');
     final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
     if (id == 0) continue;
 
     final img = item.querySelector('a.avatar img');
-    final contentA = item.querySelector('.content a') ?? item.querySelector('.content');
+    final contentA =
+        item.querySelector('.content a') ?? item.querySelector('.content');
     final timeEl = item.querySelector('.time');
-    final timeText = timeEl == null ? '' : htmlDecode(timeEl.text.replaceAll(RegExp(r'\s+'), ' ').trim());
-    final userMatch = RegExp(r'<a href="/user/([^"]+)" class="l">([^<]+)</a>').firstMatch(timeEl?.innerHtml ?? '');
+    final timeText = timeEl == null
+        ? ''
+        : htmlDecode(timeEl.text.replaceAll(RegExp(r'\s+'), ' ').trim());
+    final userMatch = RegExp(
+      r'<a href="/user/([^"]+)" class="l">([^<]+)</a>',
+    ).firstMatch(timeEl?.innerHtml ?? '');
     final repliesMatch = RegExp(r'([\d,]+)\s*回复').firstMatch(timeText);
     final timeMatch = RegExp(r'·\s*([\d-]+ [\d:]+)\s*·').firstMatch(timeText);
 
-    rows.add(BlogListRow(
-      id: id,
-      title: cText(titleA),
-      cover: img == null ? '' : _abs(img.attributes['src'] ?? ''),
-      time: timeMatch?.group(1) ?? timeText.split('·').first.trim(),
-      content: contentA == null ? '' : htmlDecode(contentA.text.replaceAll(RegExp(r'\s+'), ' ').trim()),
-      userId: int.tryParse(userMatch?.group(1) ?? '') ?? 0,
-      username: userMatch?.group(2) ?? '',
-      replies: int.tryParse((repliesMatch?.group(1) ?? '').replaceAll(',', '')) ?? 0,
-    ));
+    rows.add(
+      BlogListRow(
+        id: id,
+        title: cText(titleA),
+        cover: img == null ? '' : _abs(img.attributes['src'] ?? ''),
+        time: timeMatch?.group(1) ?? timeText.split('·').first.trim(),
+        content: contentA == null
+            ? ''
+            : htmlDecode(contentA.text.replaceAll(RegExp(r'\s+'), ' ').trim()),
+        userId: int.tryParse(userMatch?.group(1) ?? '') ?? 0,
+        username: userMatch?.group(2) ?? '',
+        replies:
+            int.tryParse((repliesMatch?.group(1) ?? '').replaceAll(',', '')) ??
+            0,
+      ),
+    );
   }
   return rows;
 }
 
-/// 目录列表行 (索引 /index/browser)
+/// 目录列表行 (索引 /index/browser, 对应原项目 cheerioCatalog)
 class CatalogRow {
   final int id;
   final String title;
   final String desc;
-  final int total;
   final int userId;
   final String username;
   final String avatar;
+
+  /// 创建时间
+  final String createdAt;
+
+  /// 更新时间
   final String updatedAt;
+
+  /// 各条目类型收录数 (anime/book/music/game/real)
+  final int anime;
+  final int book;
+  final int music;
+  final int game;
+  final int real;
 
   const CatalogRow({
     this.id = 0,
     this.title = '',
     this.desc = '',
-    this.total = 0,
     this.userId = 0,
     this.username = '',
     this.avatar = '',
+    this.createdAt = '',
     this.updatedAt = '',
+    this.anime = 0,
+    this.book = 0,
+    this.music = 0,
+    this.game = 0,
+    this.real = 0,
   });
+
+  /// 收录条目总数
+  int get total => anime + book + music + game + real;
 }
 
 /// 目录列表解析
 ///
 /// 页面: https://bgm.tv/index/browser?page=..&orderby=..
 /// 结构: `<li id="item_N" class="clearit tml_item index-item"> ... </li>`
+/// 字段对应原项目 cheerioCatalog (stores/discovery/common.ts)
 List<CatalogRow> parseCatalogList(String html) {
   final doc = parser.parse(html);
   final rows = <CatalogRow>[];
-  for (final li in doc.querySelectorAll('li.tml_item')) {
+  for (final li in doc.querySelectorAll('li.tml_item, li.index-item')) {
+    if (!li.classes.contains('tml_item')) continue;
     final idMatch = RegExp(r'item_(\d+)').firstMatch(li.id);
     final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
     if (id == 0) continue;
 
-    final h3 = li.querySelector('a[href*="/index/"] h3');
-    final avatarEl = li.querySelector('.avatar .avatarNeue');
-    final timeTips = li.querySelectorAll('.time .tip_j');
-    final desc = li.querySelector('.desc');
+    final a = li.querySelector('a.l[href*="/index/"]');
 
-    var total = 0;
-    for (final numEl in li.querySelectorAll('.num')) {
-      total += int.tryParse(numEl.text.trim()) ?? 0;
+    // 用户名 / 用户 id: .time a.l (href=/user/N)
+    final userLink = li.querySelector('.time a.l');
+    final userHref = userLink?.attributes['href'] ?? '';
+    final userId =
+        int.tryParse(
+          RegExp(r'/user/(\d+)').firstMatch(userHref)?.group(1) ?? '',
+        ) ??
+        0;
+
+    // 创建 / 更新时间: .time .tip_j (两个)
+    final tips = li.querySelectorAll('.time .tip_j');
+
+    // 头像: .avatar .avatarNeue (style background-image)
+    final avatarEl = li.querySelector('.avatar .avatarNeue');
+
+    // 各类型计数: .subject_type_<bit> .num
+    int typeNum(String bit) {
+      final el = li.querySelector('.subject_type_$bit .num');
+      return int.tryParse(el?.text.trim() ?? '') ?? 0;
     }
 
-    rows.add(CatalogRow(
-      id: id,
-      title: h3 == null ? '' : htmlDecode(h3.text.trim()),
-      desc: desc == null ? '' : htmlDecode(desc.text.trim()),
-      total: total,
-      username: cText(li.querySelector('.time a.l')),
-      avatar: avatarEl == null ? '' : _abs(matchAvatar(avatarEl)),
-      updatedAt: timeTips.length > 1 ? timeTips[1].text.trim() : '',
-    ));
+    rows.add(
+      CatalogRow(
+        id: id,
+        title: a == null
+            ? ''
+            : htmlDecode(a.querySelector('h3')?.text.trim() ?? a.text.trim()),
+        desc: cText(li.querySelector('.desc')),
+        userId: userId,
+        username: cText(userLink),
+        avatar: avatarEl == null ? '' : _abs(matchAvatar(avatarEl)),
+        createdAt: tips.isNotEmpty ? tips[0].text.trim() : '',
+        updatedAt: tips.length > 1 ? tips[1].text.trim() : '',
+        // 1=book 2=anime 3=music 4=game 6=real
+        anime: typeNum('2'),
+        book: typeNum('1'),
+        music: typeNum('3'),
+        game: typeNum('4'),
+        real: typeNum('6'),
+      ),
+    );
   }
   return rows;
+}
+
+/// 目录详情 HTML extras (原项目 cheerioCatalogDetail: 收藏 join/bye)
+class CatalogDetailExtra {
+  final String joinUrl;
+  final String byeUrl;
+  final String collect;
+  final String progress;
+
+  const CatalogDetailExtra({
+    this.joinUrl = '',
+    this.byeUrl = '',
+    this.collect = '',
+    this.progress = '',
+  });
+
+  bool get collected => byeUrl.isNotEmpty;
+}
+
+/// 解析 /index/{id}: .grp_box .btnPink/.btnBlue
+CatalogDetailExtra parseCatalogDetailExtra(String html) {
+  final fragment = htmlMatch(html, '<div id="header', '<div id="footer');
+  final doc = parser.parse(fragment.isEmpty ? html : fragment);
+  final box = doc.querySelector('.grp_box');
+  final href =
+      box?.querySelector('.btnPink')?.attributes['href'] ??
+      box?.querySelector('.btnBlue')?.attributes['href'] ??
+      '';
+  var joinUrl = '';
+  var byeUrl = '';
+  if (href.contains('erase_collect')) {
+    byeUrl = href;
+  } else if (href.isNotEmpty) {
+    joinUrl = href;
+  }
+  final tips = box?.querySelectorAll('.tip_j .tip') ?? const [];
+  return CatalogDetailExtra(
+    joinUrl: joinUrl,
+    byeUrl: byeUrl,
+    collect: tips.length > 2 ? tips[2].text.trim() : '',
+    progress: htmlDecode(
+      doc.querySelector('.progress small')?.text.trim() ?? '',
+    ),
+  );
 }
 
 /// 标签项
@@ -228,6 +399,33 @@ class TagItem {
   final int count;
 
   const TagItem({required this.name, this.count = 0});
+}
+
+/// 排行榜条目 (对应原项目 cheerioRank TagItem, 含 tip/collected)
+class RankSubject {
+  final int id;
+  final String name;
+  final String nameCn;
+  final String cover;
+  final int rank;
+  final double score;
+  final int total;
+  final String tip;
+  final bool collected;
+
+  const RankSubject({
+    required this.id,
+    this.name = '',
+    this.nameCn = '',
+    this.cover = '',
+    this.rank = 0,
+    this.score = 0,
+    this.total = 0,
+    this.tip = '',
+    this.collected = false,
+  });
+
+  String get displayName => cnjp(name, nameCn);
 }
 
 /// 标签列表解析
@@ -243,9 +441,16 @@ List<TagItem> parseTagList(String html) {
   for (final a in list.querySelectorAll('a.l')) {
     final name = htmlDecode(a.text.trim());
     if (name.isEmpty) continue;
-      final next = a.nextElementSibling;
-      final countText = next == null ? '' : cText(next).replaceAll(RegExp(r'[()]'), '');
-    tags.add(TagItem(name: name, count: int.tryParse(countText.replaceAll(',', '')) ?? 0));
+    final next = a.nextElementSibling;
+    final countText = next == null
+        ? ''
+        : cText(next).replaceAll(RegExp(r'[()]'), '');
+    tags.add(
+      TagItem(
+        name: name,
+        count: int.tryParse(countText.replaceAll(',', '')) ?? 0,
+      ),
+    );
   }
   return tags;
 }
@@ -257,22 +462,31 @@ class WikiEntry {
   final String username;
   final String time;
 
-  const WikiEntry({this.href = '', this.name = '', this.username = '', this.time = ''});
+  const WikiEntry({
+    this.href = '',
+    this.name = '',
+    this.username = '',
+    this.time = '',
+  });
 }
 
 /// 维基人页数据
 class WikiData {
-  final List<(String, int)> counts; // 全部条目/动画/书籍/.../编辑
-  final List<WikiEntry> all;
-  final List<WikiEntry> lock;
+  final List<(String, int)> counts;
+  final Map<String, List<WikiEntry>> lists;
 
-  const WikiData({this.counts = const [], this.all = const [], this.lock = const []});
+  const WikiData({this.counts = const [], this.lists = const {}});
+
+  List<WikiEntry> of(String id) => lists[id] ?? const [];
+
+  List<WikiEntry> get all => of('wiki_act-all');
+  List<WikiEntry> get lock => of('wiki_act-lock');
 }
 
 /// 维基人解析
 ///
 /// 页面: https://bgm.tv/wiki
-/// 结构: `.wikiStats li` 计数; `#wiki_act-all li` / `#wiki_act-lock li` 编辑动态
+/// 结构: `.wikiStats li` 计数; `#wiki_act-*` 编辑动态; `#latest_*` 最近入库
 WikiData parseWiki(String html) {
   final doc = parser.parse(html);
 
@@ -292,21 +506,44 @@ WikiData parseWiki(String html) {
     if (list == null) return const [];
     final entries = <WikiEntry>[];
     for (final li in list.querySelectorAll('li')) {
-      final a = li.querySelector('a[target="_blank"].l');
+      final a =
+          li.querySelector('a[target="_blank"].l') ?? li.querySelector('a.l');
       if (a == null) continue;
       final byUser = li.querySelector('small.grey a[href^="/user/"]');
       final time = li.querySelector('.rr');
-      entries.add(WikiEntry(
-        href: a.attributes['href'] ?? '',
-        name: htmlDecode(a.text.trim()),
-        username: byUser == null ? '' : htmlDecode(byUser.text.trim()),
-        time: cText(time).split(' / ').first,
-      ));
+      entries.add(
+        WikiEntry(
+          href: a.attributes['href'] ?? '',
+          name: htmlDecode(a.text.trim()),
+          username: byUser == null ? '' : htmlDecode(byUser.text.trim()),
+          time: cText(time).split(' / ').first,
+        ),
+      );
     }
     return entries;
   }
 
-  return WikiData(counts: counts, all: parseList('wiki_act-all'), lock: parseList('wiki_act-lock'));
+  const ids = [
+    'wiki_act-all',
+    'wiki_act-lock',
+    'wiki_act-merge',
+    'wiki_act-crt',
+    'wiki_act-prsn',
+    'wiki_act-ep',
+    'wiki_act-subject-relation',
+    'wiki_act-subject-person',
+    'wiki_act-subject-crt',
+    'latest_all',
+    'latest_1',
+    'latest_2',
+    'latest_3',
+    'latest_4',
+    'latest_6',
+  ];
+  return WikiData(
+    counts: counts,
+    lists: {for (final id in ids) id: parseList(id)},
+  );
 }
 
 /// 频道条目 (注目动画)
@@ -316,7 +553,12 @@ class ChannelRankItem {
   final String cover;
   final String follow;
 
-  const ChannelRankItem({this.id = 0, this.name = '', this.cover = '', this.follow = ''});
+  const ChannelRankItem({
+    this.id = 0,
+    this.name = '',
+    this.cover = '',
+    this.follow = '',
+  });
 }
 
 /// 频道讨论
@@ -343,8 +585,35 @@ class ChannelData {
   final List<ChannelRankItem> rank;
   final List<ChannelDiscussItem> discuss;
   final List<BlogListRow> blogs;
+  final List<ChannelFriendItem> friends;
 
-  const ChannelData({this.rank = const [], this.discuss = const [], this.blogs = const []});
+  const ChannelData({
+    this.rank = const [],
+    this.discuss = const [],
+    this.blogs = const [],
+    this.friends = const [],
+  });
+}
+
+/// 频道好友最近关注 (原项目 ChannelFriendsItem)
+class ChannelFriendItem {
+  final int id;
+  final String name;
+  final String cover;
+  final String userId;
+  final String userName;
+  final String action;
+  final String avatar;
+
+  const ChannelFriendItem({
+    this.id = 0,
+    this.name = '',
+    this.cover = '',
+    this.userId = '',
+    this.userName = '',
+    this.action = '',
+    this.avatar = '',
+  });
 }
 
 /// 频道聚合解析
@@ -358,12 +627,20 @@ ChannelData parseChannel(String html) {
     if (a == null) continue;
     final image = item.querySelector('.image');
     final grey = item.querySelector('.grey');
-    rank.add(ChannelRankItem(
-      id: int.tryParse((a.attributes['href'] ?? '').replaceFirst('/subject/', '')) ?? 0,
-      name: htmlDecode(a.attributes['title'] ?? ''),
-      cover: image == null ? '' : _abs(matchAttr(image, 'style', RegExp(r'url\(([^)]+)\)'))),
-      follow: cText(grey),
-    ));
+    rank.add(
+      ChannelRankItem(
+        id:
+            int.tryParse(
+              (a.attributes['href'] ?? '').replaceFirst('/subject/', ''),
+            ) ??
+            0,
+        name: htmlDecode(a.attributes['title'] ?? ''),
+        cover: image == null
+            ? ''
+            : _abs(matchAttr(image, 'style', RegExp(r'url\(([^)]+)\)'))),
+        follow: cText(grey),
+      ),
+    );
   }
 
   // 讨论: table.topic_list tr
@@ -371,7 +648,9 @@ ChannelData parseChannel(String html) {
   for (final row in doc.querySelectorAll('table.topic_list tr')) {
     final titleA = row.querySelector('td a.l');
     if (titleA == null) continue;
-    final idMatch = RegExp(r'/subject/topic/(\d+)').firstMatch(titleA.attributes['href'] ?? '');
+    final idMatch = RegExp(
+      r'/subject/topic/(\d+)',
+    ).firstMatch(titleA.attributes['href'] ?? '');
     final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
     if (id == 0) continue;
     final replies = row.querySelector('td a.l + small.grey');
@@ -379,20 +658,64 @@ ChannelData parseChannel(String html) {
     final right = row.querySelector('td[align="right"]');
     final userA = right?.querySelector('a');
     final time = right?.querySelector('small');
-    discuss.add(ChannelDiscussItem(
-      id: id,
-      title: cText(titleA),
-      replies: int.tryParse(cText(replies).replaceAll(RegExp(r'[()]'), '')) ?? 0,
-      subjectName: cText(subjectA),
-      username: cText(userA),
-      time: cText(time),
-    ));
+    discuss.add(
+      ChannelDiscussItem(
+        id: id,
+        title: cText(titleA),
+        replies:
+            int.tryParse(cText(replies).replaceAll(RegExp(r'[()]'), '')) ?? 0,
+        subjectName: cText(subjectA),
+        username: cText(userA),
+        time: cText(time),
+      ),
+    );
   }
 
   // 日志: #entry_list .item
   final blogs = parseBlogList(html);
 
-  return ChannelData(rank: rank, discuss: discuss, blogs: blogs);
+  // 好友最近关注: ul.coversSmall > li
+  final friends = <ChannelFriendItem>[];
+  for (final li in doc.querySelectorAll('ul.coversSmall > li')) {
+    final subjectA = li.querySelector('a');
+    if (subjectA == null) continue;
+    if (!(subjectA.attributes['href'] ?? '').contains('/subject/')) continue;
+    final img = subjectA.querySelector('img');
+    final cover = img?.attributes['src'] ?? '';
+    if (cover.contains('/img/no_img.gif')) continue;
+    final userA = li.querySelector('a.l');
+    final info = cText(li.querySelector('p.info'));
+    final userName = cText(userA);
+    friends.add(
+      ChannelFriendItem(
+        id:
+            int.tryParse(
+              (subjectA.attributes['href'] ?? '').replaceFirst('/subject/', ''),
+            ) ??
+            0,
+        name: htmlDecode(subjectA.attributes['title'] ?? ''),
+        cover: _abs(cover),
+        userId: (userA?.attributes['href'] ?? '').replaceFirst('/user/', ''),
+        userName: userName,
+        action: info.replaceFirst(userName, '').trim(),
+        avatar: _abs(
+          userA?.querySelector('img')?.attributes['src'] ??
+              matchAttr(
+                userA?.querySelector('.avatarNeue') ?? userA,
+                'style',
+                RegExp(r'url\(([^)]+)\)'),
+              ),
+        ),
+      ),
+    );
+  }
+
+  return ChannelData(
+    rank: rank,
+    discuss: discuss,
+    blogs: blogs,
+    friends: friends,
+  );
 }
 
 /// 小组/频道讨论行 (Dollars 论坛页: /group/dollars/forum)
@@ -424,19 +747,23 @@ List<TopicRow> parseTopicRows(String html) {
   for (final tr in doc.querySelectorAll('tr.topic')) {
     final titleA = tr.querySelector('td.subject a.l');
     if (titleA == null) continue;
-    final idMatch = RegExp(r'/group/topic/(\d+)').firstMatch(titleA.attributes['href'] ?? '');
+    final idMatch = RegExp(
+      r'/group/topic/(\d+)',
+    ).firstMatch(titleA.attributes['href'] ?? '');
     final id = int.tryParse(idMatch?.group(1) ?? '') ?? 0;
     if (id == 0) continue;
     final userA = tr.querySelector('td.author a.l');
     final posts = tr.querySelector('td.posts');
     final last = tr.querySelector('td.lastpost small.time');
-    rows.add(TopicRow(
-      id: id,
-      title: cText(titleA),
-      username: cText(userA),
-      replies: int.tryParse(cText(posts).replaceAll(',', '')) ?? 0,
-      lastTime: cText(last),
-    ));
+    rows.add(
+      TopicRow(
+        id: id,
+        title: cText(titleA),
+        username: cText(userA),
+        replies: int.tryParse(cText(posts).replaceAll(',', '')) ?? 0,
+        lastTime: cText(last),
+      ),
+    );
   }
   return rows;
 }
@@ -447,7 +774,11 @@ class AwardBlock {
   final String subtitle;
   final List<AwardItem> items;
 
-  const AwardBlock({this.title = '', this.subtitle = '', this.items = const []});
+  const AwardBlock({
+    this.title = '',
+    this.subtitle = '',
+    this.items = const [],
+  });
 }
 
 class AwardItem {
@@ -476,33 +807,40 @@ List<AwardBlock> parseAward(String html) {
   final doc = parser.parse(html);
   final blocks = <AwardBlock>[];
   for (final block in doc.querySelectorAll('div.topicRank')) {
-    final title = block.querySelector('h3.chl p') ?? block.querySelector('h3 p');
-    final subtitle = block.querySelector('h3.chl span') ?? block.querySelector('h3 span');
+    final title =
+        block.querySelector('h3.chl p') ?? block.querySelector('h3 p');
+    final subtitle =
+        block.querySelector('h3.chl span') ?? block.querySelector('h3 span');
     if (title == null) continue;
 
     final items = <AwardItem>[];
     for (final li in block.querySelectorAll('ul > li')) {
-      final a = li.querySelector('div.inner p a') ?? li.querySelector('a[href^="/"]');
+      final a =
+          li.querySelector('div.inner p a') ?? li.querySelector('a[href^="/"]');
       if (a == null) continue;
       final img = li.querySelector('img');
       final count = li.querySelector('div.inner p small');
       final sub = li.querySelector('div.inner a small.grey');
       final name = a.text.trim();
       if (name.isEmpty && count == null) continue;
-      items.add(AwardItem(
-        href: a.attributes['href'] ?? '',
-        name: htmlDecode(name),
-        count: count == null ? '' : htmlDecode(count.text.trim()),
-        subName: sub == null ? '' : htmlDecode(sub.text.trim()),
-        cover: img == null ? '' : _abs(img.attributes['src'] ?? ''),
-      ));
+      items.add(
+        AwardItem(
+          href: a.attributes['href'] ?? '',
+          name: htmlDecode(name),
+          count: count == null ? '' : htmlDecode(count.text.trim()),
+          subName: sub == null ? '' : htmlDecode(sub.text.trim()),
+          cover: img == null ? '' : _abs(img.attributes['src'] ?? ''),
+        ),
+      );
     }
 
-    blocks.add(AwardBlock(
-      title: htmlDecode(title.text.trim()),
-      subtitle: subtitle == null ? '' : htmlDecode(subtitle.text.trim()),
-      items: items,
-    ));
+    blocks.add(
+      AwardBlock(
+        title: htmlDecode(title.text.trim()),
+        subtitle: subtitle == null ? '' : htmlDecode(subtitle.text.trim()),
+        items: items,
+      ),
+    );
   }
   return blocks;
 }
@@ -511,7 +849,10 @@ List<AwardBlock> parseAward(String html) {
 Subject subjectFromCollectionItem(Map<String, dynamic> json) {
   final subject = json['subject'] as Map<String, dynamic>? ?? const {};
   return Subject(
-    id: (json['subject_id'] as num?)?.toInt() ?? (subject['id'] as num?)?.toInt() ?? 0,
+    id:
+        (json['subject_id'] as num?)?.toInt() ??
+        (subject['id'] as num?)?.toInt() ??
+        0,
     name: subject['name'] as String? ?? '',
     nameCn: subject['name_cn'] as String? ?? '',
     images: SubjectImages(
@@ -524,7 +865,8 @@ Subject subjectFromCollectionItem(Map<String, dynamic> json) {
       score: (subject['score'] as num?)?.toDouble() ?? 0,
       total: (subject['total'] as num?)?.toInt() ?? 0,
     ),
-    tags: (subject['tags'] as List?)
+    tags:
+        (subject['tags'] as List?)
             ?.map((e) => Tag.fromJson(e as Map<String, dynamic>))
             .toList() ??
         const [],
@@ -550,7 +892,10 @@ class V0CollectionItem {
   factory V0CollectionItem.fromJson(Map<String, dynamic> json) {
     final subject = json['subject'] as Map<String, dynamic>? ?? const {};
     return V0CollectionItem(
-      subjectId: (json['subject_id'] as num?)?.toInt() ?? (subject['id'] as num?)?.toInt() ?? 0,
+      subjectId:
+          (json['subject_id'] as num?)?.toInt() ??
+          (subject['id'] as num?)?.toInt() ??
+          0,
       type: (json['type'] as num?)?.toInt() ?? 0,
       epStatus: (json['ep_status'] as num?)?.toInt() ?? 0,
       updatedAt: json['updated_at'] as String? ?? '',
@@ -567,4 +912,350 @@ List<V0CollectionItem> parseV0Collections(Object? data) {
       .whereType<Map<String, dynamic>>()
       .map(V0CollectionItem.fromJson)
       .toList();
+}
+
+/// 搜索结果项 (条目 + 人物共用)
+class SearchItem {
+  /// 条目: /subject/{id} → int; 人物: /character/{id} 或 /person/{id} → int
+  /// 用字符串存是为了保留原始 href 语义; UI 渲染条目时取 int.parse。
+  /// 这里直接存为 int (条目 id / 人物 id), 对应原项目 cData($a, 'href') 提取的数字。
+  final int id;
+  final String type; // subject | character | person; '' 表示无法判断
+  final String cover;
+  final String name;
+  final String nameCn;
+  final String tip;
+  final double score;
+  final int rank;
+  final String comments;
+
+  const SearchItem({
+    this.id = 0,
+    this.type = '',
+    this.cover = '',
+    this.name = '',
+    this.nameCn = '',
+    this.tip = '',
+    this.score = 0,
+    this.rank = 0,
+    this.comments = '',
+  });
+}
+
+/// 搜索结果分页信息
+class SearchPage {
+  final List<SearchItem> list;
+  final int page;
+  final int pageTotal;
+
+  const SearchPage({this.list = const [], this.page = 1, this.pageTotal = 1});
+}
+
+/// 从 href 中提取 id (如 /subject/123 → 123, /character/45 → 45)
+int _idFromHref(String href) {
+  final m = RegExp(r'/(\d+)').firstMatch(href);
+  return int.tryParse(m?.group(1) ?? '') ?? 0;
+}
+
+/// 条目类型 class → 类型名 (如 span.ll class='subject_type_2' → anime)
+/// 对应原项目 cheerioSearch type 字段 (matched 数字, 在 UI 端再做映射)
+String _subjectTypeFromSpan(Element? el) {
+  final cls = cData(el, 'class');
+  final m = RegExp(r'subject_type_(\d+)').firstMatch(cls);
+  final n = int.tryParse(m?.group(1) ?? '');
+  return switch (n) {
+    1 => 'book',
+    2 => 'anime',
+    3 => 'music',
+    4 => 'game',
+    6 => 'real',
+    _ => '',
+  };
+}
+
+/// 条目搜索结果解析 (对应原项目 cheerioSearch)
+///
+/// 页面: /{subject|catalog|user}_search/... {@code #searchResultList} 不存在,
+/// 实际结构来自原项目 selectors: `#browserItemList .item` 的统一条目列表。
+/// 原项目 cheerio 使用 `#searchResultList li.item`, 实为裁剪后 DOM;
+/// 这里按真实主站 DOM (#browserItemList li.item) 解析, 与 parseSubjectList 同源,
+/// 但同时提取 score (rateInfo .fade) / rank / tip (p.info) 与 type。
+SearchPage parseSearchSubject(String html) {
+  final fragment = htmlMatch(html, '<div id="columnSearchB', '<div id="footer');
+  final doc = parseDom(removeCF(fragment.isEmpty ? html : fragment));
+
+  // bgm.tv 搜索页条目列表容器为 #browserItemList (与浏览器页一致)
+  final container = doc.querySelector('#browserItemList') ?? doc;
+  final items = <SearchItem>[];
+  for (final li in container.querySelectorAll('li.item')) {
+    final a = li.querySelector('h3 a.l');
+    if (a == null) continue;
+    final id = _idFromHref(cData(a, 'href'));
+    if (id == 0) continue;
+    final grey = li.querySelector('h3 small.grey');
+    final coverEl = li.querySelector('img.cover');
+    final info = li.querySelector('p.info');
+    final rateInfo = li.querySelector('.rateInfo');
+    final scoreEl = rateInfo?.querySelector('.fade');
+    final totalEl = rateInfo?.querySelector('.tip_j');
+    final rankEl = li.querySelector('.rank');
+    final typeSpan = li.querySelector('h3 span.ll');
+
+    final scoreStr = cText(scoreEl);
+    final totalText = cText(totalEl).replaceAll(RegExp(r'[()人评分]'), '');
+    items.add(
+      SearchItem(
+        id: id,
+        type: 'subject:${_subjectTypeFromSpan(typeSpan)}',
+        cover: _abs(cData(coverEl, 'src')),
+        name: grey == null ? cText(a) : htmlDecode(grey.text.trim()),
+        nameCn: cText(a),
+        tip: cText(info),
+        score: double.tryParse(scoreStr) ?? 0,
+        rank: int.tryParse(cText(rankEl).replaceAll(RegExp(r'[^\d]'), '')) ?? 0,
+        comments: totalText,
+      ),
+    );
+  }
+
+  final page = _searchPagination(doc);
+  return SearchPage(list: items, page: page.page, pageTotal: page.pageTotal);
+}
+
+/// 人物搜索结果解析 (对应原项目 cheerioSearchMono)
+///
+/// 页面: /mono_search/...; 原项目 selector 为 `.light_odd`
+/// 行结构: h2 a.l (href+名/中名), img.avatar (封面), .prsn_info (tip),
+/// small.na (comments)
+SearchPage parseSearchMono(String html) {
+  final fragment = htmlMatch(html, '<div id="columnSearchB', '<div id="footer');
+  final doc = parseDom(removeCF(fragment.isEmpty ? html : fragment));
+
+  final items = <SearchItem>[];
+  for (final row in doc.querySelectorAll('.light_odd')) {
+    final a = row.querySelector('h2 a.l');
+    if (a == null) continue;
+    final href = cData(a, 'href');
+    final id = _idFromHref(href);
+    if (id == 0) continue;
+
+    // 名/中名按 '/' 分割 (对应原项目: split('/') name=parts[0] nameCn=parts[1:])
+    final fullText = cText(a);
+    final slash = fullText.indexOf('/');
+    final name = slash < 0
+        ? fullText.trim()
+        : fullText.substring(0, slash).trim();
+    final nameCn = slash < 0 ? '' : fullText.substring(slash + 1).trim();
+
+    final avatar = row.querySelector('img.avatar');
+    final prsnInfo = row.querySelector('.prsn_info');
+    final na = row.querySelector('small.na');
+
+    items.add(
+      SearchItem(
+        id: id,
+        type: href.contains('/character/') ? 'character' : 'person',
+        cover: _abs(cData(avatar, 'src')),
+        name: name,
+        nameCn: nameCn,
+        tip: cText(prsnInfo),
+        score: 0,
+        rank: 0,
+        comments: cText(na),
+      ),
+    );
+  }
+
+  final page = _searchPagination(doc);
+  return SearchPage(list: items, page: page.page, pageTotal: page.pageTotal);
+}
+
+/// 搜索页分页解析 (bgm.tv 搜索页 #multipage)
+({int page, int pageTotal}) _searchPagination(Document doc) {
+  final multipage = doc.querySelector('#multipage');
+  if (multipage == null) return (page: 1, pageTotal: 1);
+  // 优先取 .p_edge (1 / N) 形式
+  final edge = multipage.querySelector('.p_edge');
+  if (edge != null) {
+    final m = RegExp(r'/\s*(\d+)').firstMatch(cText(edge));
+    if (m != null) {
+      return (page: 1, pageTotal: int.tryParse(m.group(1)!) ?? 1);
+    }
+  }
+  // 否则取所有分页数字最大值
+  int maxPage = 1;
+  int cur = 1;
+  for (final el in multipage.querySelectorAll('.p, .p_cur')) {
+    final n = int.tryParse(cText(el));
+    if (n != null) {
+      if (n > maxPage) maxPage = n;
+      if (el.classes.contains('p_cur')) cur = n;
+    }
+  }
+  return (page: cur, pageTotal: maxPage);
+}
+
+/// 收藏人物的最近作品 (原项目 RecentsItem / cheerioRecents)
+class MonoRecentItem {
+  final int id;
+  final String cover;
+  final int type;
+  final String href;
+  final String name;
+  final String nameJp;
+  final String info;
+  final int star;
+  final String starInfo;
+  final List<(String id, String avatar, String name, String info)> actors;
+
+  const MonoRecentItem({
+    this.id = 0,
+    this.cover = '',
+    this.type = 0,
+    this.href = '',
+    this.name = '',
+    this.nameJp = '',
+    this.info = '',
+    this.star = 0,
+    this.starInfo = '',
+    this.actors = const [],
+  });
+}
+
+/// 解析 /mono/update: #browserItemList li.item
+List<MonoRecentItem> parseMonoRecents(String html) {
+  final fragment = htmlMatch(
+    html,
+    '<div id="columnCrtBrowserB',
+    '<div id="footer',
+  );
+  final doc = parser.parse(fragment.isEmpty ? html : fragment);
+  final list = doc.querySelector('#browserItemList');
+  if (list == null) return const [];
+
+  final items = <MonoRecentItem>[];
+  for (final row in list.querySelectorAll('li.item')) {
+    final a = row.querySelector('h3 a.l');
+    if (a == null) continue;
+    final href = a.attributes['href'] ?? '';
+    final idMatch = RegExp(r'/subject/(\d+)').firstMatch(href);
+    final idFromLi = (row.attributes['id'] ?? '').replaceFirst('item_', '');
+    final typeClass =
+        row.querySelector('h3 span.ll')?.attributes['class'] ?? '';
+    final type =
+        int.tryParse(
+          RegExp(r'subject_type_(\d+)').firstMatch(typeClass)?.group(1) ?? '',
+        ) ??
+        0;
+    final starClass =
+        row.querySelector('span.starlight')?.attributes['class'] ?? '';
+    final star =
+        int.tryParse(
+          RegExp(r'stars(\d+)').firstMatch(starClass)?.group(1) ?? '',
+        ) ??
+        0;
+    final actors = <(String, String, String, String)>[];
+    for (final badge in row.querySelectorAll('.actorBadge')) {
+      final ba = badge.querySelector('a.l');
+      final img = badge.querySelector('img');
+      final avatarA = badge.querySelector('a.avatar');
+      actors.add((
+        (avatarA?.attributes['href'] ?? ba?.attributes['href'] ?? '')
+            .replaceFirst(RegExp(r'^/+'), ''),
+        _abs(img?.attributes['src'] ?? ''),
+        ba == null ? '' : htmlDecode(ba.text.trim()),
+        htmlDecode(badge.querySelector('small.grey')?.text.trim() ?? ''),
+      ));
+    }
+    items.add(
+      MonoRecentItem(
+        id:
+            int.tryParse(idMatch?.group(1) ?? '') ??
+            int.tryParse(idFromLi) ??
+            0,
+        cover: _abs(row.querySelector('img.cover')?.attributes['src'] ?? ''),
+        type: type,
+        href: href,
+        name: htmlDecode(a.text.trim()),
+        nameJp: htmlDecode(
+          row.querySelector('h3 small.grey')?.text.trim() ?? '',
+        ),
+        info: htmlDecode(row.querySelector('p.info')?.text.trim() ?? ''),
+        star: star,
+        starInfo: htmlDecode(
+          row.querySelector('.rateInfo .tip_j')?.text.trim() ?? '',
+        ),
+        actors: actors,
+      ),
+    );
+  }
+  return items;
+}
+
+/// Dollars 聊天条 (原项目 DollarsItem / cheerioDollars)
+class DollarsChatItem {
+  final String id;
+  final String avatar;
+  final String nickname;
+  final String msg;
+  final String color;
+
+  const DollarsChatItem({
+    this.id = '',
+    this.avatar = '',
+    this.nickname = '',
+    this.msg = '',
+    this.color = '',
+  });
+
+  factory DollarsChatItem.fromJson(Map<String, dynamic> json) {
+    final avatar = json['avatar'] as String? ?? '';
+    return DollarsChatItem(
+      id: '${json['id'] ?? ''}',
+      avatar: avatar.startsWith('http')
+          ? avatar
+          : avatar.isEmpty
+          ? ''
+          : 'https://lain.bgm.tv/pic/user/m/$avatar',
+      nickname: json['nickname'] as String? ?? json['name'] as String? ?? '',
+      msg: json['msg'] as String? ?? json['message'] as String? ?? '',
+      color: json['color'] as String? ?? '',
+    );
+  }
+}
+
+/// 解析 /dollars: #chatList ul li
+({List<DollarsChatItem> list, String online}) parseDollars(String html) {
+  final doc = parser.parse(html);
+  final items = <DollarsChatItem>[];
+  for (final row in doc.querySelectorAll('#chatList ul li')) {
+    final rawId = (row.attributes['id'] ?? '').split('_');
+    final id = rawId.length > 1
+        ? rawId[1].substring(0, rawId[1].length.clamp(0, 10))
+        : '';
+    final src = row.querySelector('img.avatar')?.attributes['src'] ?? '';
+    var avatar = src;
+    final mid = src.split('/m/');
+    if (mid.length > 1) {
+      avatar = 'https://lain.bgm.tv/pic/user/m/${mid.last}';
+    } else if (src.startsWith('//')) {
+      avatar = 'https:$src';
+    }
+    final style = row.querySelector('.content')?.attributes['style'] ?? '';
+    final color = style.contains(':') ? style.split(':').last.trim() : '';
+    items.add(
+      DollarsChatItem(
+        id: id,
+        avatar: avatar,
+        nickname: htmlDecode(row.querySelector('.icon p')?.text.trim() ?? ''),
+        msg: htmlDecode(row.querySelector('.content p')?.text.trim() ?? ''),
+        color: color,
+      ),
+    );
+  }
+  final onlineRaw = doc.querySelector('#toolBox')?.text ?? '';
+  final online = onlineRaw.contains(':')
+      ? onlineRaw.split(':').last.trim()
+      : onlineRaw.trim();
+  return (list: items, online: online);
 }

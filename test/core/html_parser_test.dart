@@ -5,14 +5,19 @@ import 'package:bangumi/core/html/bgm_html_parser.dart';
 void main() {
   group('htmlDecode', () {
     test('反转义实体', () {
-      expect(htmlDecode('a&amp;b &lt;c&gt; &quot;d&quot; &nbsp;'), 'a&b <c> "d"  ');
+      expect(
+        htmlDecode('a&amp;b &lt;c&gt; &quot;d&quot; &nbsp;'),
+        'a&b <c> "d"  ',
+      );
     });
   });
 
   group('htmlMatch', () {
     test('提取片段 (不含 end 标记, 与原项目一致)', () {
-      expect(htmlMatch('xx<div id="a">content</div>yy', '<div id="a">', '</div>'),
-          '<div id="a">content');
+      expect(
+        htmlMatch('xx<div id="a">content</div>yy', '<div id="a">', '</div>'),
+        '<div id="a">content',
+      );
     });
     test('起点缺失返回空', () {
       expect(htmlMatch('no marker here', '<div id="a">', '</div>'), '');
@@ -29,8 +34,10 @@ void main() {
       expect(relativeToEpoch('5分钟前', loaded), loaded - 5 * 60 * 1000);
     });
     test('中文 组合格式 (3天15时前)', () {
-      expect(relativeToEpoch('3天15时前', loaded),
-          loaded - (3 * 86400 + 15 * 3600) * 1000);
+      expect(
+        relativeToEpoch('3天15时前', loaded),
+        loaded - (3 * 86400 + 15 * 3600) * 1000,
+      );
     });
     test('中文 小时 词 (3小时前 无法解析, 与 RN 一致)', () {
       expect(relativeToEpoch('3小时前', loaded), isNull);
@@ -40,8 +47,10 @@ void main() {
     });
     test('英文 ago 格式', () {
       expect(relativeEnToEpoch('...3m ago', loaded), loaded - 3 * 60 * 1000);
-      expect(relativeEnToEpoch('...1h 2m ago', loaded),
-          loaded - (3600 + 120) * 1000);
+      expect(
+        relativeEnToEpoch('...1h 2m ago', loaded),
+        loaded - (3600 + 120) * 1000,
+      );
       expect(relativeEnToEpoch('...2d ago', loaded), loaded - 2 * 86400 * 1000);
     });
     test('无法识别返回 null', () {
@@ -96,6 +105,7 @@ void main() {
     <div class="inner">
       <span class="userInfo"><strong><a class="l" href="/user/42">用户A</a></strong> <span class="sign">签名</span></span>
       <div class="reply_content"><div class="message">楼上说得对 <q>引用</q></div></div>
+      <div class="likes_grid">3</div>
     </div>
   </div>
 </div>
@@ -108,7 +118,45 @@ void main() {
       expect(f.userId, '42');
       expect(f.floor, '#1');
       expect(f.time, '5分钟前');
+      expect(f.source, '');
       expect(f.messageHtml, contains('楼上说得对'));
+      expect(f.likes, 3);
+    });
+
+    test('解析楼层来源', () {
+      const html = '''
+<div id="comment_list" class="commentList">
+  <div id="post_9" class="row row_reply clearit">
+    <div class="post_actions"><div class="action"><small><a class="floor-anchor">#2</a> - 3小时前 · Bangumi for android</small></div></div>
+    <a href="/user/7" class="avatar"><span class="avatarNeue" style="background-image:url('//lain.bgm.tv/pic/user/l/1.jpg')"></span></a>
+    <div class="inner">
+      <span class="userInfo"><strong><a class="l" href="/user/7">用户B</a></strong></span>
+      <div class="reply_content"><div class="message">来了</div></div>
+    </div>
+  </div>
+</div>
+''';
+      final floors = parseRakuenFloors(html);
+      expect(floors.single.time, '3小时前');
+      expect(floors.single.source, 'Bangumi for android');
+    });
+  });
+
+  group('rakueHtmlUrl', () {
+    test('空 type 无 query', () {
+      expect(rakueHtmlUrl('topiclist', ''), 'https://bgm.tv/rakuen/topiclist');
+    });
+    test('简单 type', () {
+      expect(
+        rakueHtmlUrl('topiclist', 'group'),
+        'https://bgm.tv/rakuen/topiclist?type=group',
+      );
+    });
+    test('带 filter 的 type', () {
+      expect(
+        rakueHtmlUrl('topiclist', 'my_group&filter=topic'),
+        'https://bgm.tv/rakuen/topiclist?type=my_group&filter=topic',
+      );
     });
   });
 }

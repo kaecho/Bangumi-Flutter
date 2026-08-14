@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../user/sync_notes.dart';
 import 'sync_webview_scaffold.dart';
 
 /// 豆瓣同步 (移植自原项目 screens/web-view/douban-sync)
@@ -12,10 +13,11 @@ class DoubanSyncScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SyncWebViewScaffold(
+    return SyncWebViewScaffold(
       title: '豆瓣同步',
       url: 'https://www.douban.com/',
       domain: 'douban.com',
+      notePath: doubanSyncNotePath(),
     );
   }
 }

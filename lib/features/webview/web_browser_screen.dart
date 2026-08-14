@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../core/utils/display.dart';
+
 /// 内置浏览器 (移植自原项目 screens/web-view/web-browser)
 ///
 /// 路由: /web/:url (url 需 Uri.encodeComponent 编码)
@@ -57,7 +59,11 @@ class _WebBrowserScreenState extends State<WebBrowserScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title ?? '内置浏览器', maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(
+          widget.title ?? '浏览器',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           IconButton(
             tooltip: '刷新',
@@ -65,11 +71,17 @@ class _WebBrowserScreenState extends State<WebBrowserScreen> {
             onPressed: _refresh,
           ),
           IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_new),
+            onPressed: () => openExternalUrl(widget.url),
+          ),
+          IconButton(
             tooltip: '分享',
             icon: const Icon(Icons.share_outlined),
             onPressed: _share,
           ),
         ],
+
         bottom: _loading
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(2),

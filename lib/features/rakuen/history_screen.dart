@@ -7,8 +7,8 @@ import 'rakuen_models.dart';
 import 'rakuen_providers.dart';
 import '../../design_system/design_system.dart';
 
-/// 浏览历史 (本地记录)
-/// 路由: /rakuen/history
+/// 浏览历史 (port 特有功能: 本地浏览记录, 与原版 rakuen/history 语义不同)
+/// 路由: /history/browse
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
 
@@ -54,7 +54,8 @@ class HistoryScreen extends ConsumerWidget {
           : ListView.separated(
               itemCount: history.length,
               separatorBuilder: (_, _) => const Divider(indent: 16),
-              itemBuilder: (context, index) => _HistoryRow(item: history[index]),
+              itemBuilder: (context, index) =>
+                  _HistoryRow(item: history[index]),
             ),
     );
   }
@@ -91,7 +92,10 @@ class _HistoryRow extends ConsumerWidget {
                 children: [
                   Text(
                     item.title,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -101,13 +105,13 @@ class _HistoryRow extends ConsumerWidget {
                       if (item.group.isNotEmpty)
                         Text(
                           item.group,
-                          style: TextStyle(fontSize: 11, color: theme.colorScheme.primary),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.primary,
+                          ),
                         ),
                       const SizedBox(width: 8),
-                      Text(
-                        '${item.replies} 回复',
-                        style: context.ds.meta,
-                      ),
+                      Text('${item.replies} 回复', style: context.ds.meta),
                       const Spacer(),
                       Text(
                         friendlyTimeOf(

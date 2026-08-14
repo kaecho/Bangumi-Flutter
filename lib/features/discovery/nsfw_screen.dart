@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import 'widgets/browser_grid.dart';
 
@@ -14,7 +15,20 @@ class NsfwScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: BgmAppBar(title: 'NSFW', showBackButton: true),
+      appBar: BgmAppBar(
+        title: 'NSFW',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(
+              '$kHost${htmlRankBrowser('anime', sort: 'date')}',
+            ),
+          ),
+        ],
+      ),
       body: BrowserGrid(basePath: htmlRankBrowser('anime', sort: 'date')),
     );
   }

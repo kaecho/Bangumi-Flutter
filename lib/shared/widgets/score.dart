@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/storage/settings_store.dart';
+import '../../core/utils/display.dart';
 import '../../design_system/design_system.dart';
 
 /// 评分组件 (数字 + 星级)
@@ -19,29 +21,32 @@ class Score extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = context.ds;
-    final text = score > 0 ? score.toStringAsFixed(1) : '--';
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.star, size: fontSize + 2, color: ds.star),
-        const SizedBox(width: AppGap.x1),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-            color: ds.star,
-          ),
-        ),
-        if (showTotal && total > 0) ...[
-          const SizedBox(width: AppGap.x1),
-          Text(
-            '($total人评分)',
-            style: ds.meta,
-          ),
-        ],
-      ],
+    return ListenableBuilder(
+      listenable: SettingsStore.instance,
+      builder: (context, _) {
+        if (SettingsStore.instance.hideScore) return const SizedBox.shrink();
+        final ds = context.ds;
+        final text = score > 0 ? score.toStringAsFixed(1) : '--';
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star, size: fontSize + 2, color: ds.star),
+            const SizedBox(width: AppGap.x1),
+            Text(
+              text,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w600,
+                color: ds.star,
+              ),
+            ),
+            if (showTotal && total > 0) ...[
+              const SizedBox(width: AppGap.x1),
+              Text('($total人评分)', style: ds.meta),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -56,22 +61,28 @@ class Stars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? context.ds.star;
-    final value = (score / 2).clamp(0, 5);
-    final full = value.floor();
-    final hasHalf = (value - full) >= 0.25;
+    return ListenableBuilder(
+      listenable: SettingsStore.instance,
+      builder: (context, _) {
+        if (SettingsStore.instance.hideScore) return const SizedBox.shrink();
+        final c = color ?? context.ds.star;
+        final value = (score / 2).clamp(0, 5);
+        final full = value.floor();
+        final hasHalf = (value - full) >= 0.25;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(5, (i) {
-        if (i < full) {
-          return Icon(Icons.star, size: size, color: c);
-        }
-        if (i == full && hasHalf) {
-          return Icon(Icons.star_half, size: size, color: c);
-        }
-        return Icon(Icons.star_border, size: size, color: c);
-      }),
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(5, (i) {
+            if (i < full) {
+              return Icon(Icons.star, size: size, color: c);
+            }
+            if (i == full && hasHalf) {
+              return Icon(Icons.star_half, size: size, color: c);
+            }
+            return Icon(Icons.star_border, size: size, color: c);
+          }),
+        );
+      },
     );
   }
 }
@@ -151,6 +162,33 @@ class SectionHeader extends StatelessWidget {
           ?trailing,
         ],
       ),
+    );
+  }
+}
+
+/// 用户站龄 (原项目 UserAge)
+class UserAgeBadge extends StatelessWidget {
+  final String userId;
+
+  const UserAgeBadge({super.key, required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: SettingsStore.instance,
+      builder: (context, _) {
+        final store = SettingsStore.instance;
+        if (!store.userAge) return const SizedBox.shrink();
+        final label = userAgeLabel(userId, type: store.userAgeType);
+        if (label == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Text(
+            label,
+            style: context.ds.tiny.copyWith(color: context.ds.textHint),
+          ),
+        );
+      },
     );
   }
 }

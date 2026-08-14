@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/models/subject.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
+
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
 
@@ -19,7 +22,18 @@ class SubjectTagScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(subjectDetailProvider(id));
     return Scaffold(
-      appBar: BgmAppBar(title: '标签', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '标签',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl('$kHost/subject/$id'),
+          ),
+        ],
+      ),
+
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -58,7 +72,11 @@ class _TagRow extends StatelessWidget {
   final Tag tag;
   final String type;
 
-  const _TagRow({required this.subjectId, required this.tag, required this.type});
+  const _TagRow({
+    required this.subjectId,
+    required this.tag,
+    required this.type,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -73,10 +91,7 @@ class _TagRow extends StatelessWidget {
             Expanded(
               child: Text(tag.name, style: const TextStyle(fontSize: 14)),
             ),
-            Text(
-              '${tag.count}',
-              style: context.ds.caption,
-            ),
+            Text('${tag.count}', style: context.ds.caption),
             Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
           ],
         ),

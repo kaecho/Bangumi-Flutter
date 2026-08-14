@@ -10,22 +10,22 @@ class CollectionStatus {
   static const int dropped = 5;
 
   static String text(int status) => switch (status) {
-        wish => '想看',
-        collect => '看过',
-        doing => '在看',
-        onHold => '搁置',
-        dropped => '抛弃',
-        _ => '',
-      };
+    wish => '想看',
+    collect => '看过',
+    doing => '在看',
+    onHold => '搁置',
+    dropped => '抛弃',
+    _ => '',
+  };
 
   static String actionText(int status) => switch (status) {
-        wish => '想看',
-        collect => '看过',
-        doing => '在看',
-        onHold => '搁置',
-        dropped => '抛弃',
-        _ => '收藏',
-      };
+    wish => '想看',
+    collect => '看过',
+    doing => '在看',
+    onHold => '搁置',
+    dropped => '抛弃',
+    _ => '收藏',
+  };
 }
 
 /// 条目类型: anime | book | real | game | music
@@ -39,22 +39,43 @@ class SubjectType {
   static const List<String> all = [anime, book, real, game, music];
 
   static String text(String type) => switch (type) {
-        anime => '动画',
-        book => '书籍',
-        real => '三次元',
-        game => '游戏',
-        music => '音乐',
-        _ => type,
-      };
+    anime => '动画',
+    book => '书籍',
+    real => '三次元',
+    game => '游戏',
+    music => '音乐',
+    _ => type,
+  };
+
+  static String fromApiName(String name) => switch (name) {
+    '动画' || 'anime' || '2' => anime,
+    '书籍' || 'book' || '1' => book,
+    '音乐' || 'music' || '3' => music,
+    '游戏' || 'game' || '4' => game,
+    '三次元' || 'real' || '6' => real,
+    _ => name,
+  };
 
   static String pluralText(String type) => switch (type) {
-        anime => '番组',
-        book => '书籍',
-        real => '三次元',
-        game => '游戏',
-        music => '音乐',
-        _ => type,
-      };
+    anime => '番组',
+    book => '书籍',
+    real => '三次元',
+    game => '游戏',
+    music => '音乐',
+    _ => type,
+  };
+
+  /// 原项目 $.action: 看 / 读 / 玩 / 听
+  static String action(String type) => switch (type) {
+    book => '读',
+    game => '玩',
+    music => '听',
+    _ => '看',
+  };
+
+  static String statusText(int status, [String type = anime]) {
+    return CollectionStatus.text(status).replaceAll('看', action(type));
+  }
 }
 
 /// 用户对单个条目的收藏 (列表项)
@@ -96,13 +117,18 @@ class CollectionItem {
       // v0 API 返回数字类型 (1=book 2=anime 3=music 4=game 6=real), 旧版返回字符串
       subjectType: switch (json['subject_type']) {
         final String s => s,
-        final num n => const {1: 'book', 2: 'anime', 3: 'music', 4: 'game', 6: 'real'}[n.toInt()] ?? 'anime',
+        final num n =>
+          const {1: 'book', 2: 'anime', 3: 'music', 4: 'game', 6: 'real'}[n
+                  .toInt()] ??
+              'anime',
         _ => 'anime',
       },
       rate: (json['rate'] as num?)?.toInt() ?? 0,
       type: (json['type'] as num?)?.toInt() ?? 0,
       comment: json['comment'] as String? ?? '',
-      tags: (json['tags'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      tags:
+          (json['tags'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
       epStatus: (json['ep_status'] as num?)?.toInt() ?? 0,
       volStatus: (json['vol_status'] as num?)?.toInt() ?? 0,
       updatedAt: json['updated_at'] as String? ?? '',
@@ -117,17 +143,23 @@ class UserCollection {
   final int offset;
   final List<CollectionItem> data;
 
-  const UserCollection({this.total = 0, this.limit = 30, this.offset = 0, this.data = const []});
+  const UserCollection({
+    this.total = 0,
+    this.limit = 30,
+    this.offset = 0,
+    this.data = const [],
+  });
 
   factory UserCollection.fromJson(Map<String, dynamic> json) => UserCollection(
-        total: (json['total'] as num?)?.toInt() ?? 0,
-        limit: (json['limit'] as num?)?.toInt() ?? 30,
-        offset: (json['offset'] as num?)?.toInt() ?? 0,
-        data: (json['data'] as List?)
-                ?.map((e) => CollectionItem.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    limit: (json['limit'] as num?)?.toInt() ?? 30,
+    offset: (json['offset'] as num?)?.toInt() ?? 0,
+    data:
+        (json['data'] as List?)
+            ?.map((e) => CollectionItem.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }
 
 /// 用户对单一条目的收藏 (v0)
@@ -162,11 +194,15 @@ class UserSubjectCollection {
         rate: (json['rate'] as num?)?.toInt() ?? 0,
         type: (json['type'] as num?)?.toInt() ?? 0,
         comment: json['comment'] as String? ?? '',
-        tags: (json['tags'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+        tags:
+            (json['tags'] as List?)?.map((e) => e.toString()).toList() ??
+            const [],
         epStatus: (json['ep_status'] as num?)?.toInt() ?? 0,
         volStatus: (json['vol_status'] as num?)?.toInt() ?? 0,
         updatedAt: json['updated_at'] as String? ?? '',
-        user: json['user'] == null ? null : User.fromJson(json['user'] as Map<String, dynamic>),
+        user: json['user'] == null
+            ? null
+            : User.fromJson(json['user'] as Map<String, dynamic>),
         subject: json['subject'] == null
             ? null
             : Subject.fromJson(json['subject'] as Map<String, dynamic>),
@@ -179,19 +215,46 @@ class CollectionStats {
 
   const CollectionStats({this.byType = const {}});
 
-  factory CollectionStats.fromJson(Map<String, dynamic> json) {
-    final map = <String, Map<int, int>>{};
-    json.forEach((type, value) {
-      final raw = value as Map<String, dynamic>? ?? const {};
-      map[type] = {
-        1: (raw['wish'] as num?)?.toInt() ?? 0,
-        2: (raw['collect'] as num?)?.toInt() ?? 0,
-        3: (raw['doing'] as num?)?.toInt() ?? 0,
-        4: (raw['on_hold'] as num?)?.toInt() ?? 0,
-        5: (raw['dropped'] as num?)?.toInt() ?? 0,
-      };
-    });
-    return CollectionStats(byType: map);
+  factory CollectionStats.fromJson(Object? json) {
+    if (json is List) return CollectionStats.fromStatusList(json);
+    if (json is Map<String, dynamic>) {
+      final map = <String, Map<int, int>>{};
+      json.forEach((type, value) {
+        if (value is! Map) return;
+        final raw = Map<String, dynamic>.from(value);
+        map[SubjectType.fromApiName(type)] = {
+          1: (raw['wish'] as num?)?.toInt() ?? 0,
+          2: (raw['collect'] as num?)?.toInt() ?? 0,
+          3: (raw['doing'] as num?)?.toInt() ?? 0,
+          4: (raw['on_hold'] as num?)?.toInt() ?? 0,
+          5: (raw['dropped'] as num?)?.toInt() ?? 0,
+        };
+      });
+      return CollectionStats(byType: map);
+    }
+    return const CollectionStats();
+  }
+
+  /// 旧版 /user/{uid}/collections/status 数组
+  factory CollectionStats.fromStatusList(List<dynamic> data) {
+    final byType = <String, Map<int, int>>{};
+    for (final raw in data) {
+      if (raw is! Map) continue;
+      final entry = Map<String, dynamic>.from(raw);
+      final name = SubjectType.fromApiName(entry['name'] as String? ?? '');
+      final counts = <int, int>{};
+      for (final collect in entry['collects'] as List? ?? const []) {
+        if (collect is! Map) continue;
+        final c = Map<String, dynamic>.from(collect);
+        final status =
+            (c['status'] as Map<String, dynamic>? ?? const {})['id'] as num?;
+        if (status != null) {
+          counts[status.toInt()] = (c['count'] as num?)?.toInt() ?? 0;
+        }
+      }
+      if (name.isNotEmpty) byType[name] = counts;
+    }
+    return CollectionStats(byType: byType);
   }
 
   int count(String type, int status) => byType[type]?[status] ?? 0;
@@ -210,7 +273,8 @@ class EpCollectionStatus {
 
   const EpCollectionStatus({this.epId = 0, this.status = 0});
 
-  factory EpCollectionStatus.fromJson(Map<String, dynamic> json) => EpCollectionStatus(
+  factory EpCollectionStatus.fromJson(Map<String, dynamic> json) =>
+      EpCollectionStatus(
         epId: (json['ep_id'] as num?)?.toInt() ?? 0,
         status: (json['status'] as num?)?.toInt() ?? 0,
       );

@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+
+import 'html_parse.dart';
 import 'rakuen_providers.dart';
 import 'widgets/topic_row.dart';
 import '../../design_system/design_system.dart';
@@ -33,7 +36,8 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _forumScroll.addListener(() {
-      if (_forumScroll.position.pixels >= _forumScroll.position.maxScrollExtent - 200) {
+      if (_forumScroll.position.pixels >=
+          _forumScroll.position.maxScrollExtent - 200) {
         ref.read(groupForumProvider(widget.name).notifier).loadMore();
       }
     });
@@ -46,23 +50,30 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
     super.dispose();
   }
 
-  Future<void> _joinGroup() async {
+  Future<void> _joinOrBye(GroupInfoData info, {required bool quit}) async {
     if (!ref.read(isLoggedInProvider)) {
       await context.push('/login');
       return;
     }
+    final href = quit ? info.byeUrl : info.joinUrl;
+    if (href.isEmpty) return;
     setState(() => _joining = true);
     try {
       final client = ref.read(apiClientProvider);
-      await client.post(apiGroupJoin(widget.name));
+      var url = href;
+      if (url.startsWith('/')) url = '$kHost$url';
+      await client.post(url, data: {'action': 'join-bye'}, host: kHost);
+      ref.invalidate(groupInfoProvider(widget.name));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已加入小组')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(quit ? '已退出小组' : '已加入小组')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('加入失败, 请稍后重试')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(quit ? '退出失败' : '加入失败, 请稍后重试')));
       }
     } finally {
       if (mounted) setState(() => _joining = false);
@@ -83,9 +94,39 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          IconButton(
+            tooltip: '添加新讨论',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () => context.push(
+              '/web/${Uri.encodeComponent(htmlNewTopic(group: widget.name))}',
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (v) {
+              if (v == 'browser') {
+                openExternalUrl(htmlGroupPage(widget.name));
+                return;
+              }
+              if (v == 'members') {
+                openExternalUrl(htmlGroupMembers(widget.name));
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
+
+              PopupMenuItem(value: 'members', child: Text('小组成员')),
+            ],
+          ),
+        ],
+
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: '讨论'), Tab(text: '成员')],
+          tabs: const [
+            Tab(text: '讨论'),
+            Tab(text: '成员'),
+          ],
         ),
       ),
       body: Column(
@@ -115,32 +156,35 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
                       children: [
                         Text(
                           info.title.isEmpty ? widget.name : info.title,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         if (info.members > 0)
-                          Text(
-                            '${info.members} 位成员',
-                            style: context.ds.meta,
-                          ),
+                          Text('${info.members} 位成员', style: context.ds.meta),
                       ],
                     ),
                   ),
-                  FilledButton(
-                    onPressed: _joining ? null : _joinGroup,
-                    style: FilledButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                  if (info.joinUrl.isNotEmpty || info.byeUrl.isNotEmpty)
+                    FilledButton(
+                      onPressed: _joining
+                          ? null
+                          : () => _joinOrBye(info, quit: info.joined),
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      child: _joining
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(info.joined ? '退出' : '加入'),
                     ),
-                    child: _joining
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('加入'),
-                  ),
                 ],
               ),
             ),
@@ -198,7 +242,8 @@ class _ForumTab extends ConsumerWidget {
               if (index >= data.items.length) {
                 return Center(
                   child: TextButton(
-                    onPressed: () => ref.read(groupForumProvider(name).notifier).loadMore(),
+                    onPressed: () =>
+                        ref.read(groupForumProvider(name).notifier).loadMore(),
                     child: const Text('加载更多'),
                   ),
                 );
@@ -260,15 +305,14 @@ class _MembersTab extends ConsumerWidget {
                 },
                 child: Column(
                   children: [
-                    Avatar(
-                      url: member.avatar,
-                      size: 52,
-                      name: member.userName,
-                    ),
+                    Avatar(url: member.avatar, size: 52, name: member.userName),
                     const SizedBox(height: 6),
                     Text(
                       member.userName,
-                      style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurface,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

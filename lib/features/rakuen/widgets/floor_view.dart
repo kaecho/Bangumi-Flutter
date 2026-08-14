@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/widgets/cover.dart';
 import '../../../core/html/bgm_html_parser.dart' as core;
+import '../../../core/api/api_client.dart';
+import '../../../core/api/api_endpoints.dart';
+import '../../../core/auth/site_cookies.dart';
+import '../../../core/storage/settings_store.dart';
 import '../../rakuen/rakuen_settings.dart';
+
 import '../../../shared/widgets/bgm_html.dart';
+import '../../../core/utils/display.dart';
 import '../../../core/utils/format.dart';
 import '../../../design_system/design_system.dart';
+import '../../../shared/widgets/score.dart';
 
 /// 帖子楼层视图 (主楼层 + 子回复)
-class FloorView extends StatelessWidget {
+class FloorView extends ConsumerWidget {
   final core.RakuenFloor floor;
   final String floorLabel;
   final bool isAuthor;
@@ -16,9 +25,16 @@ class FloorView extends StatelessWidget {
   final void Function(String userName)? onReply;
   final bool isSub;
 
+  /// 主题 ID (用于贴贴/复制链接; 为空时隐藏贴贴与链接菜单)
+  final String topicId;
+
   /// 是否已手动展开全部子回复
   final bool expanded;
   final VoidCallback? onExpand;
+
+  /// 长楼层正文是否展开 (漂浮收起)
+  final bool htmlExpanded;
+  final VoidCallback? onHtmlToggle;
 
   const FloorView({
     super.key,
@@ -28,12 +44,15 @@ class FloorView extends StatelessWidget {
     required this.settings,
     this.onReply,
     this.isSub = false,
+    this.topicId = '',
     this.expanded = false,
     this.onExpand,
+    this.htmlExpanded = false,
+    this.onHtmlToggle,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final avatar = floor.avatar;
 
@@ -57,8 +76,11 @@ class FloorView extends StatelessWidget {
     }
 
     final subExpand = int.tryParse(settings.subExpand) ?? 0;
-    final showAllSubs = expanded || subExpand == 0 || floor.subReplies.length <= subExpand;
-    final visibleSubs = showAllSubs ? floor.subReplies : floor.subReplies.take(subExpand).toList();
+    final showAllSubs =
+        expanded || subExpand == 0 || floor.subReplies.length <= subExpand;
+    final visibleSubs = showAllSubs
+        ? floor.subReplies
+        : floor.subReplies.take(subExpand).toList();
     final hiddenSubs = floor.subReplies.length - visibleSubs.length;
 
     return Padding(
@@ -66,118 +88,357 @@ class FloorView extends StatelessWidget {
         horizontal: settings.wide ? 16 : 12,
         vertical: 8,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Avatar(url: avatar, size: isSub ? 26 : 36, name: floor.userName),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      child: GestureDetector(
+        onLongPress: () => _showFloorMenu(context, ref),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            floor.userName.isEmpty ? '匿名' : floor.userName,
-                            style: TextStyle(
-                              fontSize: isSub ? 12 : 13,
-                              fontWeight: isAuthor ? FontWeight.w600 : FontWeight.w400,
-                              color: isAuthor ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+                    Avatar(
+                      url: avatar,
+                      size: isSub ? 26 : 36,
+                      name: floor.userName,
+                      userId: floor.userId,
+                    ),
+                    if (settings.isTracked(floor.userId))
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Icon(
+                          Icons.star,
+                          size: 12,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              displayText(
+                                floor.userName.isEmpty ? '匿名' : floor.userName,
+                              ),
+                              style: TextStyle(
+                                fontSize: isSub ? 12 : 13,
+                                fontWeight: isAuthor
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                                color: isAuthor
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
+                          ),
+                          UserAgeBadge(userId: floor.userId),
+
+                          if (isAuthor)
+                            Container(
+                              margin: const EdgeInsets.only(left: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: Text(
+                                '楼主',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          const Spacer(),
+                          if (floorLabel.isNotEmpty)
+                            _FloorBadge(label: floorLabel, settings: settings),
+                          if (floor.time.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              friendlyTime(floor.time),
+                              style: context.ds.tiny,
+                            ),
+                          ],
+                          if (ref.watch(settingsStoreProvider).showSource &&
+                              floor.source.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Text(floor.source, style: context.ds.tiny),
+                          ],
+                        ],
+                      ),
+                      if (floor.userSign.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            floor.userSign,
+                            style: context.ds.tiny,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (isAuthor)
-                          Container(
-                            margin: const EdgeInsets.only(left: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                            child: Text(
-                              '楼主',
-                              style: TextStyle(fontSize: 9, color: theme.colorScheme.primary),
-                            ),
-                          ),
-                        const Spacer(),
-                        if (floorLabel.isNotEmpty) _FloorBadge(label: floorLabel, settings: settings),
-                        if (floor.time.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            friendlyTime(floor.time),
-                            style: context.ds.tiny,
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (floor.userSign.isNotEmpty)
+                      const SizedBox(height: 6),
+                      if (msg.isNotEmpty)
+                        settings.showFoldButton && msg.length > 480
+                            ? _FoldableHtml(
+                                html: msg,
+                                showImages: settings.loadImages,
+                                matchLink: settings.matchLink,
+                                emojiSize: settings.bigEmojiSize,
+                                expanded: htmlExpanded,
+                                onToggle: onHtmlToggle,
+                              )
+                            : BgmHtml(
+                                data: msg,
+                                showImages: settings.loadImages,
+                                matchLink: settings.matchLink,
+                                emojiSize: settings.bigEmojiSize,
+                              ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (!isSub)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (settings.likes && floor.likes > 0)
                       Padding(
-                        padding: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.only(right: 8),
                         child: Text(
-                          floor.userSign,
+                          '${floor.likes} 贴贴',
                           style: context.ds.tiny,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    const SizedBox(height: 6),
-                    if (msg.isNotEmpty) BgmHtml(data: msg, showImages: settings.loadImages),
+
+                    if (onReply != null)
+                      InkWell(
+                        onTap: () => onReply!(floor.userName),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.reply_outlined,
+                            size: 16,
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
-            ],
-          ),
-          if (onReply != null && !isSub)
-            Align(
-              alignment: Alignment.centerRight,
-              child: InkWell(
-                onTap: () => onReply!(floor.userName),
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(Icons.reply_outlined, size: 16, color: theme.colorScheme.outline),
+            if (floor.subReplies.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 6, left: 36),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.4,
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final (i, sub) in visibleSubs.indexed)
+                      FloorView(
+                        floor: sub,
+                        floorLabel: sub.floor.isNotEmpty
+                            ? sub.floor
+                            : '${floorLabel.isEmpty ? '' : floorLabel}-${i + 1}',
+                        isAuthor: isAuthor,
+                        settings: settings,
+                        isSub: true,
+                        onReply: onReply,
+                      ),
+                    if (hiddenSubs > 0)
+                      _ExpandSubsButton(count: hiddenSubs, onTap: onExpand),
+                  ],
                 ),
               ),
-            ),
-          if (floor.subReplies.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.only(top: 6, left: 36),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final (i, sub) in visibleSubs.indexed)
-                    FloorView(
-                      floor: sub,
-                      floorLabel: sub.floor.isNotEmpty
-                          ? sub.floor
-                          : '${floorLabel.isEmpty ? '' : floorLabel}-${i + 1}',
-                      isAuthor: isAuthor,
-                      settings: settings,
-                      isSub: true,
-                      onReply: onReply,
-                    ),
-                  if (hiddenSubs > 0)
-                    _ExpandSubsButton(
-                      count: hiddenSubs,
-                      onTap: onExpand,
-                    ),
-                ],
-              ),
-            ),
-          const Divider(height: 12),
-        ],
+            const Divider(height: 12),
+          ],
+        ),
       ),
     );
+  }
+
+  /// 楼层长按菜单 (原项目楼层操作菜单)
+  Future<void> _showFloorMenu(BuildContext context, WidgetRef ref) async {
+    final isBlocked = settings.isUserBlocked(floor.userId);
+    final canLike = topicId.isNotEmpty && floor.id.isNotEmpty;
+    final canDisconnect = floor.userId.isNotEmpty;
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              dense: true,
+              title: Text(
+                '$floorLabel. ${floor.userName.isEmpty ? '匿名' : floor.userName}',
+                style: context.ds.bodyStrong,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Divider(height: 1),
+            if (onReply != null)
+              ListTile(
+                leading: const Icon(Icons.reply_outlined),
+                title: const Text('回复'),
+                onTap: () => Navigator.of(ctx).pop('reply'),
+              ),
+            if (canLike)
+              ListTile(
+                leading: const Icon(Icons.thumb_up_outlined),
+                title: const Text('贴贴'),
+                onTap: () => Navigator.of(ctx).pop('like'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.content_copy_outlined),
+              title: const Text('复制文本'),
+              onTap: () => Navigator.of(ctx).pop('copy'),
+            ),
+            if (canLike)
+              ListTile(
+                leading: const Icon(Icons.link),
+                title: const Text('复制链接'),
+                onTap: () => Navigator.of(ctx).pop('copyLink'),
+              ),
+            ListTile(
+              leading: Icon(
+                isBlocked
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+              title: Text(isBlocked ? '解除屏蔽' : '屏蔽用户'),
+              onTap: () => Navigator.of(ctx).pop('block'),
+            ),
+            if (canDisconnect)
+              ListTile(
+                leading: const Icon(Icons.person_off_outlined),
+                title: const Text('绝交'),
+                onTap: () => Navigator.of(ctx).pop('disconnect'),
+              ),
+            if (floor.userId.isNotEmpty)
+              ListTile(
+                leading: Icon(
+                  settings.isTracked(floor.userId)
+                      ? Icons.star
+                      : Icons.star_border,
+                ),
+                title: Text(settings.isTracked(floor.userId) ? '取消追踪' : '追踪回复'),
+                onTap: () => Navigator.of(ctx).pop('track'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !context.mounted) return;
+
+    switch (action) {
+      case 'reply':
+        onReply?.call(floor.userName);
+      case 'like':
+        await _likeFloor(ref);
+      case 'copy':
+        await Clipboard.setData(
+          ClipboardData(text: stripHtml(floor.messageHtml)),
+        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('已复制'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+      case 'copyLink':
+        await Clipboard.setData(
+          ClipboardData(text: '$kHost/topic/$topicId#post_${floor.id}'),
+        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('已复制链接'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+      case 'block':
+        await ref
+            .read(rakuenSettingsProvider.notifier)
+            .addBlockUser(floor.userId);
+      case 'disconnect':
+        await _disconnectUser(ref);
+      case 'track':
+        await ref
+            .read(rakuenSettingsProvider.notifier)
+            .toggleTrackUser(floor.userId);
+    }
+  }
+
+  /// 贴贴: POST /like?type=8&main_id={topicId}&id={floorId}
+  Future<void> _likeFloor(WidgetRef ref) async {
+    final gh = await _formhash(ref);
+    if (gh.isEmpty) return;
+    try {
+      await ref
+          .read(apiClientProvider)
+          .get(
+            apiLike(
+              8,
+              int.tryParse(topicId) ?? 0,
+              id: int.tryParse(floor.id) ?? 0,
+              gh: gh,
+            ),
+          );
+    } catch (e) {
+      // 贴贴失败静默 (原项目乐观更新)
+    }
+  }
+
+  /// 绝交: GET /disconnect/{userId}?gh={formhash}
+  Future<void> _disconnectUser(WidgetRef ref) async {
+    final gh = await _formhash(ref);
+    if (gh.isEmpty) return;
+    try {
+      await ref.read(apiClientProvider).get(apiDisconnect(floor.userId, gh));
+    } catch (e) {
+      // 绝交失败静默
+    }
+  }
+
+  Future<String> _formhash(WidgetRef ref) async {
+    try {
+      return await ref.read(formhashProvider.future);
+    } catch (_) {
+      return '';
+    }
   }
 }
 
@@ -218,7 +479,10 @@ class _FloorBadge extends StatelessWidget {
             Container(
               width: 6,
               height: 6,
-              decoration: BoxDecoration(color: theme.colorScheme.error, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.error,
+                shape: BoxShape.circle,
+              ),
             ),
             const SizedBox(width: 3),
             text,
@@ -257,6 +521,73 @@ class _ExpandSubsButton extends StatelessWidget {
           style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
         ),
       ),
+    );
+  }
+}
+
+class _FoldableHtml extends StatefulWidget {
+  final String html;
+  final bool showImages;
+  final bool matchLink;
+  final int emojiSize;
+  final bool expanded;
+  final VoidCallback? onToggle;
+
+  const _FoldableHtml({
+    required this.html,
+    required this.showImages,
+    this.matchLink = false,
+    this.emojiSize = 36,
+    this.expanded = false,
+    this.onToggle,
+  });
+
+  @override
+  State<_FoldableHtml> createState() => _FoldableHtmlState();
+}
+
+class _FoldableHtmlState extends State<_FoldableHtml> {
+  late bool _expanded = widget.expanded;
+
+  @override
+  void didUpdateWidget(covariant _FoldableHtml oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.expanded != widget.expanded) {
+      _expanded = widget.expanded;
+    }
+  }
+
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    widget.onToggle?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final html = BgmHtml(
+      data: widget.html,
+      showImages: widget.showImages,
+      matchLink: widget.matchLink,
+      emojiSize: widget.emojiSize,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_expanded)
+          html
+        else
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 220),
+            child: ClipRect(child: html),
+          ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _toggle,
+            child: Text(_expanded ? '收起' : '展开'),
+          ),
+        ),
+      ],
     );
   }
 }

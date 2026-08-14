@@ -10,7 +10,11 @@ class UgcAgreeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const sectionStyle = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.6);
+    const sectionStyle = TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.w600,
+      height: 1.6,
+    );
     const bodyStyle = TextStyle(fontSize: 13.5, height: 1.7);
 
     return Scaffold(

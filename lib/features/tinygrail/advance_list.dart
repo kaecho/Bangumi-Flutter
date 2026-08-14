@@ -33,19 +33,32 @@ class AdvanceListScreen extends ConsumerWidget {
   final String title;
   final FutureProvider<List<AdvanceItem>> provider;
   final String valueLabel;
+  final String? notePath;
 
   const AdvanceListScreen({
     super.key,
     required this.title,
     required this.provider,
     this.valueLabel = '评分',
+    this.notePath,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(provider);
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        actions: [
+          if (notePath != null)
+            IconButton(
+              tooltip: '说明',
+              icon: const Icon(Icons.info_outline),
+              onPressed: () => context.push(notePath!),
+            ),
+        ],
+      ),
+
       body: async.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -61,8 +74,15 @@ class AdvanceListScreen extends ConsumerWidget {
                     final chara = item.chara;
                     return ListTile(
                       onTap: () => context.push('/tinygrail/chara/${chara.id}'),
-                      leading: Text('#${index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      title: Text(chara.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      leading: Text(
+                        '#${index + 1}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      title: Text(
+                        chara.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       subtitle: Text(
                         '现价 ¥${tgPrice(chara.current)} · Lv.${chara.level} · 股息 ${chara.rate.toStringAsFixed(2)}',
                         style: context.ds.meta,
@@ -98,7 +118,8 @@ final advanceAskProvider = FutureProvider<List<AdvanceItem>>((ref) async {
   for (var i = 0; i < 3; i++) {
     final batch = await api.fetchList('recent', page: i + 1, limit: 80);
     for (final chara in batch) {
-      if (chara.asks >= 10 && tgCalculateRate(chara.rate, chara.rank, chara.stars) >= 2) {
+      if (chara.asks >= 10 &&
+          tgCalculateRate(chara.rate, chara.rank, chara.stars) >= 2) {
         items.add(chara);
       }
     }
@@ -113,12 +134,14 @@ final advanceAskProvider = FutureProvider<List<AdvanceItem>>((ref) async {
       final rate = tgCalculateRate(chara.rate, chara.rank, chara.stars);
       final mark = rate / asks.first.price * 100;
       if (mark > 1) {
-        result.add(AdvanceItem(
-          chara: chara,
-          mark: mark,
-          firstPrice: asks.first.price,
-          firstAmount: asks.first.amount,
-        ));
+        result.add(
+          AdvanceItem(
+            chara: chara,
+            mark: mark,
+            firstPrice: asks.first.price,
+            firstAmount: asks.first.amount,
+          ),
+        );
       }
     } catch (_) {}
   }
@@ -137,14 +160,22 @@ final advanceBidProvider = FutureProvider<List<AdvanceItem>>((ref) async {
       final depth = await api.fetchDepth(chara.id);
       final bids = depth.bids.where((e) => e.price > 0).toList();
       if (bids.isEmpty) continue;
-      final markRate = tgCalculateRate(chara.rate, (chara.rank > 500 ? 500 : chara.rank) == 0 ? 500 : (chara.rank > 500 ? 500 : chara.rank), chara.stars);
+      final markRate = tgCalculateRate(
+        chara.rate,
+        (chara.rank > 500 ? 500 : chara.rank) == 0
+            ? 500
+            : (chara.rank > 500 ? 500 : chara.rank),
+        chara.stars,
+      );
       final mark = bids.first.price / (markRate <= 0 ? 1 : markRate);
-      result.add(AdvanceItem(
-        chara: chara,
-        mark: mark,
-        firstPrice: bids.first.price,
-        firstAmount: bids.first.amount,
-      ));
+      result.add(
+        AdvanceItem(
+          chara: chara,
+          mark: mark,
+          firstPrice: bids.first.price,
+          firstAmount: bids.first.amount,
+        ),
+      );
     } catch (_) {}
   }
   result.sort((a, b) => b.mark.compareTo(a.mark));
@@ -175,10 +206,20 @@ Future<List<AdvanceItem>> _fetchAuctionList(TinygrailApi api, bool useB) async {
     if (useB && chara.level < 3) continue;
     final rank = useB ? (chara.rank > 500 ? 500 : chara.rank) : chara.rank;
     if (rank > 500 && !useB) continue;
-    final rate = tgCalculateRate(chara.rate, rank == 0 ? 500 : rank, chara.stars);
+    final rate = tgCalculateRate(
+      chara.rate,
+      rank == 0 ? 500 : rank,
+      chara.stars,
+    );
     final mark = rate / (chara.price <= 0 ? 1 : chara.price) * 100;
     if (mark >= 5) {
-      result.add(AdvanceItem(chara: chara, mark: mark, firstPrice: chara.price.toDouble()));
+      result.add(
+        AdvanceItem(
+          chara: chara,
+          mark: mark,
+          firstPrice: chara.price.toDouble(),
+        ),
+      );
     }
   }
   result.sort((a, b) => b.mark.compareTo(a.mark));
@@ -206,12 +247,14 @@ final advanceStateProvider = FutureProvider<List<AdvanceItem>>((ref) async {
       final depth = await api.fetchDepth(chara.id);
       final asks = depth.asks.where((e) => e.price > 0).toList();
       if (asks.isEmpty) continue;
-      result.add(AdvanceItem(
-        chara: chara,
-        mark: asks.first.price,
-        firstPrice: asks.first.price,
-        firstAmount: asks.first.amount,
-      ));
+      result.add(
+        AdvanceItem(
+          chara: chara,
+          mark: asks.first.price,
+          firstPrice: asks.first.price,
+          firstAmount: asks.first.amount,
+        ),
+      );
     } catch (_) {}
   }
   result.sort((a, b) => a.mark.compareTo(b.mark));

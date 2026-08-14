@@ -12,7 +12,8 @@ class TinygrailTopWeekScreen extends ConsumerStatefulWidget {
   const TinygrailTopWeekScreen({super.key});
 
   @override
-  ConsumerState<TinygrailTopWeekScreen> createState() => _TinygrailTopWeekScreenState();
+  ConsumerState<TinygrailTopWeekScreen> createState() =>
+      _TinygrailTopWeekScreenState();
 }
 
 class _TinygrailTopWeekScreenState extends ConsumerState<TinygrailTopWeekScreen>
@@ -30,17 +31,25 @@ class _TinygrailTopWeekScreenState extends ConsumerState<TinygrailTopWeekScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('每周萌王'),
+        actions: [
+          IconButton(
+            tooltip: '我的拍卖',
+            icon: const Icon(Icons.gavel, size: 20),
+            onPressed: () => context.push('/tinygrail/bid'),
+          ),
+        ],
         bottom: TabBar(
           controller: _tab,
-          tabs: const [Tab(text: '本周'), Tab(text: '历史')],
+          tabs: const [
+            Tab(text: '本周'),
+            Tab(text: '历史'),
+          ],
         ),
       ),
+
       body: TabBarView(
         controller: _tab,
-        children: const [
-          _TopWeekList(),
-          _TopWeekHistory(),
-        ],
+        children: const [_TopWeekList(), _TopWeekHistory()],
       ),
     );
   }
@@ -62,7 +71,8 @@ class _TopWeekList extends ConsumerWidget {
             : ListView.separated(
                 itemCount: list.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, index) => _TopWeekTile(item: list[index]),
+                itemBuilder: (context, index) =>
+                    _TopWeekTile(item: list[index]),
               ),
       ),
     );
@@ -85,7 +95,8 @@ class _TopWeekHistory extends ConsumerWidget {
             : ListView.separated(
                 itemCount: list.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, index) => _TopWeekTile(item: list[index]),
+                itemBuilder: (context, index) =>
+                    _TopWeekTile(item: list[index]),
               ),
       ),
     );
@@ -101,7 +112,10 @@ class _TopWeekTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       onTap: () => context.push('/tinygrail/chara/${item.id}'),
-      leading: Text('#${item.rank}', style: const TextStyle(fontWeight: FontWeight.w700)),
+      leading: Text(
+        '#${item.rank}',
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
       title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
         'Lv.${item.level} · 价格 ¥${tgPrice(item.price)} · 股息 ${item.rate.toStringAsFixed(2)}',
@@ -119,6 +133,8 @@ final topWeekProvider = FutureProvider<List<TinygrailTopWeek>>((ref) async {
   return ref.read(tinygrailApiProvider).fetchTopWeek();
 });
 
-final topWeekHistoryProvider = FutureProvider<List<TinygrailTopWeek>>((ref) async {
+final topWeekHistoryProvider = FutureProvider<List<TinygrailTopWeek>>((
+  ref,
+) async {
   return ref.read(tinygrailApiProvider).fetchTopWeekHistory(1);
 });

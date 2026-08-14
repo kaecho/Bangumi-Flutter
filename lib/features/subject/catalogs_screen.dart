@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+
 import 'subject_models.dart';
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
@@ -20,7 +23,18 @@ class CatalogsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final catalogs = ref.watch(catalogsProvider(id));
     return Scaffold(
-      appBar: BgmAppBar(title: '目录', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '目录',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(htmlSubjectCatalogs(id)),
+          ),
+        ],
+      ),
+
       body: catalogs.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -84,6 +98,8 @@ class _CatalogRow extends StatelessWidget {
 
   void openCatalog(BuildContext context, CatalogItem item) {
     // 目录详情页在其他模块实现前, 使用内置浏览器打开
-    context.push('/web/${Uri.encodeComponent('https://bgm.tv/index/${item.id}')}');
+    context.push(
+      '/web/${Uri.encodeComponent('https://bgm.tv/index/${item.id}')}',
+    );
   }
 }

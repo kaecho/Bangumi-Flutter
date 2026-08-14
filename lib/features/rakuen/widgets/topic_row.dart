@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/cover.dart';
 import '../../rakuen/html_parse.dart';
+import '../../../core/utils/display.dart';
 import '../../../core/utils/format.dart';
 import '../../../design_system/design_system.dart';
+import '../../../shared/widgets/score.dart';
 
 /// 帖子列表行 (小组/板块/搜索通用)
 class RakuenTopicRow extends StatelessWidget {
@@ -35,10 +37,14 @@ class RakuenTopicRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Avatar(
-              url: topic.avatar.startsWith('//') ? 'https:${topic.avatar}' : topic.avatar,
+              url: topic.avatar.startsWith('//')
+                  ? 'https:${topic.avatar}'
+                  : topic.avatar,
               size: 34,
               name: topic.userName,
+              userId: topic.userId,
             ),
+
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -46,7 +52,14 @@ class RakuenTopicRow extends StatelessWidget {
                 children: [
                   Text(
                     topic.title,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      fontSize: visualFontSize(topic.title, const [
+                        (20, 13),
+                        (0, 14),
+                      ]),
+                      fontWeight: FontWeight.w500,
+                    ),
+
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -55,23 +68,39 @@ class RakuenTopicRow extends StatelessWidget {
                     children: [
                       if (showGroup && topic.group.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.08,
+                            ),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             topic.group,
-                            style: TextStyle(fontSize: 10, color: theme.colorScheme.primary),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: theme.colorScheme.primary,
+                            ),
                           ),
                         ),
-                      if (showGroup && topic.group.isNotEmpty) const SizedBox(width: 6),
+                      if (showGroup && topic.group.isNotEmpty)
+                        const SizedBox(width: 6),
                       Expanded(
-                        child: Text(
-                          topic.userName,
-                          style: context.ds.meta,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                topic.userName,
+                                style: context.ds.meta,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            UserAgeBadge(userId: topic.userId),
+                          ],
                         ),
                       ),
                       if (topic.time.isNotEmpty)
@@ -92,7 +121,10 @@ class RakuenTopicRow extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 8),
                 child: Text(
                   '${topic.replyCount}',
-                  style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
               ),
           ],

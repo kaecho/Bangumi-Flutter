@@ -100,15 +100,24 @@ class AppThemeData extends ThemeExtension<AppThemeData> {
     required this.tiny,
   });
 
-  /// 从 ColorScheme 派生 (accent 相关走 scheme, 语义色走 [AppPalette])
-  factory AppThemeData.fromScheme(ColorScheme scheme) {
+  factory AppThemeData.fromScheme(ColorScheme scheme, {bool deepDark = false}) {
     final dark = scheme.brightness == Brightness.dark;
     final textPrimary = scheme.onSurface;
     final textSecondary = scheme.onSurfaceVariant;
     final textHint = scheme.outline;
+    final useDeep = dark && deepDark;
 
-    TextStyle s(double size, FontWeight weight, Color color, {double height = 1.3}) =>
-        TextStyle(fontSize: size, fontWeight: weight, color: color, height: height);
+    TextStyle s(
+      double size,
+      FontWeight weight,
+      Color color, {
+      double height = 1.3,
+    }) => TextStyle(
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      height: height,
+    );
 
     return AppThemeData(
       accent: scheme.primary,
@@ -121,9 +130,22 @@ class AppThemeData extends ThemeExtension<AppThemeData> {
       textPrimary: textPrimary,
       textSecondary: textSecondary,
       textHint: textHint,
-      surfaceBase: dark ? AppPalette.bgDark : AppPalette.bgLight,
-      surfaceCard: dark ? AppPalette.cardDark : AppPalette.cardLight,
-      border: dark ? AppPalette.borderDark : AppPalette.borderLight,
+      surfaceBase: useDeep
+          ? AppPalette.bgDeepDark
+          : dark
+          ? AppPalette.bgDark
+          : AppPalette.bgLight,
+      surfaceCard: useDeep
+          ? AppPalette.cardDeepDark
+          : dark
+          ? AppPalette.cardDark
+          : AppPalette.cardLight,
+      border: useDeep
+          ? AppPalette.borderDeepDark
+          : dark
+          ? AppPalette.borderDark
+          : AppPalette.borderLight,
+
       display: s(20, FontWeight.w700, textPrimary),
       title: s(17, FontWeight.w600, textPrimary),
       section: s(15, FontWeight.w600, textPrimary),

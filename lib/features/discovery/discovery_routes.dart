@@ -37,11 +37,22 @@ import 'yearbook_screen.dart';
 /// 发现域路由 (发现页子页面)
 final List<GoRoute> discoveryRoutes = [
   GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
-  GoRoute(path: '/search', builder: (_, _) => const SearchScreen()),
+  GoRoute(
+    path: '/search',
+    builder: (_, state) => SearchScreen(
+      initialQuery: state.uri.queryParameters['q'] ?? '',
+      initialType: state.uri.queryParameters['type'] ?? '',
+    ),
+  ),
+
   GoRoute(path: '/rank', builder: (_, _) => const RankScreen()),
   GoRoute(path: '/anime', builder: (_, _) => const AnimeScreen()),
   GoRoute(path: '/staff', builder: (_, _) => const StaffScreen()),
-  GoRoute(path: '/catalog', builder: (_, _) => const CatalogScreen()),
+  GoRoute(
+    path: '/catalog',
+    builder: (_, state) =>
+        CatalogScreen(keyword: state.uri.queryParameters['_keyword']),
+  ),
   GoRoute(
     path: '/catalog/:id',
     builder: (_, state) => CatalogDetailScreen(
@@ -64,19 +75,31 @@ final List<GoRoute> discoveryRoutes = [
   GoRoute(path: '/like', builder: (_, _) => const LikeScreen()),
   GoRoute(path: '/pic', builder: (_, _) => const PicScreen()),
   GoRoute(path: '/wiki', builder: (_, _) => const WikiScreen()),
-  GoRoute(path: '/channel', builder: (_, _) => const ChannelScreen()),
+  GoRoute(
+    path: '/channel',
+    builder: (_, state) => ChannelScreen(
+      initialType: state.uri.queryParameters['type'] ?? 'anime',
+    ),
+  ),
+
   GoRoute(path: '/vib', builder: (_, _) => const VibScreen()),
   GoRoute(path: '/typerank', builder: (_, _) => const TypeRankScreen()),
   GoRoute(
     path: '/award/:year',
     builder: (_, state) => AwardScreen(
-      year: int.tryParse(state.pathParameters['year'] ?? '') ?? DateTime.now().year,
+      year:
+          int.tryParse(state.pathParameters['year'] ?? '') ??
+          DateTime.now().year,
     ),
   ),
   GoRoute(path: '/bi-weekly', builder: (_, _) => const BiWeeklyScreen()),
   GoRoute(path: '/dollars', builder: (_, _) => const DollarsScreen()),
   GoRoute(path: '/game', builder: (_, _) => const GameScreen()),
   GoRoute(path: '/manga', builder: (_, _) => const MangaScreen()),
+  GoRoute(
+    path: '/wenku',
+    builder: (_, _) => const MangaScreen(title: '文库'),
+  ),
   GoRoute(path: '/hentai', builder: (_, _) => const HentaiScreen()),
   GoRoute(path: '/nsfw', builder: (_, _) => const NsfwScreen()),
   GoRoute(path: '/users', builder: (_, _) => const DiscoveryUsersScreen()),
@@ -84,5 +107,11 @@ final List<GoRoute> discoveryRoutes = [
   GoRoute(path: '/browser', builder: (_, _) => const BrowserScreen()),
   GoRoute(path: '/character', builder: (_, _) => const CharacterScreen()),
   GoRoute(path: '/anitama', builder: (_, _) => const AnitamaScreen()),
-  GoRoute(path: '/wordcloud', builder: (_, _) => const WordCloudScreen()),
+  GoRoute(
+    path: '/wordcloud',
+    builder: (_, state) => WordCloudScreen(
+      subjectId: int.tryParse(state.uri.queryParameters['subjectId'] ?? ''),
+      type: state.uri.queryParameters['type'] ?? '',
+    ),
+  ),
 ];

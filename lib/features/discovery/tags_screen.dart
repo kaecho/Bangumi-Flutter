@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
@@ -13,12 +14,16 @@ import 'widgets/discovery_html.dart';
 const kTagTypes = [
   ('anime', '动画'),
   ('book', '书籍'),
-  ('real', '三次元'),
+  ('music', '音乐'),
   ('game', '游戏'),
+  ('real', '三次元'),
 ];
 
 /// 某类型的标签列表
-final tagListProvider = FutureProvider.family<List<TagItem>, String>((ref, type) async {
+final tagListProvider = FutureProvider.family<List<TagItem>, String>((
+  ref,
+  type,
+) async {
   final client = ref.read(apiClientProvider);
   final body = await client.get(htmlTypeTag(type), host: kHost);
   return parseTagList(body as String);
@@ -39,7 +44,18 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
   Widget build(BuildContext context) {
     final tags = ref.watch(tagListProvider(_type));
     return Scaffold(
-      appBar: BgmAppBar(title: '标签', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '标签',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl('$kHost/$_type/tag'),
+          ),
+        ],
+      ),
+
       body: Column(
         children: [
           SizedBox(
@@ -78,45 +94,59 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
               ),
               data: (list) => list.isEmpty
                   ? const Center(child: Text('暂无标签'))
-                  : ListView.builder(
+                  : GridView.builder(
                       padding: const EdgeInsets.all(12),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 1,
+                          ),
                       itemCount: list.length,
                       itemBuilder: (context, index) {
                         final tag = list[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: InkWell(
-                            onTap: () => context.push(
-                              '/tags/$_type/${Uri.encodeComponent(tag.name)}',
+                        final count = tag.count > 10000
+                            ? '${(tag.count / 10000).toStringAsFixed(1)}w'
+                            : '${tag.count}';
+                        final scheme = Theme.of(context).colorScheme;
+                        return InkWell(
+                          onTap: () => context.push(
+                            '/tags/$_type/${Uri.encodeComponent(tag.name)}',
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerHighest.withValues(
+                                alpha: 0.7,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            borderRadius: BorderRadius.circular(8),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                              child: Row(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Expanded(
-                                    child: Text(
-                                      tag.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Theme.of(context).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
                                   Text(
-                                    '${tag.count}',
+                                    tag.name,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600,
+                                      color: scheme.onSurface,
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    size: 18,
-                                    color: Theme.of(context).colorScheme.outline,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    count,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
                                   ),
                                 ],
                               ),

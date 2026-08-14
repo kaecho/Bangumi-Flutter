@@ -26,7 +26,8 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     super.initState();
     _scope = widget.boardKey;
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
         ref.read(boardTopicsProvider(_scope).notifier).loadMore();
       }
     });
@@ -40,10 +41,11 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
 
   @override
   Widget build(BuildContext context) {
-        final title = kRakuenScopes
-        .where((e) => e.$2 == _scope)
-        .map((e) => e.$1)
-        .firstOrNull ??
+    final title =
+        kRakuenScopes
+            .where((e) => e.$2 == _scope)
+            .map((e) => e.$1)
+            .firstOrNull ??
         '板块';
 
     return Scaffold(
@@ -117,7 +119,9 @@ class _BoardTopicList extends ConsumerWidget {
               if (index >= data.items.length) {
                 return Center(
                   child: TextButton(
-                    onPressed: () => ref.read(boardTopicsProvider(scope).notifier).loadMore(),
+                    onPressed: () => ref
+                        .read(boardTopicsProvider(scope).notifier)
+                        .loadMore(),
                     child: const Text('加载更多'),
                   ),
                 );

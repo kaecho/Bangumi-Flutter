@@ -10,7 +10,8 @@ import 'package:html/dom.dart';
 import '../../core/html/bgm_html_parser.dart' as core;
 
 /// 帖子页 URL (core 已映射 canonical 路径: /group/topic/N /subject/topic/N ...)
-String topicPageUrl(String topicId, {int page = 1}) => core.topicHtmlUrl(topicId, page: page);
+String topicPageUrl(String topicId, {int page = 1}) =>
+    core.topicHtmlUrl(topicId, page: page);
 
 /// 小组论坛 URL
 String groupForumPageUrl(String group, {int page = 1}) =>
@@ -20,7 +21,8 @@ String groupForumPageUrl(String group, {int page = 1}) =>
 String groupHomePageUrl(String group) => 'https://bgm.tv/group/$group';
 
 /// 小组成员 URL
-String groupMembersPageUrl(String group) => 'https://bgm.tv/group/$group/members';
+String groupMembersPageUrl(String group) =>
+    'https://bgm.tv/group/$group/members';
 
 /// 日志页 URL
 String blogPageUrl(int blogId) => 'https://bgm.tv/blog/$blogId';
@@ -50,6 +52,7 @@ class TopicPageData {
   final String title;
   final String group;
   final String groupHref;
+  final String groupThumb;
   final String userName;
   final String userId;
   final String avatar;
@@ -62,6 +65,7 @@ class TopicPageData {
     this.title = '',
     this.group = '',
     this.groupHref = '',
+    this.groupThumb = '',
     this.userName = '',
     this.userId = '',
     this.avatar = '',
@@ -95,13 +99,22 @@ class BlogPageData {
   });
 }
 
-/// 小组信息
 class GroupInfoData {
   final String title;
   final String icon;
   final int members;
+  final String joinUrl;
+  final String byeUrl;
 
-  const GroupInfoData({this.title = '', this.icon = '', this.members = 0});
+  const GroupInfoData({
+    this.title = '',
+    this.icon = '',
+    this.members = 0,
+    this.joinUrl = '',
+    this.byeUrl = '',
+  });
+
+  bool get joined => byeUrl.isNotEmpty;
 }
 
 /// 小组成员
@@ -137,7 +150,8 @@ class RakuenTopicItem {
     this.time = '',
   });
 
-  int get replyCount => int.tryParse(replies.replaceAll(RegExp(r'[()+\s]'), '')) ?? 0;
+  int get replyCount =>
+      int.tryParse(replies.replaceAll(RegExp(r'[()+\s]'), '')) ?? 0;
 }
 
 String _bgUrl(String url) => url.startsWith('//') ? 'https:$url' : url;
@@ -184,30 +198,57 @@ List<core.RakuenFloor> parseTopicFloors(String html) {
 
 core.RakuenFloor _parseFloor(Element row) {
   final reInfo = row.querySelector('.post_actions.re_info .action small');
-  final info = reInfo != null ? reInfo.text.trim().split(' - ') : const <String>[];
-  final userLink = row.querySelector('.inner .userInfo strong a.l') ??
+  final info = reInfo != null
+      ? reInfo.text.trim().split(' - ')
+      : const <String>[];
+  final userLink =
+      row.querySelector('.inner .userInfo strong a.l') ??
       row.querySelector('.inner strong a.l') ??
       row.querySelector('a.l');
   final message = row.querySelector('.inner .reply_content > .message');
-  final sign = row.querySelector('.inner .sign.tip_j') ?? row.querySelector('span.sign.tip_j');
+  final sign =
+      row.querySelector('.inner .sign.tip_j') ??
+      row.querySelector('span.sign.tip_j');
 
   final subReplies = <core.RakuenFloor>[];
-  for (final sub in row.querySelectorAll('.topic_sub_reply > div.sub_reply_bg')) {
+  for (final sub in row.querySelectorAll(
+    '.topic_sub_reply > div.sub_reply_bg',
+  )) {
     final subInfo = sub.querySelector('.post_actions.re_info .action small');
-    final parts = subInfo != null ? subInfo.text.trim().split(' - ') : const <String>[];
-    final subUser = sub.querySelector('.inner strong.userName a.l') ??
+    final parts = subInfo != null
+        ? subInfo.text.trim().split(' - ')
+        : const <String>[];
+    final subUser =
+        sub.querySelector('.inner strong.userName a.l') ??
         sub.querySelector('.inner strong a.l') ??
         sub.querySelector('a.l');
-    subReplies.add(core.RakuenFloor(
-      id: (sub.attributes['id'] ?? '').replaceFirst('post_', ''),
-      floor: parts.isNotEmpty ? parts[0].trim() : '',
-      time: parts.length > 1 ? parts[1].trim() : '',
-      avatar: _bgImage(sub.querySelector('span.avatarNeue')) ?? '',
-      userId: core.matchAttr(subUser, 'href', RegExp(r'/user/(\d+)')),
-      userName: core.htmlDecode(core.cText(subUser ?? sub)),
-      userSign: core.htmlDecode(core.cText(sub.querySelector('.sign.tip_j') ?? sub)),
-      messageHtml: sub.querySelector('.cmt_sub_content')?.innerHtml ?? '',
-    ));
+    subReplies.add(
+      core.RakuenFloor(
+        id: (sub.attributes['id'] ?? '').replaceFirst('post_', ''),
+        floor: parts.isNotEmpty ? parts[0].trim() : '',
+        time: parts.length > 1 ? parts[1].trim() : '',
+        avatar: _bgImage(sub.querySelector('span.avatarNeue')) ?? '',
+        userId: core.matchAttr(subUser, 'href', RegExp(r'/user/(\d+)')),
+        userName: core.htmlDecode(core.cText(subUser ?? sub)),
+        userSign: core.htmlDecode(
+          core.cText(sub.querySelector('.sign.tip_j') ?? sub),
+        ),
+        messageHtml: sub.querySelector('.cmt_sub_content')?.innerHtml ?? '',
+        likes:
+            int.tryParse(
+              RegExp(r'(\d+)')
+                      .firstMatch(
+                        core.cText(
+                          sub.querySelector('.likes_grid') ??
+                              sub.querySelector('.ico_like'),
+                        ),
+                      )
+                      ?.group(1) ??
+                  '',
+            ) ??
+            0,
+      ),
+    );
   }
 
   return core.RakuenFloor(
@@ -219,6 +260,19 @@ core.RakuenFloor _parseFloor(Element row) {
     userName: core.htmlDecode(core.cText(userLink ?? row)),
     userSign: core.htmlDecode(core.cText(sign ?? row)),
     messageHtml: message?.innerHtml ?? '',
+    likes:
+        int.tryParse(
+          RegExp(r'(\d+)')
+                  .firstMatch(
+                    core.cText(
+                      row.querySelector('.likes_grid') ??
+                          row.querySelector('.ico_like'),
+                    ),
+                  )
+                  ?.group(1) ??
+              '',
+        ) ??
+        0,
     subReplies: subReplies,
   );
 }
@@ -234,9 +288,15 @@ TopicPageData parseTopicPage(String html) {
 
   String groupName = '';
   String groupHref = '';
+  String groupThumb = '';
   if (group != null) {
     groupName = core.htmlDecode(group.text.trim());
     groupHref = group.attributes['href'] ?? '';
+    groupThumb = _bgImage(group.querySelector('img.avatar')) ?? '';
+  }
+  if (groupThumb.isEmpty) {
+    groupThumb =
+        _bgImage(doc.querySelector('#pageHeader a.avatar img.avatar')) ?? '';
   }
 
   String title = _h1Title(h1);
@@ -253,9 +313,14 @@ TopicPageData parseTopicPage(String html) {
 
   if (postTopic != null) {
     final userLink =
-        postTopic.querySelector('.inner strong a.l') ?? postTopic.querySelector('a.l');
-    final reInfo = postTopic.querySelector('.post_actions.re_info .action small');
-    final t = reInfo != null ? reInfo.text.trim().split(' - ') : const <String>[];
+        postTopic.querySelector('.inner strong a.l') ??
+        postTopic.querySelector('a.l');
+    final reInfo = postTopic.querySelector(
+      '.post_actions.re_info .action small',
+    );
+    final t = reInfo != null
+        ? reInfo.text.trim().split(' - ')
+        : const <String>[];
     userName = core.htmlDecode(core.cText(userLink ?? postTopic));
     userId = core.matchAttr(userLink, 'href', RegExp(r'/user/(\d+)'));
     avatar = _bgImage(postTopic.querySelector('span.avatarNeue')) ?? '';
@@ -270,6 +335,7 @@ TopicPageData parseTopicPage(String html) {
     title: title,
     group: groupName,
     groupHref: groupHref,
+    groupThumb: groupThumb,
     userName: userName,
     userId: userId,
     avatar: avatar,
@@ -295,10 +361,12 @@ BlogPageData parseBlogPage(String html) {
   final h1 = doc.querySelector('h1');
   final title = _h1Title(h1);
   final content = doc.querySelector('#entry_content')?.innerHtml ?? '';
-  final userLink = doc.querySelector('#viewEntry .author a.l') ??
+  final userLink =
+      doc.querySelector('#viewEntry .author a.l') ??
       doc.querySelector('.post_subject a.l') ??
       doc.querySelector('a.avatar');
-  final timeEl = doc.querySelector('.header .time') ?? doc.querySelector('.tools .time');
+  final timeEl =
+      doc.querySelector('.header .time') ?? doc.querySelector('.tools .time');
 
   String time = '';
   if (timeEl != null) {
@@ -327,16 +395,20 @@ List<RakuenTopicItem> parseGroupForum(String html) {
     final author = row.querySelector('td.author a');
     final posts = row.querySelector('td.posts');
     final last = row.querySelector('td.lastpost small.time');
-    result.add(RakuenTopicItem(
-      topicId: topicIdFromHref(core.cData(title, 'href')),
-      title: core.htmlDecode(core.cData(title, 'title').isNotEmpty
-          ? core.cData(title, 'title')
-          : core.cText(title ?? row)),
-      userName: core.htmlDecode(core.cText(author ?? row)),
-      userId: core.matchAttr(author, 'href', RegExp(r'/user/(\d+)')),
-      replies: core.cText(posts ?? row),
-      time: core.cText(last ?? row),
-    ));
+    result.add(
+      RakuenTopicItem(
+        topicId: topicIdFromHref(core.cData(title, 'href')),
+        title: core.htmlDecode(
+          core.cData(title, 'title').isNotEmpty
+              ? core.cData(title, 'title')
+              : core.cText(title ?? row),
+        ),
+        userName: core.htmlDecode(core.cText(author ?? row)),
+        userId: core.matchAttr(author, 'href', RegExp(r'/user/(\d+)')),
+        replies: posts?.text.trim() ?? '',
+        time: last?.text.trim() ?? '',
+      ),
+    );
   }
   return result;
 }
@@ -346,7 +418,8 @@ GroupInfoData parseGroupHome(String html) {
   final doc = core.parseDom(core.removeCF(html));
   final h1 = doc.querySelector('h1');
   final title = h1 != null ? core.htmlDecode(h1.text.trim()) : '';
-  final iconEl = doc.querySelector('.header .avatar img') ??
+  final iconEl =
+      doc.querySelector('.header .avatar img') ??
       doc.querySelector('#pageHeader a.avatar img') ??
       doc.querySelector('a.avatar img');
   final icon = _bgImage(iconEl) ?? '';
@@ -355,7 +428,22 @@ GroupInfoData parseGroupHome(String html) {
     final v = int.tryParse(m.group(1)!.replaceAll(',', ''));
     if (v != null && v > members && v < 100000000) members = v;
   }
-  return GroupInfoData(title: title, icon: icon, members: members);
+  final joinHref =
+      doc.querySelector('#groupJoinAction a.chiiBtn')?.attributes['href'] ?? '';
+  var joinUrl = '';
+  var byeUrl = '';
+  if (joinHref.contains('/join?')) {
+    joinUrl = joinHref;
+  } else if (joinHref.contains('/bye?')) {
+    byeUrl = joinHref;
+  }
+  return GroupInfoData(
+    title: title,
+    icon: icon,
+    members: members,
+    joinUrl: joinUrl,
+    byeUrl: byeUrl,
+  );
 }
 
 /// 解析小组成员列表
@@ -365,11 +453,15 @@ List<GroupMember> parseGroupMembers(String html) {
   final result = <GroupMember>[];
   for (final li in doc.querySelectorAll('#memberUserList li.user')) {
     final link = li.querySelector('a');
-    result.add(GroupMember(
-      userId: core.matchAttr(link, 'href', RegExp(r'/user/(\d+)')),
-      userName: core.htmlDecode(core.cText(li.querySelector('strong a') ?? link ?? li)),
-      avatar: _bgImage(li.querySelector('img')) ?? '',
-    ));
+    result.add(
+      GroupMember(
+        userId: core.matchAttr(link, 'href', RegExp(r'/user/(\d+)')),
+        userName: core.htmlDecode(
+          core.cText(li.querySelector('strong a') ?? link ?? li),
+        ),
+        avatar: _bgImage(li.querySelector('img')) ?? '',
+      ),
+    );
   }
   return result;
 }

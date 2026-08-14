@@ -24,7 +24,7 @@ import 'login_screen.dart';
 import 'logs_screen.dart';
 import 'lottery_rank_screen.dart';
 import 'new_bangumi_screen.dart';
-import 'rank_screen.dart';
+import 'overview_screen.dart';
 import 'relation_screen.dart';
 import 'rich_screen.dart';
 import 'sacrifice_screen.dart';
@@ -36,7 +36,10 @@ import 'temple_screen.dart';
 import 'temples_screen.dart';
 import 'top_week_screen.dart';
 import 'trade_screen.dart';
+import 'tree_rich_screen.dart';
+import 'tree_screen.dart';
 import 'valhalla_screen.dart';
+import 'wiki_screen.dart';
 
 /// 小圣杯域路由
 final List<GoRoute> tinygrailRoutes = [
@@ -54,7 +57,8 @@ final List<GoRoute> tinygrailRoutes = [
     final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
     return TinygrailCharaValhallaScreen(monoId: id);
   }),
-  GoRoute(path: '/tinygrail/rank', builder: (_, _) => const TinygrailRankScreen()),
+  GoRoute(path: '/tinygrail/rank', builder: (_, _) => const TinygrailOverviewScreen()),
+  GoRoute(path: '/tinygrail/overview', builder: (_, _) => const TinygrailOverviewScreen()),
   GoRoute(path: '/tinygrail/rich', builder: (_, _) => const TinygrailRichScreen()),
   GoRoute(path: '/tinygrail/star', builder: (_, _) => const TinygrailStarScreen()),
   GoRoute(path: '/tinygrail/star-rank', builder: (_, _) => const TinygrailStarRankScreen()),
@@ -103,4 +107,12 @@ final List<GoRoute> tinygrailRoutes = [
   }),
   GoRoute(path: '/tinygrail/items', builder: (_, _) => const TinygrailItemsScreen()),
   GoRoute(path: '/tinygrail/clipboard', builder: (_, _) => const TinygrailClipboardScreen()),
+  GoRoute(path: '/tinygrail/wiki', builder: (_, _) => const TinygrailWikiScreen()),
+  GoRoute(
+    path: '/tinygrail/tree',
+    builder: (_, state) => TinygrailTreeScreen(
+      userName: state.uri.queryParameters['user'] ?? '',
+    ),
+  ),
+  GoRoute(path: '/tinygrail/tree-rich', builder: (_, _) => const TinygrailTreeRichScreen()),
 ];

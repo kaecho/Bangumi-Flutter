@@ -47,6 +47,30 @@ class RakuenSettingsState {
   /// 显示长楼层收起按钮
   final bool showFoldButton;
 
+  /// 贴贴模块 (原项目 likes)
+  final bool likes;
+
+  /// 楼层直达条 (原项目 scrollDirection: none/left/bottom/right)
+  final String scrollDirection;
+
+  /// 楼层链接显示成信息块 (原项目 matchLink)
+  final bool matchLink;
+
+  /// 大表情尺寸 (原项目 bigEmojiSize: 28/36/48)
+  final int bigEmojiSize;
+
+  /// 楼层跳转滚动动画 (原项目 sliderAnimated)
+  final bool sliderAnimated;
+
+  /// 交换跳转按钮 (原项目 switchSlider)
+  final bool switchSlider;
+
+  /// 长楼层漂浮收起 (原项目 showFixedToggleFloorBtn)
+  final bool showFixedToggleFloorBtn;
+
+  /// 追踪特定用户回复 (原项目 commentTrack)
+  final List<String> commentTrack;
+
   const RakuenSettingsState({
     this.blockUsers = const [],
     this.blockGroups = const [],
@@ -61,7 +85,18 @@ class RakuenSettingsState {
     this.filterDelete = true,
     this.markOldTopic = true,
     this.showFoldButton = false,
+    this.likes = true,
+    this.scrollDirection = 'bottom',
+    this.matchLink = false,
+    this.bigEmojiSize = 36,
+    this.sliderAnimated = true,
+    this.switchSlider = false,
+    this.showFixedToggleFloorBtn = false,
+    this.commentTrack = const [],
   });
+
+  bool isTracked(String userId) =>
+      userId.isNotEmpty && commentTrack.contains(userId);
 
   /// 楼层图片是否加载 (autoLoadImage != '0')
   bool get loadImages => autoLoadImage != '0';
@@ -94,40 +129,65 @@ class RakuenSettingsState {
     bool? filterDelete,
     bool? markOldTopic,
     bool? showFoldButton,
-  }) =>
-      RakuenSettingsState(
-        blockUsers: blockUsers ?? this.blockUsers,
-        blockGroups: blockGroups ?? this.blockGroups,
-        blockKeywords: blockKeywords ?? this.blockKeywords,
-        blockDefaultUser: blockDefaultUser ?? this.blockDefaultUser,
-        floorStyle: floorStyle ?? this.floorStyle,
-        quote: quote ?? this.quote,
-        quoteAvatar: quoteAvatar ?? this.quoteAvatar,
-        subExpand: subExpand ?? this.subExpand,
-        wide: wide ?? this.wide,
-        autoLoadImage: autoLoadImage ?? this.autoLoadImage,
-        filterDelete: filterDelete ?? this.filterDelete,
-        markOldTopic: markOldTopic ?? this.markOldTopic,
-        showFoldButton: showFoldButton ?? this.showFoldButton,
-      );
+    bool? likes,
+    String? scrollDirection,
+    bool? matchLink,
+    int? bigEmojiSize,
+    bool? sliderAnimated,
+    bool? switchSlider,
+    bool? showFixedToggleFloorBtn,
+    List<String>? commentTrack,
+  }) => RakuenSettingsState(
+    blockUsers: blockUsers ?? this.blockUsers,
+    blockGroups: blockGroups ?? this.blockGroups,
+    blockKeywords: blockKeywords ?? this.blockKeywords,
+    blockDefaultUser: blockDefaultUser ?? this.blockDefaultUser,
+    floorStyle: floorStyle ?? this.floorStyle,
+    quote: quote ?? this.quote,
+    quoteAvatar: quoteAvatar ?? this.quoteAvatar,
+    subExpand: subExpand ?? this.subExpand,
+    wide: wide ?? this.wide,
+    autoLoadImage: autoLoadImage ?? this.autoLoadImage,
+    filterDelete: filterDelete ?? this.filterDelete,
+    markOldTopic: markOldTopic ?? this.markOldTopic,
+    showFoldButton: showFoldButton ?? this.showFoldButton,
+    likes: likes ?? this.likes,
+    scrollDirection: scrollDirection ?? this.scrollDirection,
+    matchLink: matchLink ?? this.matchLink,
+    bigEmojiSize: bigEmojiSize ?? this.bigEmojiSize,
+    sliderAnimated: sliderAnimated ?? this.sliderAnimated,
+    switchSlider: switchSlider ?? this.switchSlider,
+    showFixedToggleFloorBtn:
+        showFixedToggleFloorBtn ?? this.showFixedToggleFloorBtn,
+    commentTrack: commentTrack ?? this.commentTrack,
+  );
 
   Map<String, dynamic> toJson() => {
-        'blockUsers': blockUsers,
-        'blockGroups': blockGroups,
-        'blockKeywords': blockKeywords,
-        'blockDefaultUser': blockDefaultUser,
-        'floorStyle': floorStyle,
-        'quote': quote,
-        'quoteAvatar': quoteAvatar,
-        'subExpand': subExpand,
-        'wide': wide,
-        'autoLoadImage': autoLoadImage,
-        'filterDelete': filterDelete,
-        'markOldTopic': markOldTopic,
-        'showFoldButton': showFoldButton,
-      };
+    'blockUsers': blockUsers,
+    'blockGroups': blockGroups,
+    'blockKeywords': blockKeywords,
+    'blockDefaultUser': blockDefaultUser,
+    'floorStyle': floorStyle,
+    'quote': quote,
+    'quoteAvatar': quoteAvatar,
+    'subExpand': subExpand,
+    'wide': wide,
+    'autoLoadImage': autoLoadImage,
+    'filterDelete': filterDelete,
+    'markOldTopic': markOldTopic,
+    'showFoldButton': showFoldButton,
+    'likes': likes,
+    'scrollDirection': scrollDirection,
+    'matchLink': matchLink,
+    'bigEmojiSize': bigEmojiSize,
+    'sliderAnimated': sliderAnimated,
+    'switchSlider': switchSlider,
+    'showFixedToggleFloorBtn': showFixedToggleFloorBtn,
+    'commentTrack': commentTrack,
+  };
 
-  factory RakuenSettingsState.fromJson(Map<String, dynamic> json) => RakuenSettingsState(
+  factory RakuenSettingsState.fromJson(Map<String, dynamic> json) =>
+      RakuenSettingsState(
         blockUsers: _stringList(json['blockUsers']),
         blockGroups: _stringList(json['blockGroups']),
         blockKeywords: _stringList(json['blockKeywords']),
@@ -141,6 +201,15 @@ class RakuenSettingsState {
         filterDelete: json['filterDelete'] as bool? ?? true,
         markOldTopic: json['markOldTopic'] as bool? ?? true,
         showFoldButton: json['showFoldButton'] as bool? ?? false,
+        likes: json['likes'] as bool? ?? true,
+        scrollDirection: json['scrollDirection'] as String? ?? 'bottom',
+        matchLink: json['matchLink'] as bool? ?? false,
+        bigEmojiSize: (json['bigEmojiSize'] as num?)?.toInt() ?? 36,
+        sliderAnimated: json['sliderAnimated'] as bool? ?? true,
+        switchSlider: json['switchSlider'] as bool? ?? false,
+        showFixedToggleFloorBtn:
+            json['showFixedToggleFloorBtn'] as bool? ?? false,
+        commentTrack: _stringList(json['commentTrack']),
       );
 
   static List<String> _stringList(dynamic v) =>
@@ -148,9 +217,8 @@ class RakuenSettingsState {
 }
 
 /// 超展开设置 Provider (hive 持久化)
-final rakuenSettingsProvider = NotifierProvider<RakuenSettings, RakuenSettingsState>(
-  RakuenSettings.new,
-);
+final rakuenSettingsProvider =
+    NotifierProvider<RakuenSettings, RakuenSettingsState>(RakuenSettings.new);
 
 class RakuenSettings extends Notifier<RakuenSettingsState> {
   static const _boxName = 'rakuen';
@@ -158,7 +226,11 @@ class RakuenSettings extends Notifier<RakuenSettingsState> {
 
   @override
   RakuenSettingsState build() {
-    final raw = Cache.instance.get(_boxName, _key, maxAge: const Duration(days: 3650));
+    final raw = Cache.instance.get(
+      _boxName,
+      _key,
+      maxAge: const Duration(days: 3650),
+    );
     if (raw is String && raw.isNotEmpty) {
       try {
         final json = jsonDecode(raw) as Map<String, dynamic>;
@@ -182,7 +254,13 @@ class RakuenSettings extends Notifier<RakuenSettingsState> {
       filterDelete: key == 'filterDelete' ? value : null,
       markOldTopic: key == 'markOldTopic' ? value : null,
       showFoldButton: key == 'showFoldButton' ? value : null,
+      likes: key == 'likes' ? value : null,
+      matchLink: key == 'matchLink' ? value : null,
+      sliderAnimated: key == 'sliderAnimated' ? value : null,
+      switchSlider: key == 'switchSlider' ? value : null,
+      showFixedToggleFloorBtn: key == 'showFixedToggleFloorBtn' ? value : null,
     );
+
     if (next != state) await _save(next);
   }
 
@@ -191,8 +269,14 @@ class RakuenSettings extends Notifier<RakuenSettingsState> {
       floorStyle: key == 'floorStyle' ? value : null,
       subExpand: key == 'subExpand' ? value : null,
       autoLoadImage: key == 'autoLoadImage' ? value : null,
+      scrollDirection: key == 'scrollDirection' ? value : null,
     );
+
     if (next != state) await _save(next);
+  }
+
+  Future<void> setBigEmojiSize(int value) async {
+    await _save(state.copyWith(bigEmojiSize: value));
   }
 
   Future<void> addBlockUser(String userId) async {
@@ -201,7 +285,32 @@ class RakuenSettings extends Notifier<RakuenSettingsState> {
   }
 
   Future<void> removeBlockUser(String userId) async {
-    await _save(state.copyWith(blockUsers: state.blockUsers.where((e) => e != userId).toList()));
+    await _save(
+      state.copyWith(
+        blockUsers: state.blockUsers.where((e) => e != userId).toList(),
+      ),
+    );
+  }
+
+  Future<void> trackUser(String userId) async {
+    if (userId.isEmpty || state.commentTrack.contains(userId)) return;
+    await _save(state.copyWith(commentTrack: [...state.commentTrack, userId]));
+  }
+
+  Future<void> untrackUser(String userId) async {
+    await _save(
+      state.copyWith(
+        commentTrack: state.commentTrack.where((e) => e != userId).toList(),
+      ),
+    );
+  }
+
+  Future<void> toggleTrackUser(String userId) async {
+    if (state.isTracked(userId)) {
+      await untrackUser(userId);
+    } else {
+      await trackUser(userId);
+    }
   }
 
   Future<void> addBlockGroup(String group) async {
@@ -210,17 +319,25 @@ class RakuenSettings extends Notifier<RakuenSettingsState> {
   }
 
   Future<void> removeBlockGroup(String group) async {
-    await _save(state.copyWith(blockGroups: state.blockGroups.where((e) => e != group).toList()));
+    await _save(
+      state.copyWith(
+        blockGroups: state.blockGroups.where((e) => e != group).toList(),
+      ),
+    );
   }
 
   Future<void> addBlockKeyword(String keyword) async {
     if (state.blockKeywords.contains(keyword)) return;
-    await _save(state.copyWith(blockKeywords: [...state.blockKeywords, keyword]));
+    await _save(
+      state.copyWith(blockKeywords: [...state.blockKeywords, keyword]),
+    );
   }
 
   Future<void> removeBlockKeyword(String keyword) async {
     await _save(
-      state.copyWith(blockKeywords: state.blockKeywords.where((e) => e != keyword).toList()),
+      state.copyWith(
+        blockKeywords: state.blockKeywords.where((e) => e != keyword).toList(),
+      ),
     );
   }
 }
@@ -242,4 +359,12 @@ const kAutoLoadImageOptions = [
   ('0.2m', '200'),
   ('2m', '2000'),
   ('自动', '10000'),
+];
+
+/// 楼层直达条方向 (原项目 RAKUEN_SCROLL_DIRECTION)
+const kScrollDirectionOptions = [
+  ('隐藏', 'none'),
+  ('左侧', 'left'),
+  ('底部', 'bottom'),
+  ('右侧', 'right'),
 ];

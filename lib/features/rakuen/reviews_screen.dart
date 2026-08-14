@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../core/utils/format.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+
 import 'rakuen_models.dart';
 import 'rakuen_providers.dart';
 import '../../design_system/design_system.dart';
@@ -27,7 +30,8 @@ class _ReviewsScreenState extends ConsumerState<ReviewsScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
         ref.read(reviewsProvider(widget.subjectId).notifier).loadMore();
       }
     });
@@ -42,7 +46,17 @@ class _ReviewsScreenState extends ConsumerState<ReviewsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('评论')),
+      appBar: AppBar(
+        title: const Text('影评'),
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(htmlReviews(widget.subjectId)),
+          ),
+        ],
+      ),
+
       body: Consumer(
         builder: (context, ref, _) {
           final async = ref.watch(reviewsProvider(widget.subjectId));
@@ -54,7 +68,8 @@ class _ReviewsScreenState extends ConsumerState<ReviewsScreen> {
                 children: [
                   const Text('加载失败'),
                   TextButton(
-                    onPressed: () => ref.invalidate(reviewsProvider(widget.subjectId)),
+                    onPressed: () =>
+                        ref.invalidate(reviewsProvider(widget.subjectId)),
                     child: const Text('重试'),
                   ),
                 ],
@@ -72,8 +87,9 @@ class _ReviewsScreenState extends ConsumerState<ReviewsScreen> {
                   if (index >= data.reviews.length) {
                     return Center(
                       child: TextButton(
-                        onPressed: () =>
-                            ref.read(reviewsProvider(widget.subjectId).notifier).loadMore(),
+                        onPressed: () => ref
+                            .read(reviewsProvider(widget.subjectId).notifier)
+                            .loadMore(),
                         child: const Text('加载更多'),
                       ),
                     );
@@ -105,7 +121,11 @@ class _ReviewRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Avatar(url: review.user?.avatarUrl ?? '', size: 34, name: review.user?.displayName),
+            Avatar(
+              url: review.user?.avatarUrl ?? '',
+              size: 34,
+              name: review.user?.displayName,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -113,7 +133,10 @@ class _ReviewRow extends StatelessWidget {
                 children: [
                   Text(
                     review.title,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -135,10 +158,7 @@ class _ReviewRow extends StatelessWidget {
                       ),
                       const Spacer(),
                       if (review.replies > 0)
-                        Text(
-                          '${review.replies} 回复',
-                          style: context.ds.meta,
-                        ),
+                        Text('${review.replies} 回复', style: context.ds.meta),
                       const SizedBox(width: 8),
                       Text(
                         friendlyTime(review.createdAt),

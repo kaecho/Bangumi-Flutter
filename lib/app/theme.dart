@@ -7,20 +7,28 @@ import '../design_system/design_system.dart';
 /// 主题管理: 由设计 token 驱动 (浅色/深色/跟随系统 + 自定义主题色)
 class AppTheme {
   static ThemeData light(Color seed) => _base(Brightness.light, seed);
-  static ThemeData dark(Color seed) => _base(Brightness.dark, seed);
+  static ThemeData dark(Color seed, {bool deepDark = false}) =>
+      _base(Brightness.dark, seed, deepDark: deepDark);
 
-  static ThemeData _base(Brightness brightness, Color seed) {
+  static ThemeData _base(
+    Brightness brightness,
+    Color seed, {
+    bool deepDark = false,
+  }) {
     final scheme = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: brightness,
     );
-    final ds = AppThemeData.fromScheme(scheme);
+    final ds = AppThemeData.fromScheme(scheme, deepDark: deepDark);
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       extensions: [ds],
-      scaffoldBackgroundColor: ds.surfaceBase,
+      scaffoldBackgroundColor: deepDark && brightness == Brightness.dark
+          ? AppPalette.bgDeepDark
+          : ds.surfaceBase,
+
       textTheme: TextTheme(
         titleLarge: ds.title,
         titleMedium: ds.bodyStrong,

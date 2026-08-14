@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
+import '../subject/collection_sheet.dart';
+import 'tags_screen.dart';
 import 'widgets/discovery_html.dart';
 import 'widgets/season_filter.dart';
 
+
 /// 频道聚合数据
-final channelProvider = FutureProvider.family<ChannelData, String>((ref, type) async {
+final channelProvider = FutureProvider.family<ChannelData, String>((
+  ref,
+  type,
+) async {
   final client = ref.read(apiClientProvider);
   final body = await client.get(htmlChannel(type), host: kHost);
   return parseChannel(body as String);
@@ -23,26 +29,56 @@ final channelProvider = FutureProvider.family<ChannelData, String>((ref, type) a
 /// 频道页 (https://bgm.tv/{anime|book|real|game}) 聚合了 注目条目/
 /// 讨论/日志 三个栏目。
 class ChannelScreen extends ConsumerStatefulWidget {
-  const ChannelScreen({super.key});
+  final String initialType;
+
+  const ChannelScreen({super.key, this.initialType = 'anime'});
 
   @override
   ConsumerState<ChannelScreen> createState() => _ChannelScreenState();
 }
 
 class _ChannelScreenState extends ConsumerState<ChannelScreen> {
-  String _type = 'anime';
+  late String _type = widget.initialType;
+
+  static const _typeLabels = {
+    'anime': '动画',
+    'book': '书籍',
+    'real': '三次元',
+    'game': '游戏',
+    'music': '音乐',
+  };
 
   @override
   Widget build(BuildContext context) {
     final channel = ref.watch(channelProvider(_type));
+    final typeCn = _typeLabels[_type] ?? '动画';
     return Scaffold(
-      appBar: BgmAppBar(title: '频道', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '$typeCn频道',
+        showBackButton: true,
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (value) {
+              if (value == 'browser') {
+                openExternalUrl('$kHost/${_type == 'anime' ? 'anime' : _type}');
+              } else {
+                setState(() => _type = value);
+              }
+            },
+            itemBuilder: (_) => [
+              for (final entry in _typeLabels.entries)
+                PopupMenuItem(value: entry.key, child: Text(entry.value)),
+              const PopupMenuDivider(),
+              const PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
+            ],
+          ),
+        ],
+      ),
       body: Column(
         children: [
-          TypeTabs(
-            value: _type,
-            onChanged: (v) => setState(() => _type = v),
-          ),
+          TypeTabs(value: _type, onChanged: (v) => setState(() => _type = v)),
+
           Expanded(
             child: channel.when(
               loading: () => const Center(child: Loading()),
@@ -77,8 +113,11 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                             final item = data.rank[index];
                             return GestureDetector(
                               onTap: () => context.push('/subject/${item.id}'),
+                              onLongPress: () =>
+                                  showCollectionSheet(context, item.id),
                               child: SizedBox(
                                 width: 104,
+
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -104,31 +143,66 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                       ),
                     ],
                     if (data.discuss.isNotEmpty) ...[
-                      const SectionHeader(title: '讨论'),
+                      const SectionHeader(title: '最新帖子'),
                       for (final item in data.discuss)
                         ListTile(
                           dense: true,
-                          title: Text(
-                            item.title,
-                            maxLines: 1,
+                          title: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(text: item.title),
+                                if (item.replies > 0)
+                                  TextSpan(
+                                    text: ' +${item.replies}',
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 13),
                           ),
                           subtitle: Text(
-                            '${item.username} · ${item.time}',
+                            item.subjectName.isEmpty
+                                ? item.username
+                                : item.subjectName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 11),
                           ),
-                          trailing: Text(
-                            '${item.replies} 回复',
-                            style: const TextStyle(fontSize: 11),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                item.username,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                item.time,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                          onTap: () => context.push(
-                            '/web/${Uri.encodeComponent('https://bgm.tv/subject/topic/${item.id}')}',
-                          ),
+                          onTap: () =>
+                              context.push('/rakuen/topic/subject/${item.id}'),
                         ),
                     ],
                     if (data.blogs.isNotEmpty) ...[
-                      const SectionHeader(title: '日志'),
+                      const SectionHeader(title: '最新日志'),
                       for (final blog in data.blogs)
                         ListTile(
                           dense: true,
@@ -142,17 +216,139 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                             '${blog.username} · ${blog.time} · ${blog.replies} 回复',
                             style: const TextStyle(fontSize: 11),
                           ),
-                          onTap: () => context.push(
-                            '/web/${Uri.encodeComponent('https://bgm.tv/blog/${blog.id}')}',
-                          ),
+                          onTap: () => context.push('/rakuen/blog/${blog.id}'),
                         ),
                     ],
+                    if (data.friends.isNotEmpty) ...[
+                      const SectionHeader(title: '好友最近关注'),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 12,
+                          children: [
+                            for (final item in data.friends)
+                              SizedBox(
+                                width:
+                                    (MediaQuery.sizeOf(context).width - 34) / 2,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      context.push('/subject/${item.id}'),
+                                  onLongPress: () =>
+                                      showCollectionSheet(context, item.id),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Cover(
+                                        url: item.cover,
+                                        width: 56,
+                                        height: _type == 'music' ? 56 : 75,
+                                        radius: 6,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.name,
+                                              maxLines: 3,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: visualFontSize(
+                                                  item.name,
+                                                  const [
+                                                    (18, 10),
+                                                    (14, 11),
+                                                    (0, 12),
+                                                  ],
+                                                ),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text.rich(
+                                              TextSpan(
+                                                children: [
+                                                  TextSpan(
+                                                    text: item.userName,
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  if (item.action.isNotEmpty)
+                                                    TextSpan(
+                                                      text: ' ${item.action}',
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SectionHeader(title: '标签'),
+                    _ChannelTags(type: _type),
                   ],
                 ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ChannelTags extends ConsumerWidget {
+  final String type;
+
+  const _ChannelTags({required this.type});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tags = ref.watch(tagListProvider(type));
+    return tags.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: Loading()),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (list) => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final tag in list.take(24))
+              ActionChip(
+                label: Text(tag.name, style: const TextStyle(fontSize: 12)),
+                onPressed: () => context.push(
+                  '/tags/$type/${Uri.encodeComponent(tag.name)}',
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

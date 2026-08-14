@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
+
 import 'subject_models.dart';
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
@@ -25,7 +29,45 @@ class MonoScreen extends ConsumerWidget {
       appBar: BgmAppBar(
         title: type == 'person' ? '人物' : '角色',
         showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(
+              type == 'person' ? htmlPersonPage(id) : htmlCharacterPage(id),
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (v) {
+              final url = type == 'person'
+                  ? htmlPersonPage(id)
+                  : htmlCharacterPage(id);
+              final name = detail.valueOrNull?.displayName ?? '';
+              if (v == 'copy') {
+                Clipboard.setData(ClipboardData(text: url));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('已复制链接')));
+                return;
+              }
+              if (v == 'share') {
+                Clipboard.setData(
+                  ClipboardData(text: '【链接】$name | Bangumi番组计划\n$url'),
+                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('已复制分享文案')));
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'copy', child: Text('复制链接')),
+              PopupMenuItem(value: 'share', child: Text('复制分享文案')),
+            ],
+          ),
+        ],
       ),
+
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -81,7 +123,10 @@ class _MonoHeader extends StatelessWidget {
               children: [
                 Text(
                   detail.displayName,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -102,11 +147,16 @@ class _MonoHeader extends StatelessWidget {
                   children: [
                     if (detail.gender.isNotEmpty)
                       _MonoChip(text: '性别: ${detail.gender}'),
-                    if (detail.birth.isNotEmpty) _MonoChip(text: '生日: ${detail.birth}'),
-                    if (detail.bloodType.isNotEmpty) _MonoChip(text: '血型: ${detail.bloodType}'),
-                    if (detail.career.isNotEmpty) _MonoChip(text: detail.career.join(' / ')),
-                    if (detail.collects > 0) _MonoChip(text: '${detail.collects} 收藏'),
-                    if (detail.comments > 0) _MonoChip(text: '${detail.comments} 吐槽'),
+                    if (detail.birth.isNotEmpty)
+                      _MonoChip(text: '生日: ${detail.birth}'),
+                    if (detail.bloodType.isNotEmpty)
+                      _MonoChip(text: '血型: ${detail.bloodType}'),
+                    if (detail.career.isNotEmpty)
+                      _MonoChip(text: detail.career.join(' / ')),
+                    if (detail.collects > 0)
+                      _MonoChip(text: '${detail.collects} 收藏'),
+                    if (detail.comments > 0)
+                      _MonoChip(text: '${detail.comments} 吐槽'),
                   ],
                 ),
                 if (type == 'person')
@@ -119,8 +169,12 @@ class _MonoHeader extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 14),
                           minimumSize: const Size(0, 32),
                         ),
-                        onPressed: () => context.push('/subject/${detail.id}/works'),
-                        child: const Text('全部作品', style: TextStyle(fontSize: 12)),
+                        onPressed: () =>
+                            context.push('/subject/${detail.id}/works'),
+                        child: const Text(
+                          '全部作品',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                     ),
                   ),
@@ -146,10 +200,7 @@ class _MonoChip extends StatelessWidget {
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(
-        text,
-        style: context.ds.tiny,
-      ),
+      child: Text(text, style: context.ds.tiny),
     );
   }
 }
@@ -188,7 +239,10 @@ class _MonoSummaryState extends State<_MonoSummary> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   _expanded ? '收起' : '展开',
-                  style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
               ),
             ),
@@ -247,12 +301,18 @@ class _MonoWorks extends ConsumerWidget {
   final int id;
   final String displayName;
 
-  const _MonoWorks({required this.type, required this.id, required this.displayName});
+  const _MonoWorks({
+    required this.type,
+    required this.id,
+    required this.displayName,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final works = ref.watch(monoSubjectsProvider((type: type, id: id))).valueOrNull;
+    final works = ref
+        .watch(monoSubjectsProvider((type: type, id: id)))
+        .valueOrNull;
     if (works == null || works.isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -269,7 +329,12 @@ class _MonoWorks extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   children: [
-                    Cover(url: item.images.common, width: 44, height: 60, radius: 4),
+                    Cover(
+                      url: item.images.common,
+                      width: 44,
+                      height: 60,
+                      radius: 4,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -297,7 +362,11 @@ class _MonoWorks extends ConsumerWidget {
                         item.score.toStringAsFixed(1),
                         style: TextStyle(fontSize: 12, color: context.ds.star),
                       ),
-                    Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: context.ds.textHint,
+                    ),
                   ],
                 ),
               ),
@@ -305,11 +374,16 @@ class _MonoWorks extends ConsumerWidget {
           if (works.length > 8)
             TextButton(
               onPressed: () => context.push(
-                type == 'person' ? '/subject/$id/works' : '/mono/character/$id/subjects',
+                type == 'person'
+                    ? '/subject/$id/works'
+                    : '/mono/character/$id/subjects',
               ),
               child: Text(
                 '查看全部 ${works.length} 部作品',
-                style: TextStyle(fontSize: 13, color: theme.colorScheme.primary),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ),
         ],
@@ -326,7 +400,9 @@ class _MonoComments extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final comments = ref.watch(monoCommentsProvider(id)).valueOrNull;
-    if (comments == null || comments.items.isEmpty) return const SizedBox.shrink();
+    if (comments == null || comments.items.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),

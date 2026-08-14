@@ -164,6 +164,7 @@ class TinygrailRich {
   final int assets;
   final int total;
   final int principal;
+  final int share; // 周股息
   final int lastActiveDate;
   final int lastIndex;
   final int state;
@@ -176,6 +177,7 @@ class TinygrailRich {
     this.assets = 0,
     this.total = 0,
     this.principal = 0,
+    this.share = 0,
     this.lastActiveDate = 0,
     this.lastIndex = 0,
     this.state = 0,
@@ -189,6 +191,7 @@ class TinygrailRich {
         assets: (json['Assets'] as num?)?.toInt() ?? 0,
         total: ((json['TotalBalance'] ?? json['Total'] ?? 0) as num).toInt(),
         principal: (json['Principal'] as num?)?.toInt() ?? 0,
+        share: (json['Share'] as num?)?.toInt() ?? 0,
         lastActiveDate: (json['LastActiveDate'] as num?)?.toInt() ?? 0,
         lastIndex: (json['LastIndex'] as num?)?.toInt() ?? 0,
         state: (json['State'] as num?)?.toInt() ?? 0,

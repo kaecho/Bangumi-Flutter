@@ -4,9 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
-import '../../shared/widgets/score.dart';
 import 'widgets/discovery_html.dart';
 import '../../design_system/design_system.dart';
 
@@ -20,14 +20,61 @@ final wikiProvider = FutureProvider<WikiData>((ref) async {
   return parseWiki(body as String);
 });
 
-class WikiScreen extends ConsumerWidget {
+class WikiScreen extends ConsumerStatefulWidget {
   const WikiScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WikiScreen> createState() => _WikiScreenState();
+}
+
+class _WikiScreenState extends ConsumerState<WikiScreen> {
+  int _cate = 0; // 0=编辑 1=关联 2=入库
+  String _kind = 'wiki_act-all';
+
+  static const _editKinds = <(String id, String label)>[
+    ('wiki_act-all', '条目'),
+    ('wiki_act-lock', '锁定'),
+    ('wiki_act-merge', '合并'),
+    ('wiki_act-ep', '章节'),
+    ('wiki_act-crt', '角色'),
+    ('wiki_act-prsn', '人物'),
+  ];
+  static const _relationKinds = <(String id, String label)>[
+    ('wiki_act-subject-relation', '条目关联'),
+    ('wiki_act-subject-person', '条目-人物'),
+    ('wiki_act-subject-crt', '条目-角色'),
+  ];
+  static const _lastKinds = <(String id, String label)>[
+    ('latest_all', '全部'),
+    ('latest_2', '动画'),
+    ('latest_1', '书籍'),
+    ('latest_3', '音乐'),
+    ('latest_4', '游戏'),
+    ('latest_6', '三次元'),
+  ];
+
+  List<(String, String)> get _kinds => switch (_cate) {
+    1 => _relationKinds,
+    2 => _lastKinds,
+    _ => _editKinds,
+  };
+
+  @override
+  Widget build(BuildContext context) {
     final wiki = ref.watch(wikiProvider);
     return Scaffold(
-      appBar: BgmAppBar(title: '维基人', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '维基人',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl('$kHost/wiki'),
+          ),
+        ],
+      ),
+
       body: wiki.when(
         loading: () => const Center(child: Loading()),
         error: (error, _) => Center(
@@ -43,42 +90,93 @@ class WikiScreen extends ConsumerWidget {
             ],
           ),
         ),
-        data: (data) => RefreshIndicator(
-          onRefresh: () => ref.refresh(wikiProvider.future),
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 24),
+        data: (data) {
+          final kinds = _kinds;
+          final current = kinds.any((e) => e.$1 == _kind)
+              ? _kind
+              : kinds.first.$1;
+          final entries = data.of(current);
+          return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(12),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final (label, count) in data.counts)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '$label $count',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 0, label: Text('编辑')),
+                    ButtonSegment(value: 1, label: Text('关联')),
+                    ButtonSegment(value: 2, label: Text('入库')),
                   ],
+                  selected: {_cate},
+                  onSelectionChanged: (s) {
+                    setState(() {
+                      _cate = s.first;
+                      _kind = _kinds.first.$1;
+                    });
+                  },
                 ),
               ),
-              const SectionHeader(title: '条目编辑动态'),
-              ..._buildEntries(context, data.all),
-              const SectionHeader(title: '锁定条目动态'),
-              ..._buildEntries(context, data.lock),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SegmentedButton<String>(
+                    segments: [
+                      for (final (id, label) in kinds)
+                        ButtonSegment(value: id, label: Text(label)),
+                    ],
+                    selected: {current},
+                    onSelectionChanged: (s) => setState(() => _kind = s.first),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => ref.refresh(wikiProvider.future),
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 24, top: 8),
+                    children: [
+                      if (data.counts.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final (label, count) in data.counts)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest
+                                        .withValues(alpha: 0.5),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '$label $count',
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      if (entries.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(child: Text('该分类暂无数据')),
+                        )
+                      else
+                        ..._buildEntries(context, entries),
+                    ],
+                  ),
+                ),
+              ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -103,8 +201,8 @@ class WikiScreen extends ConsumerWidget {
           onTap: entry.href.isEmpty
               ? null
               : () => context.push(
-                    '/web/${Uri.encodeComponent('https://bgm.tv${entry.href}')}',
-                  ),
+                  '/web/${Uri.encodeComponent('https://bgm.tv${entry.href}')}',
+                ),
         ),
     ];
   }

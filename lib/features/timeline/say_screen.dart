@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/site_cookies.dart';
+import '../../core/utils/display.dart';
 import '../../core/utils/format.dart';
+
 import '../../shared/models/timeline.dart';
 import '../../shared/models/user.dart';
 import '../../shared/widgets/cover.dart';
@@ -32,13 +35,15 @@ class SayComment {
   });
 
   factory SayComment.fromJson(Map<String, dynamic> json) => SayComment(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        userId: (json['user_id'] as num?)?.toInt() ?? 0,
-        user: json['user'] == null ? null : User.fromJson(json['user'] as Map<String, dynamic>),
-        content: json['content'] as String? ?? '',
-        createdAt: json['created_at'] as String? ?? '',
-        likes: (json['likes'] as num?)?.toInt() ?? 0,
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    userId: (json['user_id'] as num?)?.toInt() ?? 0,
+    user: json['user'] == null
+        ? null
+        : User.fromJson(json['user'] as Map<String, dynamic>),
+    content: json['content'] as String? ?? '',
+    createdAt: json['created_at'] as String? ?? '',
+    likes: (json['likes'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 吐槽详情数据: 吐槽本体 + 评论列表
@@ -51,7 +56,10 @@ class SayDetail {
 
 /// 吐槽详情 (移植自原项目 screens/timeline/say)
 /// 数据: /say/{id} + /timeline/{id}/comments
-final sayDetailProvider = FutureProvider.family<SayDetail, int>((ref, id) async {
+final sayDetailProvider = FutureProvider.family<SayDetail, int>((
+  ref,
+  id,
+) async {
   final client = ref.read(apiClientProvider);
 
   Say say;
@@ -88,7 +96,34 @@ class SayScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(sayDetailProvider(id));
     return Scaffold(
-      appBar: AppBar(title: const Text('吐槽详情')),
+      appBar: AppBar(
+        title: Text(
+          detail.maybeWhen(
+            data: (value) {
+              final count = value.comments.length;
+              final date = value.say.createdAt.split(' ').first;
+              return '吐槽 ($count)${date.isEmpty ? '' : ' · $date'}';
+            },
+            orElse: () => '吐槽详情',
+          ),
+        ),
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () {
+              final say = detail.valueOrNull?.say;
+              final userId = say?.user?.username.isNotEmpty == true
+                  ? say!.user!.username
+                  : '${say?.userId ?? ''}';
+              if (userId.isEmpty) return;
+              openExternalUrl(htmlSay(userId, id));
+            },
+          ),
+        ],
+      ),
+
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -118,13 +153,18 @@ class SayScreen extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 '评论 (${value.comments.length})',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             if (value.comments.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: Text('暂无评论', style: TextStyle(fontSize: 13))),
+                child: Center(
+                  child: Text('暂无评论', style: TextStyle(fontSize: 13)),
+                ),
               )
             else
               ...value.comments.map((c) => _CommentTile(comment: c)),
@@ -165,7 +205,9 @@ class _SayHeaderState extends ConsumerState<_SayHeader> {
       if (gh.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('点赞需要站点 Cookie 登录, 请到 设置 → 站点 Cookie 登录 配置')),
+            const SnackBar(
+              content: Text('点赞需要站点 Cookie 登录, 请到 设置 → 站点 Cookie 登录 配置'),
+            ),
           );
         }
         return;
@@ -177,9 +219,9 @@ class _SayHeaderState extends ConsumerState<_SayHeader> {
       if (mounted) setState(() => _liked = true);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('点赞失败, 请确认已登录')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('点赞失败, 请确认已登录')));
       }
     } finally {
       if (mounted) setState(() => _liking = false);
@@ -198,7 +240,11 @@ class _SayHeaderState extends ConsumerState<_SayHeader> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Avatar(url: user?.avatarUrl ?? '', size: 40, name: user?.displayName),
+            Avatar(
+              url: user?.avatarUrl ?? '',
+              size: 40,
+              name: user?.displayName,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -206,12 +252,18 @@ class _SayHeaderState extends ConsumerState<_SayHeader> {
                 children: [
                   Text(
                     user?.displayName ?? '用户${say.userId}',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     friendlyTime(say.createdAt),
-                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -270,22 +322,127 @@ class _CommentTile extends StatelessWidget {
                     Expanded(
                       child: Text(
                         user?.displayName ?? '用户${comment.userId}',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Text(
                       friendlyTime(comment.createdAt),
-                      style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(comment.content, style: const TextStyle(fontSize: 14, height: 1.5)),
+                Text(
+                  comment.content,
+                  style: const TextStyle(fontSize: 14, height: 1.5),
+                ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 发表吐槽 (原项目 header '+' → Say 新发模式)
+/// 路由: /timeline/say/new
+class SayComposeScreen extends ConsumerStatefulWidget {
+  const SayComposeScreen({super.key});
+
+  @override
+  ConsumerState<SayComposeScreen> createState() => _SayComposeScreenState();
+}
+
+class _SayComposeScreenState extends ConsumerState<SayComposeScreen> {
+  final _controller = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _sending = true);
+    try {
+      String gh;
+      try {
+        gh = await ref.read(formhashProvider.future);
+      } catch (_) {
+        gh = '';
+      }
+      if (gh.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('发表吐槽需要站点 Cookie 登录')));
+        }
+        return;
+      }
+      final client = ref.read(apiClientProvider);
+      await client.post(
+        htmlUpdateSay(),
+        host: kHost,
+        data: {'say_input': text, 'formhash': gh, 'submit': '提交'},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已发表')));
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('发表失败: ${apiErrorMessage(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('新吐槽'),
+        actions: [
+          TextButton(
+            onPressed: _sending ? null : _submit,
+            child: _sending
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('发表'),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLines: 8,
+          maxLength: 500,
+          decoration: const InputDecoration(
+            hintText: '说点什么...',
+            border: OutlineInputBorder(),
+          ),
+        ),
       ),
     );
   }

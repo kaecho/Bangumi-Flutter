@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/auth/auth_controller.dart';
 import '../../shared/models/collection.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
@@ -26,6 +27,19 @@ final milestoneProvider = FutureProvider.family<List<CollectionItem>, String>((r
   }
   return items;
 });
+
+/// 我的照片墙 (发现页菜单入口, 原项目 Milestone)
+class MyMilestoneScreen extends ConsumerWidget {
+  const MyMilestoneScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(currentUserProvider);
+    return me == null
+        ? const Scaffold(body: Center(child: Text('请先登录')))
+        : MilestoneScreen(userId: userPathId(me));
+  }
+}
 
 /// 照片墙 (用户"看过"条目封面拼图)
 class MilestoneScreen extends ConsumerStatefulWidget {

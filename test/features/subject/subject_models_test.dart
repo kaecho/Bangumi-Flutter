@@ -24,7 +24,13 @@ void main() {
           'rank': 85,
           'count': {'1': 53, '10': 3046},
         },
-        'collection': {'wish': 1, 'collect': 2, 'doing': 3, 'on_hold': 4, 'dropped': 5},
+        'collection': {
+          'wish': 1,
+          'collect': 2,
+          'doing': 3,
+          'on_hold': 4,
+          'dropped': 5,
+        },
       });
 
       expect(subject.id, 8);
@@ -53,10 +59,13 @@ void main() {
     });
 
     test('v0 嵌套 [{v: ...}] 结构', () {
-      const info = Infobox(key: '别名', value: [
-        {'v': '叛逆的鲁路修'},
-        {'v': 'Code Geass'},
-      ]);
+      const info = Infobox(
+        key: '别名',
+        value: [
+          {'v': '叛逆的鲁路修'},
+          {'v': 'Code Geass'},
+        ],
+      );
       expect(info.valueText, '叛逆的鲁路修 / Code Geass');
     });
 
@@ -68,7 +77,14 @@ void main() {
   group('EpList.fromJson', () {
     test('按类型分组', () {
       final list = EpList.fromJson([
-        {'id': 1, 'type': 0, 'sort': 1, 'name': 'A', 'duration': '24m', 'airdate': '2008-04-06'},
+        {
+          'id': 1,
+          'type': 0,
+          'sort': 1,
+          'name': 'A',
+          'duration': '24m',
+          'airdate': '2008-04-06',
+        },
         {'id': 2, 'type': 0, 'sort': 2, 'name': 'B'},
         {'id': 3, 'type': 1, 'sort': 1, 'name': '特典'},
         {'id': 4, 'type': 2, 'sort': 1, 'name': 'OP'},
@@ -92,6 +108,8 @@ void main() {
       expect(CollectionStatus.text(4), '搁置');
       expect(CollectionStatus.text(5), '抛弃');
       expect(CollectionStatus.actionText(0), '收藏');
+      expect(SubjectType.statusText(1, 'book'), '想读');
+      expect(SubjectType.statusText(3, 'game'), '在玩');
     });
   });
 
@@ -115,7 +133,10 @@ void main() {
     });
 
     test('未收藏时 hasCollection 为 false', () {
-      expect(CollectionDetail.fromJson({'subject_id': 1}).hasCollection, isFalse);
+      expect(
+        CollectionDetail.fromJson({'subject_id': 1}).hasCollection,
+        isFalse,
+      );
     });
   });
 
@@ -128,7 +149,12 @@ void main() {
         'relation': '主角',
         'images': {'large': 'http://lain.bgm.tv/pic/crt/l/1.jpg'},
         'actors': [
-          {'id': 3818, 'name': '福山潤', 'name_cn': '福山润', 'career': ['seiyu']},
+          {
+            'id': 3818,
+            'name': '福山潤',
+            'name_cn': '福山润',
+            'career': ['seiyu'],
+          },
         ],
       });
 
@@ -145,11 +171,14 @@ void main() {
       final map = EpStatusMap(watched: {1: true, 2: true, 3: false});
       expect(map.isWatched(1), isTrue);
       expect(map.isWatched(3), isFalse);
-      expect(map.progressOf(const [
-        Ep(id: 1, sort: 1),
-        Ep(id: 2, sort: 2),
-        Ep(id: 3, sort: 3),
-      ]), 2);
+      expect(
+        map.progressOf(const [
+          Ep(id: 1, sort: 1),
+          Ep(id: 2, sort: 2),
+          Ep(id: 3, sort: 3),
+        ]),
+        2,
+      );
     });
 
     test('无状态时取 ep_status 兜底', () {
@@ -160,6 +189,8 @@ void main() {
   group('parseSubjectCommentsHtml', () {
     test('解析吐槽条目字段', () {
       final page = parseSubjectCommentsHtml('''
+        <div id="SecTab"><a class="chiiBtn" href="/subject/1/comments?version=current">当前版本</a></div>
+
         <div class="page_inner"><strong class="p_cur">1</strong>
           <span class="p_edge">(&nbsp;1&nbsp;/&nbsp;2&nbsp;)</span></div>
         <div class="item clearit" data-item-user="745654">
@@ -178,6 +209,7 @@ void main() {
 
       expect(page.page, 1);
       expect(page.pageTotal, 2);
+      expect(page.hasVersion, isTrue);
       expect(page.items.length, 1);
       final c = page.items.first;
       expect(c.userName, 'mudeki');
@@ -266,6 +298,147 @@ void main() {
       expect(e.userName, '有职转死');
       expect(e.summary, '内容扩充');
       expect(e.rev, 1803048);
+    });
+  });
+
+  group('parseSubjectHtmlExtras', () {
+    test('解析锁定提示、猜你喜欢与谁在看', () {
+      final extras = parseSubjectHtmlExtras('''
+        <div class="tipIntro"><div class="inner">
+          <h3>条目已锁定</h3>
+        </div></div>
+        <ul class="coversSmall">
+          <li>
+            <a href="/subject/12" title="cowboy bebop">
+              <span style="background-image:url('//lain.bgm.tv/pic/cover/s/12.jpg')"></span>
+              <span class="l">cowboy bebop</span>
+            </a>
+          </li>
+        </ul>
+        <ul id="subjectPanelCollect">
+          <li>
+            <span class="avatarNeue" style="background-image:url('//lain.bgm.tv/pic/user/s/1.jpg')"></span>
+            <div class="innerWithAvatar">
+              <a href="/user/sai" class="avatar">sai</a>
+              <span class="starlight stars8"></span>
+              <small class="grey">2小时前</small>
+            </div>
+          </li>
+        </ul>
+      ''');
+      expect(extras.lock, '条目已锁定');
+      expect(extras.likes.first.id, 12);
+      expect(extras.recent.length, 1);
+      expect(extras.recent.first.userId, 'sai');
+      expect(extras.recent.first.name, 'sai');
+      expect(extras.recent.first.star, 8);
+      expect(extras.recent.first.status, '2时前');
+    });
+
+    test('解析曲目列表', () {
+      final extras = parseSubjectHtmlExtras('''
+        <ul class="line_list_music">
+          <li class="cat">Disc 1</li>
+          <li><h6><a href="/ep/101">Opening</a></h6></li>
+          <li><h6><a href="/ep/102">Tank!</a></h6></li>
+          <li class="cat">Disc 2</li>
+          <li><h6><a href="/ep/201">The Real Folk Blues</a></h6></li>
+        </ul>
+      ''');
+      expect(extras.discs.length, 2);
+      expect(extras.discs.first.title, 'Disc 1');
+      expect(extras.discs.first.tracks.map((e) => e.title), [
+        'Opening',
+        'Tank!',
+      ]);
+      expect(extras.discs.first.tracks.first.epId, 101);
+      expect(extras.discs.last.tracks.single.title, 'The Real Folk Blues');
+    });
+
+    test('解析单行本', () {
+      final extras = parseSubjectHtmlExtras('''
+        <h2 class="subtitle">单行本</h2>
+        <ul class="browserCoverMedium">
+          <li>
+            <a href="/subject/200" title="第1卷">
+              <span style="background-image:url('//lain.bgm.tv/pic/cover/s/1.jpg')"></span>
+              <a class="title">第1卷</a>
+            </a>
+          </li>
+        </ul>
+      ''');
+      expect(extras.comics.length, 1);
+      expect(extras.comics.first.id, 200);
+      expect(extras.comics.first.name, '第1卷');
+    });
+
+    test('解析好友评分', () {
+      final extras = parseSubjectHtmlExtras('''
+        <div class="frdScore">
+          <span class="num">7.8</span>
+          <a class="l">12 人评分</a>
+        </div>
+      ''');
+      expect(extras.friendScore, 7.8);
+      expect(extras.friendTotal, 12);
+    });
+
+    test('无 tipIntro 时 lock 为空', () {
+      expect(parseSubjectHtmlExtras('<div></div>').lock, '');
+      expect(parseSubjectHtmlExtras('<div></div>').likes, isEmpty);
+      expect(parseSubjectHtmlExtras('<div></div>').recent, isEmpty);
+    });
+  });
+
+  group('parseSubjectRatingHtml', () {
+    test('解析人数和好友评分行', () {
+      final page = parseSubjectRatingHtml('''
+        <div id="columnInSubjectA">
+          <ul class="secTab">
+            <li>想看 11</li>
+            <li>看过 22</li>
+            <li>在看 33</li>
+            <li>搁置 4</li>
+            <li>抛弃 5</li>
+          </ul>
+          <ul id="memberUserList">
+            <li>
+              <a href="/user/abc" class="avatar">好友甲</a>
+              <span class="avatarNeue" style="background-image:url('//lain.bgm.tv/pic/user/l/a.jpg')"></span>
+              <span class="starlight stars9"></span>
+              <p class="info">2026-8-1</p>
+              <div class="userContainer">好友甲
+2026-8-1
+好看</div>
+            </li>
+          </ul>
+        </div>
+        <div id="columnInSubjectB"></div>
+      ''');
+      expect(page.wishes, 11);
+      expect(page.collections, 22);
+      expect(page.doings, 33);
+      expect(page.onHold, 4);
+      expect(page.dropped, 5);
+      expect(page.items, hasLength(1));
+      expect(page.items.first.userId, 'abc');
+      expect(page.items.first.userName, '好友甲');
+      expect(page.items.first.star, 9);
+      expect(page.items.first.content, contains('好看'));
+    });
+  });
+
+  group('RatingStats.deviation', () {
+    test('全员同分时争议度为占位符', () {
+      const stats = RatingStats(score: 8, total: 10, counts: {8: 10});
+      expect(stats.deviation, 0);
+      expect(stats.dispute, '-');
+    });
+
+    test('极端两极分化时争议度为厨黑大战', () {
+      const stats = RatingStats(score: 5.5, total: 20, counts: {1: 10, 10: 10});
+      expect(stats.deviation, greaterThan(1.75));
+      expect(stats.dispute, '厨黑大战');
     });
   });
 }

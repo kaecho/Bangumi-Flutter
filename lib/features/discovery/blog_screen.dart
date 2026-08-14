@@ -4,36 +4,99 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import 'widgets/discovery_html.dart';
 import 'widgets/paged.dart';
 
-class BlogList extends PagedNotifier<BlogListRow, int> {
+class BlogList extends PagedNotifier<BlogListRow, String> {
   @override
-  Future<List<BlogListRow>> fetchPage(int arg, int page) async {
+  Future<List<BlogListRow>> fetchPage(String arg, int page) async {
     final client = ref.read(apiClientProvider);
-    final body = await client.get(htmlBlogList(page: page), host: kHost);
+    final body = await client.get(
+      htmlBlogList(type: arg, page: page),
+      host: kHost,
+    );
     return parseBlogList(body as String);
   }
 }
 
 final blogListProvider =
-    AsyncNotifierProvider.family<BlogList, PagedData<BlogListRow>, int>(BlogList.new);
+    AsyncNotifierProvider.family<BlogList, PagedData<BlogListRow>, String>(
+      BlogList.new,
+    );
 
-/// 全站日志
-class BlogScreen extends ConsumerWidget {
+/// 全站日志 (原项目 TabsV2: 全部/动画/书籍/游戏/音乐/三次元)
+class BlogScreen extends ConsumerStatefulWidget {
   const BlogScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BlogScreen> createState() => _BlogScreenState();
+}
+
+class _BlogScreenState extends ConsumerState<BlogScreen> {
+  static const _types = <(String key, String label)>[
+    ('all', '全部'),
+    ('anime', '动画'),
+    ('book', '书籍'),
+    ('game', '游戏'),
+    ('music', '音乐'),
+    ('real', '三次元'),
+  ];
+  int _type = 0;
+
+  String get _typeKey => _types[_type].$1;
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: BgmAppBar(title: '日志', showBackButton: true),
-      body: PagedListView<BlogListRow, int>(
-        provider: blogListProvider,
-        arg: 0,
-        emptyText: '暂无日志',
-        itemBuilder: (context, row, index) => _BlogRow(row: row),
+      appBar: BgmAppBar(
+        title: '日志',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '我的日志',
+            icon: const Icon(Icons.person_outline),
+            onPressed: () => context.push('/my-blogs'),
+          ),
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () =>
+                openExternalUrl('$kHost${htmlBlogList(type: _typeKey)}'),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                for (var i = 0; i < _types.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(_types[i].$2),
+                      selected: _type == i,
+                      onSelected: (_) => setState(() => _type = i),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: PagedListView<BlogListRow, String>(
+              provider: blogListProvider,
+              arg: _typeKey,
+              emptyText: '暂无日志',
+              itemBuilder: (context, row, index) => _BlogRow(row: row),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -48,9 +111,8 @@ class _BlogRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return InkWell(
-      onTap: () => context.push(
-        '/web/${Uri.encodeComponent('https://bgm.tv/blog/${row.id}')}',
-      ),
+      onTap: () => context.push('/rakuen/blog/${row.id}'),
+
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
@@ -62,7 +124,9 @@ class _BlogRow extends StatelessWidget {
                 width: 44,
                 height: 44,
                 child: row.cover.isEmpty
-                    ? Container(color: theme.colorScheme.surfaceContainerHighest)
+                    ? Container(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                      )
                     : Cover(url: row.cover, width: 44, height: 44, radius: 4),
               ),
             ),

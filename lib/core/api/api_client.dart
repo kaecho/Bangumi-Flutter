@@ -10,6 +10,9 @@ import '../debug/debug_log.dart';
 import '../storage/settings_store.dart';
 import 'api_endpoints.dart';
 
+/// 主站通信错误 (原项目 userStore.websiteError)
+final websiteErrorProvider = StateProvider<bool>((ref) => false);
+
 /// 全局 HTTP 客户端
 ///
 /// - 主域名 api.bgmapi.com, 失败自动降级到 api.bgm.tv (与原项目一致)
@@ -18,29 +21,54 @@ import 'api_endpoints.dart';
 ///   供 PM/电波提醒/点赞/formhash 等站点认证功能使用)
 /// - 请求超时 15s
 class ApiClient {
-  ApiClient({this._tokenProvider, this._cookieProvider, this.onLog});
+  ApiClient({
+    this._tokenProvider,
+    this._cookieProvider,
+    this.onLog,
+    this.onAuthExpired,
+    this.onWebsiteError,
+  });
 
-  late final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: kApiHost,
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 20),
-      sendTimeout: const Duration(seconds: 15),
-      headers: {'User-Agent': 'Bangumi/Flutter (https://github.com/kaecho/Bangumi-Flutter)'},
-    ),
-  )..interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        final token = _tokenProvider?.call();
-        if (token != null && token.isNotEmpty) {
-          options.headers['Authorization'] = 'Bearer $token';
-        }
-        final cookie = _cookieProvider?.call();
-        if (cookie != null && cookie.isNotEmpty) {
-          options.headers['Cookie'] = cookie;
-        }
-        handler.next(options);
-      },
-    ));
+  late final Dio _dio =
+      Dio(
+          BaseOptions(
+            baseUrl: kApiHost,
+            connectTimeout: const Duration(seconds: 15),
+            receiveTimeout: const Duration(seconds: 20),
+            sendTimeout: const Duration(seconds: 15),
+            headers: {
+              'User-Agent':
+                  'Bangumi/Flutter (https://github.com/kaecho/Bangumi-Flutter)',
+            },
+          ),
+        )
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              final token = _tokenProvider?.call();
+              if (token != null && token.isNotEmpty) {
+                options.headers['Authorization'] = 'Bearer $token';
+              }
+              final cookie = _cookieProvider?.call();
+              if (cookie != null && cookie.isNotEmpty) {
+                options.headers['Cookie'] = cookie;
+              }
+              handler.next(options);
+            },
+            onError: (error, handler) {
+              if (isWebsiteError(
+                error.requestOptions.uri.host,
+                error.response?.statusCode,
+              )) {
+                onWebsiteError?.call();
+              }
+              if (isAuthExpiredStatus(error.response?.statusCode)) {
+                onAuthExpired?.call();
+              }
+              handler.next(error);
+            },
+          ),
+        );
 
   final String? Function()? _tokenProvider;
 
@@ -49,6 +77,12 @@ class ApiClient {
 
   /// 调试日志回调 (由调用方决定是否落盘; 不记录 Authorization/Cookie 等敏感信息)
   final void Function(String line)? onLog;
+
+  /// 授权过期 (原项目 userStore.outdate)
+  final void Function()? onAuthExpired;
+
+  /// 主站 502 (原项目 userStore.websiteError)
+  final void Function()? onWebsiteError;
 
   void _log(String line) => onLog?.call(line);
 
@@ -100,9 +134,18 @@ class ApiClient {
       return resp.data;
     } on DioException catch (e) {
       // 主域名失败时降级到备用域名 (仅 bgm 官方 API)
-      if (host == null && e.response?.statusCode != null && e.response!.statusCode! >= 500) {
-        final backup = uri.replace(scheme: 'https', host: Uri.parse(kApiHostBackup).host);
-        final resp = await _track('GET', backup, () => _dio.getUri<dynamic>(backup));
+      if (host == null &&
+          e.response?.statusCode != null &&
+          e.response!.statusCode! >= 500) {
+        final backup = uri.replace(
+          scheme: 'https',
+          host: Uri.parse(kApiHostBackup).host,
+        );
+        final resp = await _track(
+          'GET',
+          backup,
+          () => _dio.getUri<dynamic>(backup),
+        );
         return resp.data;
       }
       rethrow;
@@ -118,7 +161,11 @@ class ApiClient {
     bool auth = false,
   }) async {
     final uri = buildApiUri(path, host: host, query: query);
-    final resp = await _track('POST', uri, () => _dio.postUri<dynamic>(uri, data: data));
+    final resp = await _track(
+      'POST',
+      uri,
+      () => _dio.postUri<dynamic>(uri, data: data),
+    );
     return resp.data;
   }
 
@@ -130,7 +177,11 @@ class ApiClient {
     String? host,
   }) async {
     final uri = buildApiUri(path, host: host, query: query);
-    final resp = await _track('PUT', uri, () => _dio.putUri<dynamic>(uri, data: data));
+    final resp = await _track(
+      'PUT',
+      uri,
+      () => _dio.putUri<dynamic>(uri, data: data),
+    );
     return resp.data;
   }
 
@@ -142,7 +193,11 @@ class ApiClient {
     String? host,
   }) async {
     final uri = buildApiUri(path, host: host, query: query);
-    final resp = await _track('DELETE', uri, () => _dio.deleteUri<dynamic>(uri, data: data));
+    final resp = await _track(
+      'DELETE',
+      uri,
+      () => _dio.deleteUri<dynamic>(uri, data: data),
+    );
     return resp.data;
   }
 
@@ -150,18 +205,48 @@ class ApiClient {
   /// 供超展开等页面解析使用 (原项目 fetchHTML 等价)
   Future<String> fetchHtml(String url) async {
     final uri = Uri.parse(url);
-    final resp = await _track('GET', uri, () => _dio.getUri<String>(
-          uri,
-          options: Options(
-            responseType: ResponseType.plain,
-            headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
-              'Referer': kHost,
-              'Accept-Language': 'zh-CN,zh;q=0.9',
-            },
-          ),
-        ));
+    final resp = await _track(
+      'GET',
+      uri,
+      () => _dio.getUri<String>(
+        uri,
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+            'Referer': kHost,
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+          },
+        ),
+      ),
+    );
+    return resp.data ?? '';
+  }
+
+  /// 抓取原始 HTML, 额外追加 cookie (如搜索所需的 chii_searchDateLine)
+  /// 站点 cookie (拦截器已附) 与 [extraCookie] 用 '; ' 连接
+  Future<String> fetchHtmlWithCookie(String url, String extraCookie) async {
+    final uri = Uri.parse(url);
+    final base = _cookieProvider?.call() ?? '';
+    final cookie = base.isEmpty ? extraCookie : '$base; $extraCookie';
+    final resp = await _track(
+      'GET',
+      uri,
+      () => _dio.getUri<String>(
+        uri,
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+            'Referer': kHost,
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            'Cookie': cookie,
+          },
+        ),
+      ),
+    );
     return resp.data ?? '';
   }
 }
@@ -172,7 +257,9 @@ class ApiClient {
 /// - [query] 合并进最终 URL
 Uri buildApiUri(String path, {String? host, Map<String, dynamic>? query}) {
   final base = host ?? kApiHost;
-  final uri = path.startsWith('http') ? Uri.parse(path) : Uri.parse('$base$path');
+  final uri = path.startsWith('http')
+      ? Uri.parse(path)
+      : Uri.parse('$base$path');
   if (query == null || query.isEmpty) return uri;
   return uri.replace(queryParameters: query);
 }
@@ -181,8 +268,10 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     tokenProvider: () => ref.read(authTokenProvider),
     cookieProvider: () => ref.read(siteCookiesProvider).cookieHeader,
+    onAuthExpired: () =>
+        ref.read(authControllerProvider.notifier).markOutdate(),
+    onWebsiteError: () => ref.read(websiteErrorProvider.notifier).state = true,
     onLog: (line) {
-      // 调试模式 (设置 → 调试) 开启时记录到文件 + 控制台
       if (SettingsStore.instance.debugLog) {
         unawaited(DebugLog.instance.write(line));
         debugPrint(line);
@@ -197,8 +286,7 @@ String apiErrorMessage(Object error) {
     return switch (error.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
-      DioExceptionType.receiveTimeout =>
-        '网络超时, 请稍后重试',
+      DioExceptionType.receiveTimeout => '网络超时, 请稍后重试',
       DioExceptionType.connectionError => '网络连接失败, 请检查网络',
       DioExceptionType.badResponse => '请求失败 (${error.response?.statusCode})',
       _ => '网络错误, 请稍后重试',
@@ -224,7 +312,11 @@ String buildCookieHeaderFromJson(List<dynamic> cookies) {
 /// 站点以 chii_cookietime=2592000 表示记住登录, 否则会话关闭后失效
 String normalizeCookieTime(String cookie) {
   if (cookie.isEmpty) return '';
-  final parts = cookie.split(';').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+  final parts = cookie
+      .split(';')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toList();
   final idx = parts.indexWhere((e) => e.startsWith('chii_cookietime='));
   if (idx >= 0) {
     parts[idx] = 'chii_cookietime=2592000';
@@ -236,3 +328,10 @@ String normalizeCookieTime(String cookie) {
 bool htmlRequiresLogin(String html) {
   return html.contains('需要您') && html.contains('/login');
 }
+
+/// 原项目 userStore.websiteError: 主站 502
+bool isWebsiteError(String host, int? status) =>
+    host.contains('bgm.tv') && status == 502;
+
+/// 原项目 userStore.outdate: 授权 401
+bool isAuthExpiredStatus(int? status) => status == 401;

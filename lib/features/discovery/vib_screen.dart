@@ -17,14 +17,15 @@ class VibMonth {
   const VibMonth({this.title = '', this.desc = '', this.blocks = const []});
 
   factory VibMonth.fromJson(Map<String, dynamic> json) => VibMonth(
-        title: json['title'] as String? ?? '',
-        desc: json['desc'] as String? ?? '',
-        blocks: (json['data'] as List?)
-                ?.whereType<Map<String, dynamic>>()
-                .map(VibBlock.fromJson)
-                .toList() ??
-            const [],
-      );
+    title: json['title'] as String? ?? '',
+    desc: json['desc'] as String? ?? '',
+    blocks:
+        (json['data'] as List?)
+            ?.whereType<Map<String, dynamic>>()
+            .map(VibBlock.fromJson)
+            .toList() ??
+        const [],
+  );
 }
 
 class VibBlock {
@@ -34,13 +35,14 @@ class VibBlock {
   const VibBlock({this.title = '', this.items = const []});
 
   factory VibBlock.fromJson(Map<String, dynamic> json) => VibBlock(
-        title: json['title'] as String? ?? '',
-        items: (json['data'] as List?)
-                ?.whereType<Map<String, dynamic>>()
-                .map(VibItem.fromJson)
-                .toList() ??
-            const [],
-      );
+    title: json['title'] as String? ?? '',
+    items:
+        (json['data'] as List?)
+            ?.whereType<Map<String, dynamic>>()
+            .map(VibItem.fromJson)
+            .toList() ??
+        const [],
+  );
 }
 
 class VibItem {
@@ -50,15 +52,21 @@ class VibItem {
   final String value1;
   final String value2;
 
-  const VibItem({this.id = 0, this.title = '', this.rating = '', this.value1 = '', this.value2 = ''});
+  const VibItem({
+    this.id = 0,
+    this.title = '',
+    this.rating = '',
+    this.value1 = '',
+    this.value2 = '',
+  });
 
   factory VibItem.fromJson(Map<String, dynamic> json) => VibItem(
-        id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
-        title: json['title'] as String? ?? '',
-        rating: json['rating']?.toString() ?? '',
-        value1: json['value1']?.toString() ?? json['value']?.toString() ?? '',
-        value2: json['value2']?.toString() ?? '',
-      );
+    id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+    title: json['title'] as String? ?? '',
+    rating: json['rating']?.toString() ?? '',
+    value1: json['value1']?.toString() ?? json['value']?.toString() ?? '',
+    value2: json['value2']?.toString() ?? '',
+  );
 }
 
 /// 评分月刊
@@ -78,7 +86,19 @@ class VibScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final months = ref.watch(vibProvider);
     return Scaffold(
-      appBar: BgmAppBar(title: '评分月刊', showBackButton: true),
+      appBar: BgmAppBar(
+        title: 'VIB 数据月刊',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '小组讨论',
+
+            icon: const Icon(Icons.forum_outlined),
+            onPressed: () => context.push('/rakuen/group/qpz'),
+          ),
+        ],
+      ),
+
       body: months.when(
         loading: () => const Center(child: Loading()),
         error: (error, _) => Center(
@@ -98,10 +118,7 @@ class VibScreen extends ConsumerWidget {
           onRefresh: () => ref.refresh(vibProvider.future),
           child: ListView(
             padding: const EdgeInsets.only(bottom: 24),
-            children: [
-              for (final month in list)
-                _MonthSection(month: month),
-            ],
+            children: [for (final month in list) _MonthSection(month: month)],
           ),
         ),
       ),
@@ -122,7 +139,9 @@ class _MonthSection extends StatelessWidget {
         '${month.title} 月刊',
         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
-      subtitle: month.desc.isEmpty ? null : Text(month.desc, style: const TextStyle(fontSize: 11)),
+      subtitle: month.desc.isEmpty
+          ? null
+          : Text(month.desc, style: const TextStyle(fontSize: 11)),
       children: [
         for (final block in month.blocks)
           Padding(
@@ -155,16 +174,22 @@ class _MonthSection extends StatelessWidget {
                         if (item.value1.isNotEmpty) ...[
                           const SizedBox(width: 8),
                           Text(
-                            item.value2.isEmpty ? item.value1 : '${item.value1} / ${item.value2}',
+                            item.value2.isEmpty
+                                ? item.value1
+                                : '${item.value1} / ${item.value2}',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
                       ],
                     ),
-                    onTap: item.id > 0 ? () => context.push('/subject/${item.id}') : null,
+                    onTap: item.id > 0
+                        ? () => context.push('/subject/${item.id}')
+                        : null,
                   ),
               ],
             ),

@@ -27,7 +27,8 @@ final List<GoRoute> userRoutes = [
   GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
   GoRoute(
     path: '/user/:type/collections',
-    builder: (_, state) => UserCollectionsScreen(type: state.pathParameters['type'] ?? 'anime'),
+    builder: (_, state) =>
+        UserCollectionsScreen(type: state.pathParameters['type'] ?? 'anime'),
   ),
   // 用户空间
   GoRoute(
@@ -36,24 +37,39 @@ final List<GoRoute> userRoutes = [
   ),
   GoRoute(
     path: '/user/:id/timeline',
-    builder: (_, state) => UserTimelineScreen(userId: state.pathParameters['id'] ?? ''),
+    builder: (_, state) =>
+        UserTimelineScreen(userId: state.pathParameters['id'] ?? ''),
   ),
   GoRoute(
     path: '/user/:id/milestone',
-    builder: (_, state) => MilestoneScreen(userId: state.pathParameters['id'] ?? ''),
+    builder: (_, state) =>
+        MilestoneScreen(userId: state.pathParameters['id'] ?? ''),
   ),
   GoRoute(
     path: '/user/:id/blogs',
-    builder: (_, state) => UserBlogsScreen(userId: state.pathParameters['id'] ?? ''),
+    builder: (_, state) =>
+        UserBlogsScreen(userId: state.pathParameters['id'] ?? ''),
   ),
   GoRoute(
     path: '/user/:id/catalogs',
-    builder: (_, state) => UserCatalogsScreen(userId: state.pathParameters['id'] ?? ''),
+    builder: (_, state) =>
+        UserCatalogsScreen(userId: state.pathParameters['id'] ?? ''),
   ),
   GoRoute(
     path: '/user/:id/friends',
-    builder: (_, state) => FriendsScreen(userId: state.pathParameters['id'] ?? ''),
+    builder: (_, state) => FriendsScreen(
+      userId: state.pathParameters['id'] ?? '',
+      rev: state.uri.queryParameters['rev'] == '1',
+    ),
   ),
+  GoRoute(
+    path: '/user/:id/mono',
+    builder: (_, state) => UserMonoScreen(
+      userId: state.pathParameters['id'] ?? '',
+      title: 'TA的人物',
+    ),
+  ),
+
   // 短信
   GoRoute(path: '/pm', builder: (_, _) => const PmScreen()),
   GoRoute(
@@ -66,18 +82,37 @@ final List<GoRoute> userRoutes = [
   // 设置
   GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
   GoRoute(path: '/settings/backup', builder: (_, _) => const BackupScreen()),
-  GoRoute(path: '/settings/cookies', builder: (_, _) => const CookieSettingScreen()),
+  GoRoute(
+    path: '/settings/cookies',
+    builder: (_, _) => const CookieSettingScreen(),
+  ),
   GoRoute(path: '/settings/smb', builder: (_, _) => const SmbScreen()),
   GoRoute(path: '/settings/user', builder: (_, _) => const UserSettingScreen()),
-  GoRoute(path: '/settings/origin', builder: (_, _) => const OriginSettingScreen()),
-  GoRoute(path: '/settings/status', builder: (_, _) => const ServerStatusScreen()),
+  GoRoute(
+    path: '/settings/origin',
+    builder: (_, _) => const OriginSettingScreen(),
+  ),
+  GoRoute(
+    path: '/settings/status',
+    builder: (_, _) => const ServerStatusScreen(),
+  ),
   GoRoute(path: '/settings/sponsor', builder: (_, _) => const SponsorScreen()),
   GoRoute(path: '/settings/actions', builder: (_, _) => const ActionsScreen()),
   GoRoute(path: '/settings/dev', builder: (_, _) => const DevScreen()),
   GoRoute(path: '/settings/qiafan', builder: (_, _) => const QiafanScreen()),
   // 我的快捷入口
-  GoRoute(path: '/my-friends', builder: (_, _) => const MyFriendsScreen()),
+  GoRoute(
+    path: '/my-friends',
+    builder: (_, state) =>
+        MyFriendsScreen(rev: state.uri.queryParameters['rev'] == '1'),
+  ),
+
   GoRoute(path: '/my-blogs', builder: (_, _) => const MyBlogsScreen()),
   GoRoute(path: '/my-catalogs', builder: (_, _) => const MyCatalogsScreen()),
   GoRoute(path: '/my-mono', builder: (_, _) => const MyMonoScreen()),
+  GoRoute(path: '/my-milestone', builder: (_, _) => const MyMilestoneScreen()),
+  GoRoute(
+    path: '/my-timeline',
+    builder: (_, _) => const MyUserTimelineScreen(),
+  ),
 ];

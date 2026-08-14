@@ -16,7 +16,8 @@ class TinygrailCharaAssetsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(tinygrailUserProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('角色资产')),
+      appBar: AppBar(title: const Text('我的持仓')),
+
       body: userAsync.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -28,7 +29,10 @@ class TinygrailCharaAssetsScreen extends ConsumerWidget {
                 children: [
                   const Text('请先授权登录小圣杯'),
                   const SizedBox(height: 8),
-                  FilledButton(onPressed: () => context.push('/tinygrail/login'), child: const Text('去授权')),
+                  FilledButton(
+                    onPressed: () => context.push('/tinygrail/login'),
+                    child: const Text('去授权'),
+                  ),
                 ],
               ),
             );
@@ -65,7 +69,11 @@ class _CharaAssetsBodyState extends ConsumerState<_CharaAssetsBody>
       children: [
         TabBar(
           controller: _tab,
-          tabs: const [Tab(text: '持仓'), Tab(text: 'ICO'), Tab(text: '圣殿')],
+          tabs: const [
+            Tab(text: '持仓'),
+            Tab(text: 'ICO'),
+            Tab(text: '圣殿'),
+          ],
         ),
         Expanded(
           child: TabBarView(
@@ -82,44 +90,76 @@ class _CharaAssetsBodyState extends ConsumerState<_CharaAssetsBody>
   }
 }
 
-class _AssetTab extends ConsumerWidget {
+class _AssetTab extends ConsumerStatefulWidget {
   final FutureProvider<List<TinygrailChara>> provider;
 
   const _AssetTab({required this.provider});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(provider);
+  ConsumerState<_AssetTab> createState() => _AssetTabState();
+}
+
+class _AssetTabState extends ConsumerState<_AssetTab> {
+  String _sort = 'default';
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(widget.provider);
     return async.when(
       loading: () => const Loading(height: double.infinity),
       error: (_, _) => const Center(child: Text('加载失败')),
-      data: (list) => RefreshIndicator(
-        onRefresh: () async => ref.invalidate(provider),
-        child: list.isEmpty
-            ? const Empty(text: '暂无数据')
-            : ListView.separated(
-                itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final c = list[index];
-                  return CharaTile(
-                    chara: c,
-                    onTap: () => context.push('/tinygrail/chara/${c.id}'),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('持 ${c.state} 股', style: const TextStyle(fontWeight: FontWeight.w600)),
-                        Text(
-                          '献祭 ${tgAmount(c.sacrifices)}',
-                          style: context.ds.meta,
-                        ),
-                      ],
-                    ),
-                  );
-                },
+      data: (raw) {
+        final list = sortTinygrailCharas(raw, _sort);
+        return Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+                child: TinygrailSortChip(
+                  value: _sort,
+                  onChanged: (v) => setState(() => _sort = v),
+                ),
               ),
-      ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => ref.invalidate(widget.provider),
+                child: list.isEmpty
+                    ? const Empty(text: '暂无数据')
+                    : ListView.separated(
+                        itemCount: list.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final c = list[index];
+                          return CharaTile(
+                            chara: c,
+                            onTap: () =>
+                                context.push('/tinygrail/chara/${c.id}'),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '持 ${c.state} 股',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  '献祭 ${tgAmount(c.sacrifices)}',
+                                  style: context.ds.meta,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -146,12 +186,19 @@ class _TempleTab extends ConsumerWidget {
                   final item = list[index];
                   return ListTile(
                     onTap: () => context.push('/tinygrail/chara/${item.id}'),
-                    title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    title: Text(
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     subtitle: Text(
                       'Lv.${item.level} · 献祭 ${tgAmount(item.sacrifices)}',
                       style: context.ds.meta,
                     ),
-                    trailing: Text('精炼 ${item.refine}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    trailing: Text(
+                      '精炼 ${item.refine}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   );
                 },
               ),
@@ -160,16 +207,19 @@ class _TempleTab extends ConsumerWidget {
   }
 }
 
-final charaAssetsCharaProvider = FutureProvider.family<List<TinygrailChara>, String>((ref, hash) async {
-  final data = await ref.read(tinygrailApiProvider).fetchMyCharaAssets();
-  return data.chara;
-});
+final charaAssetsCharaProvider =
+    FutureProvider.family<List<TinygrailChara>, String>((ref, hash) async {
+      final data = await ref.read(tinygrailApiProvider).fetchMyCharaAssets();
+      return data.chara;
+    });
 
-final charaAssetsIcoProvider = FutureProvider.family<List<TinygrailChara>, String>((ref, hash) async {
-  final data = await ref.read(tinygrailApiProvider).fetchMyCharaAssets();
-  return data.ico;
-});
+final charaAssetsIcoProvider =
+    FutureProvider.family<List<TinygrailChara>, String>((ref, hash) async {
+      final data = await ref.read(tinygrailApiProvider).fetchMyCharaAssets();
+      return data.ico;
+    });
 
-final charaAssetsTempleProvider = FutureProvider.family<List<TinygrailTemple>, String>((ref, hash) async {
-  return ref.read(tinygrailApiProvider).fetchMyTemple(hash);
-});
+final charaAssetsTempleProvider =
+    FutureProvider.family<List<TinygrailTemple>, String>((ref, hash) async {
+      return ref.read(tinygrailApiProvider).fetchMyTemple(hash);
+    });

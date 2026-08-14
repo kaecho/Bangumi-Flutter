@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../core/utils/display.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../shared/widgets/app_bar.dart';
@@ -108,7 +108,10 @@ class DiscoveryUsersScreen extends ConsumerWidget {
             ListTile(
               title: Text(
                 project.title,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               subtitle: Text(
                 '${project.name}@${project.userId}',
@@ -124,9 +127,12 @@ class DiscoveryUsersScreen extends ConsumerWidget {
                 }
                 var url = project.url;
                 if (url.contains('[USER_ID]')) {
-                  url = url.replaceAll('[USER_ID]', myId.isEmpty ? '700939' : myId);
+                  url = url.replaceAll(
+                    '[USER_ID]',
+                    myId.isEmpty ? '700939' : myId,
+                  );
                 }
-                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                openExternalUrl(url);
               },
             ),
           const Padding(

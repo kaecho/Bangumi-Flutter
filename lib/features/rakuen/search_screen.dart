@@ -30,7 +30,8 @@ class _RakuenSearchScreenState extends ConsumerState<RakuenSearchScreen> {
     super.initState();
     _history = _loadHistory();
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
         ref.read(rakuenSearchProvider(_keyword).notifier).loadMore();
       }
     });
@@ -44,13 +45,20 @@ class _RakuenSearchScreenState extends ConsumerState<RakuenSearchScreen> {
   }
 
   List<String> _loadHistory() {
-    final raw = Cache.instance.get(_boxName, _historyKey, maxAge: const Duration(days: 3650));
+    final raw = Cache.instance.get(
+      _boxName,
+      _historyKey,
+      maxAge: const Duration(days: 3650),
+    );
     if (raw is List) return raw.whereType<String>().toList();
     return const [];
   }
 
   Future<void> _saveHistory(String keyword) async {
-    final next = [keyword, ..._history.where((e) => e != keyword)].take(_maxHistory).toList();
+    final next = [
+      keyword,
+      ..._history.where((e) => e != keyword),
+    ].take(_maxHistory).toList();
     _history = next;
     await Cache.instance.put(_boxName, _historyKey, next);
   }
@@ -101,7 +109,10 @@ class _RakuenSearchScreenState extends ConsumerState<RakuenSearchScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-          child: Text('搜索历史', style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
+          child: Text(
+            '搜索历史',
+            style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
+          ),
         ),
         for (final keyword in _history)
           ListTile(
@@ -133,7 +144,8 @@ class _RakuenSearchScreenState extends ConsumerState<RakuenSearchScreen> {
               children: [
                 const Text('搜索失败, 请稍后重试'),
                 TextButton(
-                  onPressed: () => ref.invalidate(rakuenSearchProvider(_keyword)),
+                  onPressed: () =>
+                      ref.invalidate(rakuenSearchProvider(_keyword)),
                   child: const Text('重试'),
                 ),
               ],
@@ -151,7 +163,9 @@ class _RakuenSearchScreenState extends ConsumerState<RakuenSearchScreen> {
                 if (index >= data.items.length) {
                   return Center(
                     child: TextButton(
-                      onPressed: () => ref.read(rakuenSearchProvider(_keyword).notifier).loadMore(),
+                      onPressed: () => ref
+                          .read(rakuenSearchProvider(_keyword).notifier)
+                          .loadMore(),
                       child: const Text('加载更多'),
                     ),
                   );

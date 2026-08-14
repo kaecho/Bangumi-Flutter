@@ -35,10 +35,13 @@ abstract final class AppPalette {
   // ---- 中性色 ----
   static const bgLight = Color(0xFFF7F7F7);
   static const bgDark = Color(0xFF181818);
+  static const bgDeepDark = Color(0xFF000000);
   static const cardLight = Color(0xFFFFFFFF);
   static const cardDark = Color(0xFF232323);
+  static const cardDeepDark = Color(0xFF111111);
   static const borderLight = Color(0xFFE5E5E5);
   static const borderDark = Color(0xFF2E2E2E);
+  static const borderDeepDark = Color(0xFF1A1A1A);
 
   /// 头像占位文字底
   static const placeholderIcon = Color(0x33000000);

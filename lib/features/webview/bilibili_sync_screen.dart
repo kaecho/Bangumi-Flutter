@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../user/sync_notes.dart';
 import 'sync_webview_scaffold.dart';
 
 /// bilibili 同步 (移植自原项目 screens/web-view/bilibili-sync)
@@ -12,10 +13,11 @@ class BilibiliSyncScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SyncWebViewScaffold(
+    return SyncWebViewScaffold(
       title: 'bilibili 同步',
       url: 'https://account.bilibili.com/space?from=headline',
       domain: 'bilibili.com',
+      notePath: bilibiliSyncNotePath(),
     );
   }
 }

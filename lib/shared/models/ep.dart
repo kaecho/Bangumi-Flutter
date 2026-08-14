@@ -1,3 +1,4 @@
+import '../../core/utils/display.dart';
 import 'user.dart';
 
 /// 章节 (单集)
@@ -29,31 +30,31 @@ class Ep {
   });
 
   factory Ep.fromJson(Map<String, dynamic> json) => Ep(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        url: json['url'] as String? ?? '',
-        type: (json['type'] as num?)?.toInt() ?? 0,
-        sort: (json['sort'] as num?)?.toInt() ?? 0,
-        name: json['name'] as String? ?? '',
-        nameCn: json['name_cn'] as String? ?? '',
-        duration: json['duration'] as String? ?? '',
-        airdate: json['airdate'] as String? ?? '',
-        comment: (json['comment'] as num?)?.toInt() ?? 0,
-        desc: json['desc'] as String? ?? '',
-        disc: (json['disc'] as num?)?.toInt() ?? 0,
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    url: json['url'] as String? ?? '',
+    type: (json['type'] as num?)?.toInt() ?? 0,
+    sort: (json['sort'] as num?)?.toInt() ?? 0,
+    name: json['name'] as String? ?? '',
+    nameCn: json['name_cn'] as String? ?? '',
+    duration: json['duration'] as String? ?? '',
+    airdate: json['airdate'] as String? ?? '',
+    comment: (json['comment'] as num?)?.toInt() ?? 0,
+    desc: json['desc'] as String? ?? '',
+    disc: (json['disc'] as num?)?.toInt() ?? 0,
+  );
 
-  String get displayName => nameCn.isNotEmpty ? nameCn : name;
+  String get displayName => cnjp(name, nameCn);
 
   /// 章节类型文案
   String get typeText => switch (type) {
-        0 => '本篇',
-        1 => '特别篇',
-        2 => 'OP',
-        3 => 'ED',
-        4 => '预告/宣传',
-        6 => 'SP',
-        _ => '',
-      };
+    0 => '本篇',
+    1 => '特别篇',
+    2 => 'OP',
+    3 => 'ED',
+    4 => '预告/宣传',
+    6 => 'SP',
+    _ => '',
+  };
 }
 
 /// 条目章节列表 API 返回
@@ -75,7 +76,9 @@ class EpList {
   });
 
   factory EpList.fromJson(List<dynamic> json) {
-    final all = json.map((e) => Ep.fromJson(e as Map<String, dynamic>)).toList();
+    final all = json
+        .map((e) => Ep.fromJson(e as Map<String, dynamic>))
+        .toList();
     return EpList(
       eps: all.where((e) => e.type == 0).toList(),
       type1: all.where((e) => e.type == 1).toList(),
@@ -86,7 +89,13 @@ class EpList {
     );
   }
 
-  int get total => eps.length + type1.length + type2.length + type3.length + type4.length + type6.length;
+  int get total =>
+      eps.length +
+      type1.length +
+      type2.length +
+      type3.length +
+      type4.length +
+      type6.length;
 }
 
 /// 吐槽箱 / 回复
@@ -108,16 +117,19 @@ class Comment {
   });
 
   factory Comment.fromJson(Map<String, dynamic> json) => Comment(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        user: json['user'] == null ? null : User.fromJson(json['user'] as Map<String, dynamic>),
-        userId: (json['user_id'] as num?)?.toInt() ?? 0,
-        createdAt: json['created_at'] as String? ?? '',
-        content: json['content'] as String? ?? '',
-        subReplies: (json['sub_replies'] as List?)
-                ?.map((e) => Comment.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    user: json['user'] == null
+        ? null
+        : User.fromJson(json['user'] as Map<String, dynamic>),
+    userId: (json['user_id'] as num?)?.toInt() ?? 0,
+    createdAt: json['created_at'] as String? ?? '',
+    content: json['content'] as String? ?? '',
+    subReplies:
+        (json['sub_replies'] as List?)
+            ?.map((e) => Comment.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }
 
 /// 吐槽箱列表: { total, comments: [...] }
@@ -128,10 +140,11 @@ class CommentList {
   const CommentList({this.total = 0, this.comments = const []});
 
   factory CommentList.fromJson(Map<String, dynamic> json) => CommentList(
-        total: (json['total'] as num?)?.toInt() ?? 0,
-        comments: (json['comments'] as List?)
-                ?.map((e) => Comment.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    comments:
+        (json['comments'] as List?)
+            ?.map((e) => Comment.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }

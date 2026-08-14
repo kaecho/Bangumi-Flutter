@@ -5,9 +5,15 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/storage/settings_store.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/tab_title.dart';
 import '../../design_system/design_system.dart';
+
+import 'auction_screen.dart';
+import 'bid_screen.dart';
+import 'tinygrail_api.dart';
 
 /// 小圣杯角色资产
 class TinygrailChara {
@@ -34,16 +40,16 @@ class TinygrailChara {
   });
 
   factory TinygrailChara.fromJson(Map<String, dynamic> json) => TinygrailChara(
-        monoId: (json['monoId'] as num?)?.toInt() ?? 0,
-        name: json['name'] as String? ?? '',
-        icon: json['icon'] as String? ?? '',
-        level: (json['level'] as num?)?.toInt() ?? 0,
-        current: (json['current'] as num?)?.toInt() ?? 0,
-        total: (json['total'] as num?)?.toInt() ?? 0,
-        state: (json['state'] as num?)?.toInt() ?? 0,
-        users: (json['users'] as num?)?.toInt() ?? 0,
-        lastOrder: (json['lastOrder'] as num?)?.toInt() ?? 0,
-      );
+    monoId: (json['monoId'] as num?)?.toInt() ?? 0,
+    name: json['name'] as String? ?? '',
+    icon: json['icon'] as String? ?? '',
+    level: (json['level'] as num?)?.toInt() ?? 0,
+    current: (json['current'] as num?)?.toInt() ?? 0,
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    state: (json['state'] as num?)?.toInt() ?? 0,
+    users: (json['users'] as num?)?.toInt() ?? 0,
+    lastOrder: (json['lastOrder'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 小圣杯用户资产
@@ -65,19 +71,18 @@ class TinygrailUser {
   });
 
   factory TinygrailUser.fromJson(Map<String, dynamic> json) => TinygrailUser(
-        hash: json['hash'] as String? ?? '',
-        nickname: json['nickname'] as String? ?? '',
-        balance: (json['balance'] as num?)?.toInt() ?? 0,
-        principal: (json['principal'] as num?)?.toInt() ?? 0,
-        amount: (json['amount'] as num?)?.toInt() ?? 0,
-        total: (json['total'] as num?)?.toInt() ?? 0,
-      );
+    hash: json['hash'] as String? ?? '',
+    nickname: json['nickname'] as String? ?? '',
+    balance: (json['balance'] as num?)?.toInt() ?? 0,
+    principal: (json['principal'] as num?)?.toInt() ?? 0,
+    amount: (json['amount'] as num?)?.toInt() ?? 0,
+    total: (json['total'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 小圣杯登录状态 + 资产
-final tinygrailStateProvider = AsyncNotifierProvider<TinygrailState, TinygrailUser?>(
-  TinygrailState.new,
-);
+final tinygrailStateProvider =
+    AsyncNotifierProvider<TinygrailState, TinygrailUser?>(TinygrailState.new);
 
 class TinygrailState extends AsyncNotifier<TinygrailUser?> {
   @override
@@ -88,10 +93,17 @@ class TinygrailState extends AsyncNotifier<TinygrailUser?> {
   Future<TinygrailUser?> _fetch() async {
     final client = ref.read(apiClientProvider);
     try {
-      final hashData = await client.get(apiTinygrailHash(), host: kTinygrailHost, auth: true);
+      final hashData = await client.get(
+        apiTinygrailHash(),
+        host: kTinygrailHost,
+        auth: true,
+      );
       final hash = (hashData as Map<String, dynamic>)['hash'] as String?;
       if (hash == null || hash.isEmpty) return null;
-      final data = await client.get(apiTinygrailAssets(hash), host: kTinygrailHost);
+      final data = await client.get(
+        apiTinygrailAssets(hash),
+        host: kTinygrailHost,
+      );
       return TinygrailUser.fromJson(data as Map<String, dynamic>);
     } catch (_) {
       return null;
@@ -110,7 +122,8 @@ class TinygrailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('小圣杯'),
+        title: const TabLogoTitle('小圣杯'),
+
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -160,16 +173,34 @@ class TinygrailScreen extends ConsumerWidget {
                                 const SizedBox(width: 10),
                                 Text(
                                   user.nickname,
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 14),
                             Row(
                               children: [
-                                _StatItem(label: '可用资金', value: '${user.balance}'),
-                                _StatItem(label: '持股总值', value: '${user.amount}'),
-                                _StatItem(label: '资产总额', value: '${user.total}'),
+                                _StatItem(
+                                  label: '可用资金',
+                                  value: SettingsStore.instance.xsbShort
+                                      ? tgMoney(user.balance)
+                                      : '${user.balance}',
+                                ),
+                                _StatItem(
+                                  label: '持股总值',
+                                  value: SettingsStore.instance.xsbShort
+                                      ? tgMoney(user.amount)
+                                      : '${user.amount}',
+                                ),
+                                _StatItem(
+                                  label: '资产总额',
+                                  value: SettingsStore.instance.xsbShort
+                                      ? tgMoney(user.total)
+                                      : '${user.total}',
+                                ),
                               ],
                             ),
                           ],
@@ -177,13 +208,14 @@ class TinygrailScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _MenuTile(icon: Icons.emoji_events_outlined, title: '角色交易', route: '/tinygrail/trade'),
-                    _MenuTile(icon: Icons.trending_up, title: '排行榜', route: '/tinygrail/rank'),
-                    _MenuTile(icon: Icons.account_balance_outlined, title: '英灵殿', route: '/tinygrail/valhalla'),
-                    _MenuTile(icon: Icons.military_tech_outlined, title: '圣殿', route: '/tinygrail/temple'),
-                    _MenuTile(icon: Icons.gavel_outlined, title: '拍卖', route: '/tinygrail/auction'),
-                    _MenuTile(icon: Icons.history, title: '我的持仓', route: '/tinygrail/assets'),
-                    _MenuTile(icon: Icons.receipt_long_outlined, title: '交易记录', route: '/tinygrail/logs'),
+                    _MenuGrid(
+                      bids: ref.watch(myBidsProvider).valueOrNull?.length ?? 0,
+                      asks: ref.watch(myAsksProvider).valueOrNull?.length ?? 0,
+                      auction:
+                          ref.watch(myAuctionProvider).valueOrNull?.length ?? 0,
+                    ),
+                    const SizedBox(height: 12),
+                    const _TinygrailFooter(),
                   ],
                 );
               },
@@ -203,7 +235,10 @@ class _StatItem extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 2),
           Text(label, style: context.ds.meta),
         ],
@@ -212,22 +247,160 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _MenuTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String route;
+/// 小圣杯菜单宫格 (移植自原项目 screens/tinygrail/index MENU_ITEMS)
+class _MenuGrid extends StatelessWidget {
+  final int bids;
+  final int asks;
+  final int auction;
 
-  const _MenuTile({required this.icon, required this.title, required this.route});
+  const _MenuGrid({
+    required this.bids,
+    required this.asks,
+    required this.auction,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-        title: Text(title, style: const TextStyle(fontSize: 14)),
-        trailing: const Icon(Icons.chevron_right, size: 18),
-        onTap: () => context.push(route),
+    final items = <_Menu>[
+      _Menu(Icons.whatshot_outlined, '热门榜单', '/tinygrail/overview'),
+      _Menu(Icons.paid_outlined, '番市首富', '/tinygrail/rich'),
+      _Menu(Icons.attach_money_outlined, 'ICO 榜单', '/tinygrail/ico'),
+      _Menu(Icons.favorite_outline, '每周萌王', '/tinygrail/top-week'),
+      _Menu(Icons.account_balance_outlined, '英灵殿', '/tinygrail/valhalla'),
+      _Menu(Icons.grid_view_outlined, '最新圣殿', '/tinygrail/temples'),
+      _Menu(Icons.change_history_outlined, '通天塔 (β)', '/tinygrail/star'),
+      _Menu(Icons.add_circle_outline, '我的买单', '/tinygrail/bid', count: bids),
+      _Menu(Icons.remove_circle_outline, '我的卖单', '/tinygrail/bid', count: asks),
+      _Menu(Icons.gavel_outlined, '我的拍卖', '/tinygrail/bid', count: auction),
+      _Menu(Icons.inbox_outlined, '我的持仓', '/tinygrail/chara-assets'),
+      _Menu(Icons.insert_chart_outlined, '资金日志', '/tinygrail/logs'),
+      _Menu(Icons.search, '人物搜索', '/tinygrail/search'),
+      _Menu(Icons.chrome_reader_mode_outlined, '游戏指南', '/tinygrail/wiki'),
+      _Menu(Icons.workspaces_outlined, '我的道具', '/tinygrail/items'),
+      _Menu(Icons.swap_horiz, '角色交易', '/tinygrail/trade'),
+      _Menu(Icons.account_balance_wallet_outlined, '我的资产', '/tinygrail/assets'),
+      _Menu(Icons.temple_buddhist_outlined, '我的圣殿', '/tinygrail/temple'),
+      _Menu(Icons.emoji_events_outlined, '拍卖大厅', '/tinygrail/auction'),
+    ];
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: AppGap.x2,
+      crossAxisSpacing: AppGap.x2,
+      children: [for (final m in items) _MenuCell(menu: m)],
+    );
+  }
+}
+
+class _Menu {
+  final IconData icon;
+  final String title;
+  final String route;
+  final int count;
+
+  const _Menu(this.icon, this.title, this.route, {this.count = 0});
+}
+
+class _MenuCell extends StatelessWidget {
+  final _Menu menu;
+
+  const _MenuCell({required this.menu});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => context.push(menu.route),
+      borderRadius: AppRadius.lAll,
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.ds.surfaceCard,
+          borderRadius: AppRadius.lAll,
+        ),
+        padding: const EdgeInsets.symmetric(vertical: AppGap.x5),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(menu.icon, size: 22, color: context.ds.accent),
+                if (menu.count > 0)
+                  Positioned(
+                    right: -10,
+                    top: -8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.ds.accent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${menu.count}',
+                        style: context.ds.tiny.copyWith(
+                          color: Colors.white,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppGap.x2),
+            Text(
+              menu.title,
+              style: context.ds.meta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 首页底部快捷 (对齐原项目 footer + btns: 刮刮乐/高级功能/粘贴板)
+class _TinygrailFooter extends StatelessWidget {
+  const _TinygrailFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          ActionChip(
+            avatar: const Icon(Icons.celebration_outlined, size: 16),
+            label: const Text('刮刮乐'),
+            onPressed: () => context.push('/tinygrail/lottery-rank'),
+          ),
+          ActionChip(
+            avatar: const Icon(Icons.auto_graph_outlined, size: 16),
+            label: const Text('高级功能'),
+            onPressed: () => context.push('/tinygrail/advance'),
+          ),
+          ActionChip(
+            avatar: const Icon(Icons.content_paste_outlined, size: 16),
+            label: const Text('粘贴板'),
+            onPressed: () => context.push('/tinygrail/clipboard'),
+          ),
+          ActionChip(
+            avatar: const Icon(Icons.account_tree_outlined, size: 16),
+            label: const Text('资产分析'),
+            onPressed: () => context.push('/tinygrail/tree'),
+          ),
+          ActionChip(
+            avatar: const Icon(Icons.event_available_outlined, size: 16),
+            label: const Text('签到分红'),
+            onPressed: () => context.push('/tinygrail/lottery-rank'),
+          ),
+        ],
       ),
     );
   }

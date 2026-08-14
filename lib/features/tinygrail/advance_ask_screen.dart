@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'advance_list.dart';
+import 'tinygrail_notes.dart';
 
 /// 买入推荐
 class TinygrailAdvanceAskScreen extends StatelessWidget {
@@ -12,6 +13,7 @@ class TinygrailAdvanceAskScreen extends StatelessWidget {
       title: '买入推荐',
       provider: advanceAskProvider,
       valueLabel: '回报',
+      notePath: tinygrailAdvanceAskNotePath(),
     );
   }
 }

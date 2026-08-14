@@ -17,7 +17,10 @@ import 'widgets/recommend_list.dart';
 ///
 /// 原项目为第三方图站 (bobopic) 抓取, 按任务约定移植为用户收藏
 /// 封面的照片墙 (v0 收藏 API)。
-final picProvider = FutureProvider.family<List<Subject>, int>((ref, subjectType) async {
+final picProvider = FutureProvider.family<List<Subject>, int>((
+  ref,
+  subjectType,
+) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return const [];
   final userId = user.username.isEmpty ? '${user.id}' : user.username;
@@ -49,7 +52,26 @@ class _PicScreenState extends ConsumerState<PicScreen> {
     final loggedIn = ref.watch(isLoggedInProvider);
     final subjects = ref.watch(picProvider(_type));
     return Scaffold(
-      appBar: BgmAppBar(title: '照片墙', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '图集',
+
+        showBackButton: true,
+        actions: [
+          PopupMenuButton<int>(
+            tooltip: '筛选',
+            icon: const Icon(Icons.filter_list),
+            onSelected: (value) => setState(() => _type = value),
+            itemBuilder: (_) => [
+              for (final (value, label) in kRecommendTypes)
+                PopupMenuItem(
+                  value: value,
+                  child: Text(_type == value ? '· $label' : label),
+                ),
+            ],
+          ),
+        ],
+      ),
+
       body: !loggedIn
           ? Center(
               child: Column(
@@ -103,20 +125,23 @@ class _PicScreenState extends ConsumerState<PicScreen> {
                     data: (list) => list.isEmpty
                         ? const Center(child: Text('暂无收藏'))
                         : RefreshIndicator(
-                            onRefresh: () => ref.refresh(picProvider(_type).future),
+                            onRefresh: () =>
+                                ref.refresh(picProvider(_type).future),
                             child: GridView.builder(
                               padding: const EdgeInsets.all(10),
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                mainAxisSpacing: 8,
-                                crossAxisSpacing: 8,
-                                childAspectRatio: 3 / 4,
-                              ),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    mainAxisSpacing: 8,
+                                    crossAxisSpacing: 8,
+                                    childAspectRatio: 3 / 4,
+                                  ),
                               itemCount: list.length,
                               itemBuilder: (context, index) {
                                 final subject = list[index];
                                 return GestureDetector(
-                                  onTap: () => context.push('/subject/${subject.id}'),
+                                  onTap: () =>
+                                      context.push('/subject/${subject.id}'),
                                   child: Cover(
                                     url: subject.images.medium,
                                     width: double.infinity,

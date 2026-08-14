@@ -1,13 +1,20 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
+
 import 'subject_models.dart';
+import 'subject_notes.dart';
 import 'subject_providers.dart';
+import '../../shared/models/collection.dart';
+
 import '../../design_system/design_system.dart';
 
 /// 评分分布
@@ -21,7 +28,18 @@ class RatingScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(ratingStatsProvider(id));
     return Scaffold(
-      appBar: BgmAppBar(title: '评分分布', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '评分分布',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(htmlSubjectRating(id)),
+          ),
+        ],
+      ),
+
       body: stats.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -41,30 +59,98 @@ class RatingScreen extends ConsumerWidget {
         ),
         data: (value) => value.total == 0 && value.comments.isEmpty
             ? const Empty(text: '暂无评分数据')
-            : RatingView(stats: value),
+            : RatingView(subjectId: id, stats: value),
       ),
     );
   }
 }
 
 class RatingView extends ConsumerStatefulWidget {
+  final int subjectId;
   final RatingStats stats;
-  const RatingView({super.key, required this.stats});
+  const RatingView({super.key, required this.subjectId, required this.stats});
 
   @override
   ConsumerState<RatingView> createState() => _RatingViewState();
 }
 
 class _RatingViewState extends ConsumerState<RatingView> {
-  int _filter = 0; // 0 = 全部, 1-10 = 按分数
+  /// 0=全部, 1=想看, 2=看过, 3=在看, 4=搁置, 5=抛弃 (CollectionStatus)
+  int _status = 0;
+  int _filter = 0; // 0 = 全部分数, 1-10
+  bool _friends = false;
+
+  static const _statusToKey = {
+    1: 'wishes',
+    2: 'collections',
+    3: 'doings',
+    4: 'on_hold',
+    5: 'dropped',
+  };
+
+  static const _statusTabs = [
+    (0, '全部'),
+    (1, '想看'),
+    (2, '看过'),
+    (3, '在看'),
+    (4, '搁置'),
+    (5, '抛弃'),
+  ];
+
+  List<(int, String)> _typedStatusTabs(String type) => [
+    for (final tab in _statusTabs)
+      (tab.$1, tab.$1 == 0 ? tab.$2 : SubjectType.statusText(tab.$1, type)),
+  ];
+
+  bool _matchStatus(SubjectCommentItem c) {
+    if (_status == 0) return true;
+    final action = c.action;
+    return switch (_status) {
+      1 =>
+        action.contains('想看') ||
+            action.contains('想读') ||
+            action.contains('想玩') ||
+            action.contains('想听'),
+      2 =>
+        action.contains('看过') ||
+            action.contains('读过') ||
+            action.contains('玩过') ||
+            action.contains('听过'),
+      3 =>
+        action.contains('在看') ||
+            action.contains('在读') ||
+            action.contains('在玩') ||
+            action.contains('在听'),
+      4 => action.contains('搁置'),
+      5 => action.contains('抛弃'),
+      _ => true,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final stats = widget.stats;
-    final comments = _filter == 0
-        ? stats.comments
-        : stats.comments.where((c) => c.star == _filter).toList();
+    final statusKey = _statusToKey[_status] ?? 'collections';
+    final ratingPage = _friends
+        ? ref
+              .watch(
+                subjectRatingProvider((
+                  id: widget.subjectId,
+                  status: statusKey,
+                  friends: true,
+                )),
+              )
+              .valueOrNull
+        : null;
+    final comments =
+        (_friends ? (ratingPage?.items ?? const []) : stats.comments).where((
+          c,
+        ) {
+          if (!_friends && !_matchStatus(c)) return false;
+          if (_filter != 0 && c.star != _filter) return false;
+          return true;
+        }).toList();
     final maxCount = stats.counts.values.fold<int>(0, (a, b) => a > b ? a : b);
 
     return ListView(
@@ -112,23 +198,29 @@ class _RatingViewState extends ConsumerState<RatingView> {
                 child: BarChart(
                   BarChartData(
                     alignment: BarChartAlignment.spaceAround,
-                    maxY: (maxCount * 1.15).clamp(1, double.infinity).toDouble(),
+                    maxY: (maxCount * 1.15)
+                        .clamp(1, double.infinity)
+                        .toDouble(),
                     barTouchData: BarTouchData(
                       enabled: true,
                       touchTooltipData: BarTouchTooltipData(
                         getTooltipItem: (group, groupIndex, rod, rodIndex) =>
                             BarTooltipItem(
-                          '${group.x} 分: ${rod.toY.round()} 人',
-                          TextStyle(
-                            color: theme.colorScheme.onInverseSurface,
-                            fontSize: 12,
-                          ),
-                        ),
+                              '${group.x} 分: ${rod.toY.round()} 人',
+                              TextStyle(
+                                color: theme.colorScheme.onInverseSurface,
+                                fontSize: 12,
+                              ),
+                            ),
                       ),
                     ),
                     titlesData: FlTitlesData(
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
                       leftTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
@@ -180,8 +272,12 @@ class _RatingViewState extends ConsumerState<RatingView> {
                               width: 14,
                               color: score == _filter
                                   ? theme.colorScheme.primary
-                                  : theme.colorScheme.primary.withValues(alpha: 0.55),
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+                                  : theme.colorScheme.primary.withValues(
+                                      alpha: 0.55,
+                                    ),
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(3),
+                              ),
                             ),
                           ],
                         ),
@@ -189,10 +285,64 @@ class _RatingViewState extends ConsumerState<RatingView> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => context.push(ratingDeviationNotePath()),
+                  child: Text(
+                    '标准差 ${stats.deviation.toStringAsFixed(2)} ${stats.dispute}',
+                    style: context.ds.caption,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 16),
+
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 36,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final (value, label) in _typedStatusTabs(
+                      ref
+                              .watch(subjectDetailProvider(widget.subjectId))
+                              .valueOrNull
+                              ?.subject
+                              .type ??
+                          'anime',
+                    ))
+                      _FilterChip(
+                        label: label,
+                        selected: _status == value,
+                        onTap: () => setState(() => _status = value),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('全部')),
+                ButtonSegment(value: true, label: Text('好友')),
+              ],
+              selected: {_friends},
+              onSelectionChanged: (v) => setState(() => _friends = v.first),
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 8),
         // 分数筛选
         SizedBox(
           height: 36,
@@ -239,7 +389,11 @@ class _FilterChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _FilterChip({required this.label, required this.selected, required this.onTap});
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -277,11 +431,16 @@ class _CommentTile extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        comment.userName,
-                        style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
+                        displayText(comment.userName),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.primary,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    UserAgeBadge(userId: comment.userId),
+
                     if (comment.star > 0) ...[
                       const SizedBox(width: 4),
                       Stars(score: comment.star.toDouble(), size: 9),
@@ -299,7 +458,11 @@ class _CommentTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 3),
-                Text(comment.content, style: const TextStyle(fontSize: 13, height: 1.5)),
+                Text(
+                  displayText(comment.content),
+
+                  style: const TextStyle(fontSize: 13, height: 1.5),
+                ),
               ],
             ),
           ),

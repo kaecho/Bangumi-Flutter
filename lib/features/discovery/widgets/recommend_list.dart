@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_endpoints.dart';
 import '../../../core/auth/auth_controller.dart';
+import '../../../shared/models/collection.dart';
 import '../../../shared/models/subject.dart';
 import '../../../shared/widgets/cover.dart';
 import '../../../shared/widgets/loading.dart';
 import '../../../shared/widgets/score.dart';
+import '../../subject/collection_sheet.dart';
 import 'discovery_html.dart';
 
 /// 猜你喜欢推荐项 (基于用户收藏的客户端评分, 对应原项目 like 的 calc())
@@ -30,22 +32,22 @@ class RecommendItem {
   /// 推荐理由 (简化自原项目 getReasonsInfo)
   String get reasonText {
     final reasons = <String>[];
-    if (subject.rating != null && subject.rating!.score > 0) reasons.add('条目分数高');
+    if (subject.rating != null && subject.rating!.score > 0) {
+      reasons.add('条目分数高');
+    }
     if (subject.rank > 0 && subject.rank <= 500) reasons.add('排名靠前');
-    if (subject.tags.isNotEmpty) reasons.add('标签倾向 ${subject.tags.take(2).map((t) => t.name).join('/')}');
-    if (subject.collection != null && subject.collection!.collect > 1000) reasons.add('人气收藏');
-    return reasons.isEmpty ? '推荐值 ${score.toStringAsFixed(1)}' : reasons.take(2).join(' / ');
+    if (subject.tags.isNotEmpty) {
+      reasons.add('标签倾向 ${subject.tags.take(2).map((t) => t.name).join('/')}');
+    }
+    if (subject.collection != null && subject.collection!.collect > 1000) {
+      reasons.add('人气收藏');
+    }
+
+    return reasons.isEmpty
+        ? '推荐值 ${score.toStringAsFixed(1)}'
+        : reasons.take(2).join(' / ');
   }
 }
-
-/// 收藏状态文案
-const kTypeText = {
-  1: '想看',
-  2: '看过',
-  3: '在看',
-  4: '搁置',
-  5: '抛弃',
-};
 
 /// 类型 Tab (v0 subject_type 数字)
 const kRecommendTypes = [
@@ -81,9 +83,14 @@ Future<List<V0CollectionItem>> fetchUserCollectionsAll(
 double calcRecommendScore(V0CollectionItem item) {
   var score = 0.0;
   final subject = item.subject;
-  if (item.type >= 1 && item.type <= 5) score += (item.type == 2 || item.type == 3) ? 2 : 1;
+  if (item.type >= 1 && item.type <= 5) {
+    score += (item.type == 2 || item.type == 3) ? 2 : 1;
+  }
   if (subject.rating != null) score += (subject.rating!.score / 10) * 3;
-  if (subject.rank > 0) score += subject.rank <= 100 ? 2 : (subject.rank <= 500 ? 1 : 0.5);
+  if (subject.rank > 0) {
+    score += subject.rank <= 100 ? 2 : (subject.rank <= 500 ? 1 : 0.5);
+  }
+
   if (item.updatedAt.isNotEmpty) {
     final date = DateTime.tryParse(item.updatedAt.replaceFirst(' ', 'T'));
     if (date != null) {
@@ -122,7 +129,8 @@ class RecommendList extends ConsumerWidget {
       data: (list) => list.isEmpty
           ? const Center(child: Text('收藏数据不足, 无法推荐'))
           : RefreshIndicator(
-              onRefresh: () => ref.refresh(recommendProvider(subjectType).future),
+              onRefresh: () =>
+                  ref.refresh(recommendProvider(subjectType).future),
               child: ListView.builder(
                 padding: const EdgeInsets.only(bottom: 24),
                 itemCount: list.length,
@@ -130,8 +138,14 @@ class RecommendList extends ConsumerWidget {
                   final item = list[index];
                   return InkWell(
                     onTap: () => context.push('/subject/${item.subject.id}'),
+                    onLongPress: () =>
+                        showCollectionSheet(context, item.subject.id),
+
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       child: Row(
                         children: [
                           Cover(
@@ -156,10 +170,13 @@ class RecommendList extends ConsumerWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '推荐值 ${item.score.toStringAsFixed(1)} · ${kTypeText[item.type] ?? ''}',
+                                  '推荐值 ${item.score.toStringAsFixed(1)} · ${SubjectType.statusText(item.type, item.subject.type)}',
+
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -170,13 +187,16 @@ class RecommendList extends ConsumerWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          if (item.subject.rating != null && item.subject.rating!.score > 0)
+                          if (item.subject.rating != null &&
+                              item.subject.rating!.score > 0)
                             Score(
                               score: item.subject.rating!.score,
                               total: 0,
@@ -195,21 +215,26 @@ class RecommendList extends ConsumerWidget {
 }
 
 /// 猜你喜欢数据: 收藏 → 客户端评分 → 降序
-final recommendProvider =
-    FutureProvider.family<List<RecommendItem>, int>((ref, subjectType) async {
+final recommendProvider = FutureProvider.family<List<RecommendItem>, int>((
+  ref,
+  subjectType,
+) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return const [];
   final userId = user.username.isEmpty ? '${user.id}' : user.username;
   final collections = await fetchUserCollectionsAll(ref, userId, subjectType);
-  final items = collections
-      .map((item) => RecommendItem(
-            subject: item.subject,
-            type: item.type,
-            epStatus: item.epStatus,
-            updatedAt: item.updatedAt,
-            score: calcRecommendScore(item),
-          ))
-      .toList()
-    ..sort((a, b) => b.score.compareTo(a.score));
+  final items =
+      collections
+          .map(
+            (item) => RecommendItem(
+              subject: item.subject,
+              type: item.type,
+              epStatus: item.epStatus,
+              updatedAt: item.updatedAt,
+              score: calcRecommendScore(item),
+            ),
+          )
+          .toList()
+        ..sort((a, b) => b.score.compareTo(a.score));
   return items.take(200).toList();
 });

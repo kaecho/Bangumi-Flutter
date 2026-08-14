@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+
+import 'collection_sheet.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
@@ -21,7 +25,18 @@ class MonoSubjectsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final list = ref.watch(monoSubjectsProvider((type: type, id: id)));
     return Scaffold(
-      appBar: BgmAppBar(title: '出演作品', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '出演作品',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(htmlMonoWorks(type, id)),
+          ),
+        ],
+      ),
+
       body: list.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -61,6 +76,8 @@ class _Row extends StatelessWidget {
     final theme = Theme.of(context);
     return InkWell(
       onTap: () => context.push('/subject/${item.id}'),
+      onLongPress: () => showCollectionSheet(context, item.id),
+
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(

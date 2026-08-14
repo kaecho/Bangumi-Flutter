@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
+
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/score.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
 
@@ -19,7 +23,18 @@ class EpCommentsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final comments = ref.watch(epCommentsProvider(epId));
     return Scaffold(
-      appBar: BgmAppBar(title: '章节吐槽', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '章节吐槽',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(htmlEpPage(epId)),
+          ),
+        ],
+      ),
+
       body: comments.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -71,11 +86,15 @@ class _CommentTile extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        comment.userName,
-                        style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
+                        displayText(comment.userName),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.primary,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    UserAgeBadge(userId: comment.userId),
                     if (comment.time.isNotEmpty) ...[
                       const SizedBox(width: 6),
                       Text(
@@ -89,7 +108,10 @@ class _CommentTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(comment.content, style: const TextStyle(fontSize: 13, height: 1.5)),
+                Text(
+                  displayText(comment.content),
+                  style: const TextStyle(fontSize: 13, height: 1.5),
+                ),
               ],
             ),
           ),

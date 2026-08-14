@@ -1,91 +1,282 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/auth/auth_controller.dart';
 import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/cover.dart';
+import '../../shared/widgets/loading.dart';
 import 'widgets/discovery_html.dart';
-import 'widgets/paged.dart';
 
-class DollarsTopics extends PagedNotifier<TopicRow, int> {
+class DollarsData {
+  final List<DollarsChatItem> items;
+  final String online;
+
+  const DollarsData({this.items = const [], this.online = ''});
+}
+
+/// Dollars 聊天室 (bgm.tv/dollars, 对齐原版 fetchDollars / updateDollars)
+final dollarsChatProvider =
+    AsyncNotifierProvider<DollarsChatNotifier, DollarsData>(
+      DollarsChatNotifier.new,
+    );
+
+class DollarsChatNotifier extends AsyncNotifier<DollarsData> {
   @override
-  Future<List<TopicRow>> fetchPage(int arg, int page) async {
+  Future<DollarsData> build() => _fetch();
+
+  Future<DollarsData> _fetch() async {
     final client = ref.read(apiClientProvider);
-    // Dollars 聊天页需登录, 这里按任务描述展示 Dollars 小组的论坛主题列表
-    final body = await client.get(htmlDollarsForum(page: page), host: kHost);
-    return parseTopicRows(body as String);
+    final html = await client.get(htmlDollars(), host: kHost);
+    final parsed = parseDollars(html as String);
+    return DollarsData(items: parsed.list, online: parsed.online);
+  }
+
+  Future<void> poll() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final since = current.items.isEmpty ? '' : current.items.first.id;
+    try {
+      final client = ref.read(apiClientProvider);
+      final raw = await client.get(
+        htmlDollars(
+          sinceId: since,
+          ts: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        ),
+        host: kHost,
+      );
+      final text = raw.toString().trim();
+      if (text.isEmpty || text == 'null') return;
+      final decoded = jsonDecode(text);
+      if (decoded is! List) return;
+      final fresh = [
+        for (final e in decoded.reversed)
+          if (e is Map) DollarsChatItem.fromJson(Map<String, dynamic>.from(e)),
+      ];
+      if (fresh.isEmpty) return;
+      state = AsyncData(
+        DollarsData(
+          items: [...fresh, ...current.items].take(80).toList(),
+          online: current.online,
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> send(String message) async {
+    final client = ref.read(apiClientProvider);
+    await client.post(
+      htmlDollarsSend(),
+      data: {'message': message},
+      host: kHost,
+    );
+    await poll();
   }
 }
 
-final dollarsTopicsProvider =
-    AsyncNotifierProvider.family<DollarsTopics, PagedData<TopicRow>, int>(DollarsTopics.new);
-
-/// Dollars 论坛 (Dollars 小组主题列表)
-class DollarsScreen extends ConsumerWidget {
+/// Dollars 聊天室
+class DollarsScreen extends ConsumerStatefulWidget {
   const DollarsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: BgmAppBar(title: 'Dollars', showBackButton: true),
-      body: PagedListView<TopicRow, int>(
-        provider: dollarsTopicsProvider,
-        arg: 0,
-        emptyText: '暂无讨论',
-        itemBuilder: (context, row, index) => _TopicRowView(row: row),
-      ),
-    );
-  }
+  ConsumerState<DollarsScreen> createState() => _DollarsScreenState();
 }
 
-class _TopicRowView extends StatelessWidget {
-  final TopicRow row;
+class _DollarsScreenState extends ConsumerState<DollarsScreen> {
+  final _input = TextEditingController();
+  Timer? _timer;
+  bool _sending = false;
+  bool _auto = true;
+  bool _compose = false;
 
-  const _TopicRowView({required this.row});
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (_auto) unawaited(ref.read(dollarsChatProvider.notifier).poll());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _input.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await ref.read(dollarsChatProvider.notifier).send(text);
+      _input.clear();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('发送失败, 可能需要重新登录')));
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: () => context.push(
-        '/web/${Uri.encodeComponent('https://bgm.tv/group/topic/${row.id}')}',
+    final loggedIn = ref.watch(isLoggedInProvider);
+    final async = ref.watch(dollarsChatProvider);
+    return Scaffold(
+      appBar: BgmAppBar(
+        title: async.valueOrNull?.online.isNotEmpty == true
+            ? 'ONLINE：${async.valueOrNull!.online}'
+            : 'DOLLARS',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '刷新',
+            icon: const Icon(Icons.refresh),
+            onPressed: () => ref.invalidate(dollarsChatProvider),
+          ),
+          TextButton(
+            onPressed: () => setState(() => _auto = !_auto),
+            child: Text(
+              _auto ? 'AUTO' : 'OFF',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ),
+          IconButton(
+            tooltip: _compose ? '关闭输入' : '编辑',
+            icon: Icon(_compose ? Icons.close : Icons.edit),
+            onPressed: () => setState(() => _compose = !_compose),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
+      body: async.when(
+        loading: () => const Center(child: Loading()),
+        error: (_, _) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('加载失败'),
+              FilledButton.tonal(
+                onPressed: () => ref.invalidate(dollarsChatProvider),
+                child: const Text('重试'),
+              ),
+            ],
+          ),
+        ),
+        data: (data) => Column(
           children: [
+            if (data.online.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '在线 ${data.online}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    row.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: theme.colorScheme.onSurface,
+              child: data.items.isEmpty
+                  ? const Center(child: Text('暂无消息'))
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      itemCount: data.items.length,
+                      itemBuilder: (context, index) {
+                        final item = data.items[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Cover(
+                                url: item.avatar,
+                                width: 32,
+                                height: 32,
+                                radius: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.nickname,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      item.msg,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${row.username} · 最后回复 ${row.lastTime}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                ],
-              ),
             ),
-            Text(
-              '${row.replies} 回复',
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.colorScheme.onSurfaceVariant,
+            if (_compose)
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _input,
+                          enabled: loggedIn && !_sending,
+                          decoration: InputDecoration(
+                            hintText: loggedIn ? '说点什么…' : '登录后才能发送',
+                            isDense: true,
+                            border: const OutlineInputBorder(),
+                          ),
+                          onSubmitted: (_) => unawaited(_send()),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (!loggedIn)
+                        TextButton(
+                          onPressed: () => context.push('/login'),
+                          child: const Text('登录'),
+                        )
+                      else
+                        IconButton(
+                          onPressed: _sending ? null : () => unawaited(_send()),
+                          icon: _sending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.send),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),

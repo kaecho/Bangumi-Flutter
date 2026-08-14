@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/storage/settings_store.dart';
+import '../../../core/utils/display.dart';
 import '../../../shared/models/subject.dart';
 import '../../../shared/widgets/cover.dart';
+import '../../subject/collection_sheet.dart';
 
 /// 条目网格卡片: 封面 + 排名角标 + 标题 + 评分/集数
 ///
@@ -33,14 +36,18 @@ class SubjectCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final rating = subject.rating;
-    final info = subtitle ??
-        (showScore && rating != null && rating.score > 0
+    final hideScore = SettingsStore.instance.hideScore;
+    final info =
+        subtitle ??
+        (showScore && !hideScore && rating != null && rating.score > 0
             ? '${rating.score.toStringAsFixed(1)}分'
             : '');
 
     return InkWell(
       onTap: onTap ?? () => context.push('/subject/${subject.id}'),
+      onLongPress: () => showCollectionSheet(context, subject.id),
       borderRadius: BorderRadius.circular(6),
+
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -90,7 +97,11 @@ class SubjectCard extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: visualFontSize(subject.displayName, const [
+                (32, 10),
+                (20, 11),
+                (0, 12),
+              ]),
               height: 1.25,
               color: theme.colorScheme.onSurface,
             ),

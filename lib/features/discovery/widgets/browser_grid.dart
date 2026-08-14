@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_endpoints.dart';
+import '../../../core/storage/settings_store.dart';
+import '../../../core/utils/display.dart';
 import '../../../shared/models/subject.dart';
 import 'discovery_html.dart';
 import 'paged.dart';
@@ -14,7 +16,8 @@ class BrowserQuery {
   const BrowserQuery(this.basePath);
 
   @override
-  bool operator ==(Object other) => other is BrowserQuery && other.basePath == basePath;
+  bool operator ==(Object other) =>
+      other is BrowserQuery && other.basePath == basePath;
 
   @override
   int get hashCode => basePath.hashCode;
@@ -23,18 +26,40 @@ class BrowserQuery {
 /// 通用条目浏览器数据 (主站 HTML 列表页)
 class BrowserResults extends PagedNotifier<Subject, BrowserQuery> {
   @override
+  Future<PagedData<Subject>> build(BrowserQuery arg) {
+    ref.watch(settingsStoreProvider.select((s) => s.filter18x));
+    return super.build(arg);
+  }
+
+  @override
   Future<List<Subject>> fetchPage(BrowserQuery arg, int page) async {
     final client = ref.read(apiClientProvider);
     final sep = arg.basePath.contains('?') ? '&' : '?';
-    final body = await client.get('${arg.basePath}$sep' 'page=$page', host: kHost);
-    return parseSubjectList(body as String);
+    final body = await client.get(
+      '${arg.basePath}$sep'
+      'page=$page',
+      host: kHost,
+    );
+    final items = parseSubjectList(body as String);
+    if (!SettingsStore.instance.filter18x) return items;
+    return [
+      for (final item in items)
+        if (!isSensitiveSubject(
+          nsfw: item.nsfw,
+          name: item.name,
+          nameCn: item.nameCn,
+        ))
+          item,
+    ];
   }
 }
 
 final browserResultsProvider =
-    AsyncNotifierProvider.family<BrowserResults, PagedData<Subject>, BrowserQuery>(
-  BrowserResults.new,
-);
+    AsyncNotifierProvider.family<
+      BrowserResults,
+      PagedData<Subject>,
+      BrowserQuery
+    >(BrowserResults.new);
 
 /// 通用条目浏览器网格 (排行榜/新番/游戏/漫画等共用)
 class BrowserGrid extends StatelessWidget {

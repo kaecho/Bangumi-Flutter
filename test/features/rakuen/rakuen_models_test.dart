@@ -29,7 +29,8 @@ void main() {
     test('解析主楼 + 楼层 + 子回复', () {
       const html = '''
 <html><body>
-<div id="pageHeader"><h1><span><a class="avatar" href="/group/dev">番组开发</a> » <a href="/group/dev/forum">讨论</a></span><br />测试标题</h1></div>
+<div id="pageHeader"><h1><span><a class="avatar" href="/group/dev"><img class="avatar" src="//lain.bgm.tv/pic/icon/s/000/00/00/1.jpg" />番组开发</a> » <a href="/group/dev/forum">讨论</a></span><br />测试标题</h1></div>
+
 <div id="post_1" class="postTopic">
   <div class="post_actions re_info"><div class="action"><small>#1 - 2024-1-1 10:00</small></div></div>
   <a href="/user/100" class="avatar"><span class="avatarNeue avatarSize48" style="background-image:url('//lain.bgm.tv/pic/a.jpg')"></span></a>
@@ -58,6 +59,8 @@ void main() {
       expect(data.title, '测试标题');
       expect(data.group, '番组开发');
       expect(data.groupHref, '/group/dev');
+      expect(data.groupThumb, contains('1.jpg'));
+
       expect(data.userName, '作者');
       expect(data.userId, '100');
       expect(data.time, '2024-1-1 10:00');
@@ -96,6 +99,46 @@ void main() {
       expect(items.first.userId, '');
       expect(items.first.replyCount, 28);
       expect(items.first.time, '2026-8-11 15:16');
+    });
+    test('解析条目讨论版 /subject/topic 行', () {
+      const html = '''
+<html><body>
+<table><tbody>
+<tr class="topic even">
+  <td class="subject"><a href="/subject/topic/12345" title="讨论标题" class="l">讨论标题</a></td>
+  <td class="author"><a href="/user/42" class="l">Alice</a></td>
+  <td class="posts">7</td>
+  <td class="lastpost"><small class="time">2026-8-12 10:00</small></td>
+</tr>
+</tbody></table>
+</body></html>''';
+      final items = parseGroupForum(html);
+      expect(items, hasLength(1));
+      expect(items.first.topicId, 'subject/12345');
+      expect(items.first.title, '讨论标题');
+      expect(items.first.userId, '42');
+      expect(items.first.replyCount, 7);
+    });
+  });
+
+  group('parseGroupHome', () {
+    test('解析加入与退出链接', () {
+      const html = '''
+<html><body>
+<h1>番组开发</h1>
+<div id="groupJoinAction"><a class="chiiBtn" href="/group/dev/join?gh=abc">加入</a></div>
+</body></html>''';
+      final info = parseGroupHome(html);
+      expect(info.title, '番组开发');
+      expect(info.joinUrl, contains('/join?'));
+      expect(info.joined, isFalse);
+      final quit = parseGroupHome('''
+<html><body>
+<h1>番组开发</h1>
+<div id="groupJoinAction"><a class="chiiBtn" href="/group/dev/bye?gh=abc">退出</a></div>
+</body></html>''');
+      expect(quit.byeUrl, contains('/bye?'));
+      expect(quit.joined, isTrue);
     });
   });
 
@@ -165,17 +208,26 @@ void main() {
 
   group('BgmHtml', () {
     testWidgets('渲染纯文本 HTML', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: BgmHtml(data: '<p>你好 <b>Bangumi</b></p>')),
-      ));
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: BgmHtml(data: '<p>你好 <b>Bangumi</b></p>')),
+        ),
+      );
       expect(find.textContaining('你好'), findsOneWidget);
       expect(find.textContaining('Bangumi'), findsOneWidget);
     });
 
     testWidgets('showImages=false 时移除 img', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: BgmHtml(data: '<p>文字<img src="http://x/a.jpg"></p>', showImages: false)),
-      ));
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: BgmHtml(
+              data: '<p>文字<img src="http://x/a.jpg"></p>',
+              showImages: false,
+            ),
+          ),
+        ),
+      );
       expect(find.textContaining('文字'), findsOneWidget);
     });
   });

@@ -11,12 +11,14 @@ class SyncWebViewScaffold extends StatefulWidget {
 
   /// 初始域名 (如 account.bilibili.com), 离开该域名视为授权/同步成功
   final String domain;
+  final String? notePath;
 
   const SyncWebViewScaffold({
     super.key,
     required this.title,
     required this.url,
     required this.domain,
+    this.notePath,
   });
 
   @override
@@ -61,6 +63,12 @@ class _SyncWebViewScaffoldState extends State<SyncWebViewScaffold> {
       appBar: AppBar(
         title: Text(widget.title),
         actions: [
+          if (widget.notePath != null)
+            IconButton(
+              tooltip: '说明',
+              icon: const Icon(Icons.info_outline),
+              onPressed: () => context.push(widget.notePath!),
+            ),
           IconButton(
             tooltip: '刷新',
             icon: const Icon(Icons.refresh),
@@ -74,15 +82,16 @@ class _SyncWebViewScaffoldState extends State<SyncWebViewScaffold> {
             child: Stack(
               children: [
                 WebViewWidget(controller: _controller),
-                if (_loading)
-                  const Center(child: CircularProgressIndicator()),
+                if (_loading) const Center(child: CircularProgressIndicator()),
               ],
             ),
           ),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            color: _done ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+            color: _done
+                ? scheme.primaryContainer
+                : scheme.surfaceContainerHighest,
             child: SafeArea(
               top: false,
               child: Row(

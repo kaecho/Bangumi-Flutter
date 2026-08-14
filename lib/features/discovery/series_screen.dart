@@ -6,9 +6,9 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../shared/models/subject.dart';
-import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import 'series_header.dart';
 import 'widgets/recommend_list.dart';
 
 /// 关联系列 (条目系列)
@@ -33,7 +33,9 @@ final seriesProvider = FutureProvider<List<SeriesGroup>>((ref) async {
 
   // 1. 收藏 (看过 type=2 + 在看 type=3, 动画)
   final collections = await fetchUserCollectionsAll(ref, userId, 2);
-  final collected = collections.where((e) => e.type == 2 || e.type == 3).toList();
+  final collected = collections
+      .where((e) => e.type == 2 || e.type == 3)
+      .toList();
   if (collected.isEmpty) return const [];
 
   // 2. 条目关系 → 邻接表
@@ -43,7 +45,11 @@ final seriesProvider = FutureProvider<List<SeriesGroup>>((ref) async {
       final data = await client.get(apiV0SubjectSeries(subjectId));
       final list = (data as List).whereType<Map<String, dynamic>>();
       relations[subjectId] = list
-          .where((e) => (e['type'] as num?)?.toInt() == 2 && kSeriesRelations.contains(e['relation']))
+          .where(
+            (e) =>
+                (e['type'] as num?)?.toInt() == 2 &&
+                kSeriesRelations.contains(e['relation']),
+          )
           .map((e) => (e['id'] as num?)?.toInt() ?? 0)
           .where((id) => id > 0)
           .toList();
@@ -92,13 +98,11 @@ final seriesProvider = FutureProvider<List<SeriesGroup>>((ref) async {
     if (unique.length < 2) continue;
     final subjects = [
       for (final id in unique)
-        byId[id] ??
-            Subject(
-              id: id,
-              images: const SubjectImages(),
-            ),
+        byId[id] ?? Subject(id: id, images: const SubjectImages()),
     ];
-    result.add(SeriesGroup(name: subjects.first.displayName, subjects: subjects));
+    result.add(
+      SeriesGroup(name: subjects.first.displayName, subjects: subjects),
+    );
   }
   result.sort((a, b) => a.subjects.length.compareTo(b.subjects.length));
   return result.reversed.toList();
@@ -113,7 +117,11 @@ class SeriesScreen extends ConsumerWidget {
     final loggedIn = ref.watch(isLoggedInProvider);
     final groups = ref.watch(seriesProvider);
     return Scaffold(
-      appBar: BgmAppBar(title: '关联系列', showBackButton: true),
+      appBar: seriesAppBar(
+        context: context,
+        onRefresh: () => ref.invalidate(seriesProvider),
+      ),
+
       body: !loggedIn
           ? Center(
               child: Column(
@@ -156,7 +164,12 @@ class SeriesScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+                                padding: const EdgeInsets.fromLTRB(
+                                  14,
+                                  12,
+                                  14,
+                                  6,
+                                ),
                                 child: Text(
                                   '${group.name} (${group.subjects.length})',
                                   style: const TextStyle(
@@ -169,17 +182,23 @@ class SeriesScreen extends ConsumerWidget {
                                 height: 150,
                                 child: ListView.separated(
                                   scrollDirection: Axis.horizontal,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
                                   itemCount: group.subjects.length,
-                                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: 10),
                                   itemBuilder: (context, i) {
                                     final subject = group.subjects[i];
                                     return GestureDetector(
-                                      onTap: () => context.push('/subject/${subject.id}'),
+                                      onTap: () => context.push(
+                                        '/subject/${subject.id}',
+                                      ),
                                       child: SizedBox(
                                         width: 90,
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Cover(
                                               url: subject.images.medium,
@@ -194,7 +213,9 @@ class SeriesScreen extends ConsumerWidget {
                                                   : subject.displayName,
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(fontSize: 11),
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                              ),
                                             ),
                                           ],
                                         ),

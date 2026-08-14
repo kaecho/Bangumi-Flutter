@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../core/utils/display.dart';
 
 import 'versions_screen.dart' show kAppVersion;
 
@@ -9,12 +9,7 @@ class InformationScreen extends StatelessWidget {
   const InformationScreen({super.key});
 
   Future<void> _open(BuildContext context, String url) async {
-    final ok = await launchUrl(Uri.parse(url));
-    if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法打开链接')),
-      );
-    }
+    await openExternalUrl(url);
   }
 
   @override
@@ -45,7 +40,10 @@ class InformationScreen extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Flutter 客户端 v$kAppVersion',
-                  style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -67,7 +65,10 @@ class InformationScreen extends StatelessWidget {
                   leading: const Icon(Icons.link),
                   title: const Text('GitHub 仓库'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _open(context, 'https://github.com/kaecho/Bangumi-Flutter'),
+                  onTap: () => _open(
+                    context,
+                    'https://github.com/kaecho/Bangumi-Flutter',
+                  ),
                 ),
                 const Divider(height: 1),
                 ListTile(

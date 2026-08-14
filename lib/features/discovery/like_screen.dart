@@ -25,7 +25,35 @@ class _LikeScreenState extends ConsumerState<LikeScreen> {
   Widget build(BuildContext context) {
     final loggedIn = ref.watch(isLoggedInProvider);
     return Scaffold(
-      appBar: BgmAppBar(title: '猜你喜欢', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '猜你喜欢',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '说明',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () {
+              showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('猜你喜欢'),
+                  content: const Text(
+                    '基于你的收藏和评分做客户端推荐。\n'
+                    '多收藏、多评分可以得到更准的结果。',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('知道了'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+
       body: !loggedIn
           ? Center(
               child: Column(

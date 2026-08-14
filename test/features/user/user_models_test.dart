@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:bangumi/features/user/origin_utils.dart';
 import 'package:bangumi/features/user/user_models.dart';
 import 'package:bangumi/shared/models/collection.dart';
 
@@ -21,7 +22,9 @@ void main() {
   <h4 class="Header">2026-7-4</h4>
   <ul>
     <li id="tml_69669186" class="clearit tml_item">
+      <a href="/user/sakura" class="l">樱</a>
       <span class="info_full clearit">在玩 <a href="https://bgm.tv/subject/548128" data-subject-name-cn="节奏天国 奇迹之星" data-subject-id="548128" data-subject-name="リズム天国 ミラクルスターズ" class="l">リズム天国 ミラクルスターズ</a>
+
         <div class="card">
           <div class="container">
             <a href="https://bgm.tv/subject/548128"><span class="cover"><img src="//lain.bgm.tv/pic/cover/l/13/03/548128.jpg" /></span></a>
@@ -31,8 +34,9 @@ void main() {
             </div>
           </div>
         </div>
-        <div class="post_actions date"><span title="2026-7-4 14:37" class="titleTip">1月8天前</span></div>
+        <div class="post_actions date"><span title="2026-7-4 14:37" class="titleTip">1月8天前</span> <a class="tml_del" href="/erase/tml_69669186?gh=abc">del</a></div>
       </span>
+
     </li>
   </ul>
 </div>
@@ -54,6 +58,9 @@ void main() {
       expect(item.subject!.nameCn, '节奏天国 奇迹之星');
       expect(item.subject!.images.common, contains('548128.jpg'));
       expect(item.subject!.rating!.score, 7.9);
+      expect(item.clearHref, contains('erase/tml_69669186'));
+      expect(item.user?.username, 'sakura');
+      expect(item.user?.nickname, '樱');
     });
 
     test('无列表返回空', () {
@@ -202,11 +209,50 @@ void main() {
     });
   });
 
+  group('parsePmChat', () {
+    test('解析相关短信线程', () {
+      final data = parsePmChat('''
+        <div class="pm-chat-title"><strong><a class="l" href="/user/sakura">樱</a></strong></div>
+        <div class="pm-thread-filter">
+          <a href="/pm/conversation/9.chii?thread=11">旧主题</a>
+          <a href="/pm/conversation/9.chii?thread=22">新主题</a>
+        </div>
+        <div class="pm-message-list">
+          <div class="pm-thread-label">新主题</div>
+          <div class="pm-message">
+            <a class="avatar" href="/user/sakura"><span class="avatarNeue" style="background-image:url('//lain.bgm.tv/pic/user/l/a.jpg')"></span></a>
+            <div class="pm-message-body">你好</div>
+            <div class="pm-message-info"><small>2026-8-1</small></div>
+          </div>
+        </div>
+        <input name="formhash" value="abc" />
+      ''');
+      expect(data.form.peerUserId, 'sakura');
+      expect(data.form.peerUserName, '樱');
+      expect(data.form.threads, hasLength(2));
+      expect(data.form.threads.map((e) => e.$1), containsAll(['11', '22']));
+      expect(data.list.first.threadTitle, '新主题');
+      expect(data.list.first.threadId, '22');
+    });
+  });
+
   group('CollectionStats', () {
     test('fromJson 解析统计', () {
       const raw = {
-        'anime': {'wish': 1, 'collect': 2, 'doing': 3, 'on_hold': 4, 'dropped': 5},
-        'book': {'wish': 10, 'collect': 20, 'doing': 30, 'on_hold': 40, 'dropped': 50},
+        'anime': {
+          'wish': 1,
+          'collect': 2,
+          'doing': 3,
+          'on_hold': 4,
+          'dropped': 5,
+        },
+        'book': {
+          'wish': 10,
+          'collect': 20,
+          'doing': 30,
+          'on_hold': 40,
+          'dropped': 50,
+        },
       };
       final stats = CollectionStats.fromJson(raw);
       expect(stats.count('anime', CollectionStatus.wish), 1);
@@ -214,6 +260,26 @@ void main() {
       expect(stats.total('anime'), 15);
       expect(stats.total('book'), 150);
       expect(stats.total('missing'), 0);
+    });
+
+    test('fromJson 解析旧版数组统计', () {
+      final stats = CollectionStats.fromJson([
+        {
+          'name': '动画',
+          'collects': [
+            {
+              'status': {'id': 1},
+              'count': 8,
+            },
+            {
+              'status': {'id': 3},
+              'count': 4,
+            },
+          ],
+        },
+      ]);
+      expect(stats.count('anime', CollectionStatus.wish), 8);
+      expect(stats.count('anime', CollectionStatus.doing), 4);
     });
   });
 
@@ -226,6 +292,57 @@ void main() {
     test('非片假名原样保留', () {
       expect(basicKatakanaToRomaji('ABC'), 'ABC');
       expect(basicKatakanaToRomaji(''), '');
+    });
+  });
+
+  group('replaceOriginUrl', () {
+    test('编码 CN/JP/ID, DECODE 保持原文', () {
+      final url = replaceOriginUrl(
+        'https://x.test/?q=[CN]&jp=[JP]&id=[ID]&raw=[CN_DECODE]',
+        cn: 'cowboy bebop',
+        jp: 'カウボーイビバップ',
+        id: 12,
+        year: '1998',
+      );
+      expect(url, contains('q=cowboy%20bebop'));
+      expect(url, contains('id=12'));
+      expect(url, contains('raw=cowboy bebop'));
+    });
+  });
+
+  group('originsForType', () {
+    test('书籍走漫画+文库', () {
+      final list = originsForType(kDefaultOrigins, 'book');
+      expect(
+        list.any((e) => e.name.contains('漫画') || e.uuid.startsWith('manga')),
+        isTrue,
+      );
+      expect(list.any((e) => e.uuid.startsWith('wenku')), isTrue);
+    });
+
+    test('动画走 anime 默认源', () {
+      final list = originsForType(kDefaultOrigins, 'anime');
+      expect(list.map((e) => e.name), contains('AGE动漫'));
+    });
+  });
+
+  group('parseUserHomeExtra', () {
+    test('解析加入日期、同步率和最近活跃', () {
+      const html = '''
+<div class="nameSingle">
+  <span class="tip">2020-1-2 加入</span>
+  <span class="percent_text">66.6%</span>
+  <small class="hot">完成了 12 个条目</small>
+</div>
+<div class="timeline">
+  <small class="time">3小时前 · 看过</small>
+</div>
+''';
+      final extra = parseUserHomeExtra(html);
+      expect(extra.join, '2020-1-2 加入');
+      expect(extra.percent, 66.6);
+      expect(extra.hobby, '12');
+      expect(extra.recent, contains('3小时前'));
     });
   });
 }

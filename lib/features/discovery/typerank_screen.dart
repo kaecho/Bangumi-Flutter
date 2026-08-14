@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/score.dart';
+import 'discovery_notes.dart';
 import 'widgets/browser_grid.dart';
 import 'widgets/season_filter.dart';
 
@@ -21,24 +24,47 @@ class _TypeRankScreenState extends State<TypeRankScreen> {
   String _type = 'anime';
   String _tag = 'TV';
 
-  static const _tags = ['TV', '剧场版', 'OVA', 'WEB', '治愈', '恋爱', '搞笑', '原创', '冒险', '科幻'];
+  static const _tags = [
+    'TV',
+    '剧场版',
+    'OVA',
+    'WEB',
+    '治愈',
+    '恋爱',
+    '搞笑',
+    '原创',
+    '冒险',
+    '科幻',
+  ];
 
   String get _basePath => htmlTagSubjects(_type, _tag);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: BgmAppBar(title: '分类排行', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '分类排行',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '说明',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => context.push(typeRankNotePath()),
+          ),
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl('$kHost$_basePath'),
+          ),
+        ],
+      ),
+
       body: Column(
         children: [
           TypeTabs(
             value: _type,
             onChanged: (v) => setState(() => _type = v),
-            options: const [
-              ('anime', '动画'),
-              ('book', '书籍'),
-              ('game', '游戏'),
-            ],
+            options: const [('anime', '动画'), ('book', '书籍'), ('game', '游戏')],
           ),
           SizedBox(
             height: 40,
@@ -58,9 +84,7 @@ class _TypeRankScreenState extends State<TypeRankScreen> {
               ],
             ),
           ),
-          Expanded(
-            child: BrowserGrid(basePath: _basePath),
-          ),
+          Expanded(child: BrowserGrid(basePath: _basePath)),
         ],
       ),
     );

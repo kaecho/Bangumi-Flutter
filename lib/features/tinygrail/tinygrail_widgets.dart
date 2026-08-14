@@ -22,8 +22,8 @@ class CharaTile extends StatelessWidget {
     final color = chara.fluctuation < 0
         ? context.ds.fall
         : chara.fluctuation > 0
-            ? context.ds.rise
-            : theme.colorScheme.onSurfaceVariant;
+        ? context.ds.rise
+        : theme.colorScheme.onSurfaceVariant;
     final icon = chara.icon.replaceFirst('//', 'https://');
     return ListTile(
       onTap: onTap,
@@ -46,22 +46,33 @@ class CharaTile extends StatelessWidget {
       title: Row(
         children: [
           Flexible(
-            child: Text(chara.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(
+              chara.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const SizedBox(width: 6),
-          Text('Lv.${chara.level}', style: TextStyle(fontSize: 11, color: theme.colorScheme.primary)),
+          Text(
+            'Lv.${chara.level}',
+            style: TextStyle(fontSize: 11, color: theme.colorScheme.primary),
+          ),
         ],
       ),
       subtitle: Text(
         '发行 ${tgAmount(chara.total)} · 市场 ${tgAmount(chara.marketValue)}',
         style: context.ds.meta,
       ),
-      trailing: trailing ??
+      trailing:
+          trailing ??
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('¥${tgPrice(chara.current)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                '¥${tgPrice(chara.current)}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               Text(
                 tgFluctuation(chara.fluctuation),
                 style: TextStyle(fontSize: 11, color: color),
@@ -88,12 +99,17 @@ class TinygrailCharaListScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<TinygrailCharaListScreen> createState() => _TinygrailCharaListScreenState();
+  ConsumerState<TinygrailCharaListScreen> createState() =>
+      _TinygrailCharaListScreenState();
 }
 
-class _TinygrailCharaListScreenState extends ConsumerState<TinygrailCharaListScreen>
+class _TinygrailCharaListScreenState
+    extends ConsumerState<TinygrailCharaListScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: widget.tabs.length, vsync: this);
+  late final TabController _tab = TabController(
+    length: widget.tabs.length,
+    vsync: this,
+  );
 
   @override
   void dispose() {
@@ -143,6 +159,7 @@ class _CharaList extends ConsumerStatefulWidget {
 
 class _CharaListState extends ConsumerState<_CharaList> {
   late Future<List<TinygrailChara>> _future;
+  String _sort = 'default';
 
   @override
   void initState() {
@@ -166,26 +183,43 @@ class _CharaListState extends ConsumerState<_CharaList> {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Loading(height: double.infinity);
         }
-        final list = snapshot.data ?? const <TinygrailChara>[];
-        if (snapshot.hasError || list.isEmpty) {
+        final raw = snapshot.data ?? const <TinygrailChara>[];
+        if (snapshot.hasError || raw.isEmpty) {
           return Empty(text: snapshot.hasError ? '加载失败, 请重试' : '暂无数据');
         }
-        return RefreshIndicator(
-          onRefresh: () async {
-            setState(() => _future = widget.loader());
-            await _future;
-          },
-          child: ListView.separated(
-            itemCount: list.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final chara = list[index];
-              return CharaTile(
-                chara: chara,
-                onTap: () => context.push('/tinygrail/chara/${chara.id}'),
-              );
-            },
-          ),
+        final list = sortTinygrailCharas(raw, _sort);
+        return Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+                child: TinygrailSortChip(
+                  value: _sort,
+                  onChanged: (v) => setState(() => _sort = v),
+                ),
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  setState(() => _future = widget.loader());
+                  await _future;
+                },
+                child: ListView.separated(
+                  itemCount: list.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final chara = list[index];
+                    return CharaTile(
+                      chara: chara,
+                      onTap: () => context.push('/tinygrail/chara/${chara.id}'),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -225,14 +259,89 @@ class UserTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: rank <= 3 ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                  color: rank <= 3
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             )
-          : Avatar(url: avatar.replaceFirst('//', 'https://'), size: 40, name: name),
+          : Avatar(
+              url: avatar.replaceFirst('//', 'https://'),
+              size: 40,
+              name: name,
+            ),
       title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(subtitle, style: context.ds.meta),
-      trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+      trailing: Text(
+        value,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+const kTinygrailSorts = <(String, String)>[
+  ('default', '默认'),
+  ('current', '现价'),
+  ('fluctuation', '涨跌'),
+  ('rate', '股息'),
+  ('market', '市值'),
+  ('amount', '持股'),
+  ('sacrifices', '献祭'),
+];
+
+List<TinygrailChara> sortTinygrailCharas(
+  List<TinygrailChara> list,
+  String key,
+) {
+  final next = [...list];
+  int cmp(num a, num b) => b.compareTo(a);
+  switch (key) {
+    case 'current':
+      next.sort((a, b) => cmp(a.current, b.current));
+    case 'fluctuation':
+      next.sort((a, b) => cmp(a.fluctuation, b.fluctuation));
+    case 'rate':
+      next.sort((a, b) => cmp(a.rate, b.rate));
+    case 'market':
+      next.sort((a, b) => cmp(a.marketValue, b.marketValue));
+    case 'amount':
+      next.sort((a, b) => cmp(a.state, b.state));
+    case 'sacrifices':
+      next.sort((a, b) => cmp(a.sacrifices, b.sacrifices));
+    default:
+      break;
+  }
+  return next;
+}
+
+class TinygrailSortChip extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const TinygrailSortChip({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = kTinygrailSorts
+        .firstWhere((e) => e.$1 == value, orElse: () => kTinygrailSorts.first)
+        .$2;
+    return PopupMenuButton<String>(
+      tooltip: '排序',
+      onSelected: onChanged,
+      itemBuilder: (_) => [
+        for (final s in kTinygrailSorts)
+          PopupMenuItem(value: s.$1, child: Text(s.$2)),
+      ],
+      child: Chip(
+        visualDensity: VisualDensity.compact,
+        label: Text('排序 $label'),
+        avatar: const Icon(Icons.sort, size: 16),
+      ),
     );
   }
 }

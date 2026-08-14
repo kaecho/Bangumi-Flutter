@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 
+import 'aggregate_screen.dart';
 import 'blog_screen.dart';
 import 'board_screen.dart';
 import 'group_screen.dart';
@@ -35,24 +36,19 @@ final List<GoRoute> rakuenRoutes = [
   ),
   GoRoute(
     path: '/rakuen/group/:name',
-    builder: (_, state) => GroupScreen(name: state.pathParameters['name'] ?? ''),
+    builder: (_, state) =>
+        GroupScreen(name: state.pathParameters['name'] ?? ''),
   ),
   GoRoute(
     path: '/rakuen/board/:key',
-    builder: (_, state) => BoardScreen(boardKey: state.pathParameters['key'] ?? 'topiclist'),
+    builder: (_, state) =>
+        BoardScreen(boardKey: state.pathParameters['key'] ?? 'topiclist'),
   ),
-  GoRoute(
-    path: '/rakuen/notify',
-    builder: (_, _) => const NotifyScreen(),
-  ),
-  GoRoute(
-    path: '/rakuen/history',
-    builder: (_, _) => const HistoryScreen(),
-  ),
-  GoRoute(
-    path: '/rakuen/mine',
-    builder: (_, _) => const MineScreen(),
-  ),
+  GoRoute(path: '/rakuen/notify', builder: (_, _) => const NotifyScreen()),
+  GoRoute(path: '/rakuen/history', builder: (_, _) => const AggregateScreen()),
+  // 浏览历史 (port 特有功能: 本地浏览记录, 与原版 rakuen/history 语义不同)
+  GoRoute(path: '/history/browse', builder: (_, _) => const HistoryScreen()),
+  GoRoute(path: '/rakuen/mine', builder: (_, _) => const MineScreen()),
   GoRoute(
     path: '/rakuen/search',
     builder: (_, _) => const RakuenSearchScreen(),
@@ -63,13 +59,11 @@ final List<GoRoute> rakuenRoutes = [
   ),
   GoRoute(
     path: '/rakuen/reviews/:subjectId',
-    builder: (_, state) =>
-        ReviewsScreen(subjectId: int.tryParse(state.pathParameters['subjectId'] ?? '') ?? 0),
+    builder: (_, state) => ReviewsScreen(
+      subjectId: int.tryParse(state.pathParameters['subjectId'] ?? '') ?? 0,
+    ),
   ),
-  GoRoute(
-    path: '/rakuen/ugc-agree',
-    builder: (_, _) => const UgcAgreeScreen(),
-  ),
+  GoRoute(path: '/rakuen/ugc-agree', builder: (_, _) => const UgcAgreeScreen()),
   GoRoute(
     path: '/rakuen/image',
     builder: (_, state) =>

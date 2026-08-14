@@ -44,11 +44,22 @@ jobs:
       - name: Build AAB
         run: flutter build appbundle --release
 
+      - name: Extract changelog section for this version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="## $VERSION" '
+            $0 ~ ("^" v "([ -]|$)") { found = 1 }
+            found && /^## / && $0 !~ ("^" v "([ -]|$)") { exit }
+            found { print }
+          ' CHANGELOG.md > release_body.md
+          # 无匹配段落时回退整个 CHANGELOG
+          test -s release_body.md || cp CHANGELOG.md release_body.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: Bangumi ${{ github.ref_name }}
-          body_path: CHANGELOG.md
+          body_path: release_body.md
           files: |
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk

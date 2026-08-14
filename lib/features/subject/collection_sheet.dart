@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/storage/settings_store.dart';
+
 import '../../shared/models/collection.dart';
 import '../../shared/widgets/score.dart';
 import 'subject_providers.dart';
@@ -32,7 +34,9 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
     _type = current?.type ?? 0;
     _rate = (current?.rate ?? 0).toDouble();
     _commentController = TextEditingController(text: current?.comment ?? '');
-    _tagsController = TextEditingController(text: current?.tags.join(' ') ?? '');
+    _tagsController = TextEditingController(
+      text: current?.tags.join(' ') ?? '',
+    );
   }
 
   @override
@@ -46,7 +50,14 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasCollection = _type > 0;
-
+    final subjectType =
+        ref
+            .watch(subjectDetailProvider(widget.subjectId))
+            .valueOrNull
+            ?.subject
+            .type ??
+        'anime';
+    final verb = SubjectType.action(subjectType);
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -61,7 +72,10 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
           children: [
             Row(
               children: [
-                const Text('收藏管理', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                const Text(
+                  '收藏管理',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
                 const Spacer(),
                 IconButton(
                   visualDensity: VisualDensity.compact,
@@ -71,7 +85,6 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
               ],
             ),
             const SizedBox(height: 4),
-            // 状态选择
             Row(
               children: [
                 for (final status in const [1, 2, 3, 4, 5])
@@ -80,7 +93,7 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 2),
                       child: ChoiceChip(
                         label: Text(
-                          CollectionStatus.text(status),
+                          CollectionStatus.text(status).replaceAll('看', verb),
                           style: const TextStyle(fontSize: 12),
                         ),
                         selected: _type == status,
@@ -143,7 +156,10 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
                     onPressed: _submitting ? null : _remove,
                     child: Text(
                       '删除收藏',
-                      style: TextStyle(fontSize: 13, color: theme.colorScheme.error),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: theme.colorScheme.error,
+                      ),
                     ),
                   ),
                   const Spacer(),
@@ -183,18 +199,23 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
         tags: tags,
       );
       invalidateSubjectState(ref, widget.subjectId);
+      SettingsStore.instance.haptic(2);
+      await _maybeAutoComplete();
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('收藏已更新'), duration: Duration(seconds: 1)),
+          const SnackBar(
+            content: Text('收藏已更新'),
+            duration: Duration(seconds: 1),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _submitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败: ${apiErrorMessage(e)}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('保存失败: ${apiErrorMessage(e)}')));
       }
     }
   }
@@ -207,16 +228,57 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已删除收藏'), duration: Duration(seconds: 1)),
+          const SnackBar(
+            content: Text('已删除收藏'),
+            duration: Duration(seconds: 1),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _submitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('删除失败: ${apiErrorMessage(e)}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('删除失败: ${apiErrorMessage(e)}')));
       }
     }
   }
+
+  Future<void> _maybeAutoComplete() async {
+    if (_type != CollectionStatus.collect) return;
+    final store = SettingsStore.instance;
+    final subject = ref
+        .read(subjectDetailProvider(widget.subjectId))
+        .valueOrNull
+        ?.subject;
+    if (subject == null) return;
+    final eps = subject.eps > 0 ? subject.eps : subject.epsCount;
+    if (store.autoCompleteEps &&
+        (subject.type == SubjectType.anime ||
+            subject.type == SubjectType.real) &&
+        eps > 0) {
+      await updateWatchedEpsAction(ref, widget.subjectId, eps);
+      ref.invalidate(epStatusProvider(widget.subjectId));
+      return;
+    }
+    if (store.autoCompleteBooks && subject.type == SubjectType.book) {
+      await updateWatchedEpsAction(
+        ref,
+        widget.subjectId,
+        eps,
+        watchedVols: subject.volums > 0 ? subject.volums : null,
+      );
+      ref.invalidate(epStatusProvider(widget.subjectId));
+    }
+  }
+}
+
+/// 打开原版 Manage 等价的收藏弹层
+Future<void> showCollectionSheet(BuildContext context, int subjectId) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (_) => CollectionSheet(subjectId: subjectId),
+  );
 }

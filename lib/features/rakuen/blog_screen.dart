@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/utils/display.dart';
+
 import '../../shared/widgets/bgm_html.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
@@ -45,17 +48,22 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
     setState(() => _sending = true);
     try {
       final client = ref.read(apiClientProvider);
-      await client.post(apiBlogNewReply('${widget.id}'), data: {'content': text});
+      await client.post(
+        apiBlogNewReply('${widget.id}'),
+        data: {'content': text},
+      );
       _replyController.clear();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('回复成功')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('回复成功')));
       }
       ref.invalidate(blogDetailProvider(widget.id));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('回复失败: ${apiErrorMessage(e)}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('回复失败: ${apiErrorMessage(e)}')));
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -71,11 +79,48 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          async.valueOrNull?.title.isNotEmpty == true ? async.valueOrNull!.title : '日志',
+          async.valueOrNull?.title.isNotEmpty == true
+              ? async.valueOrNull!.title
+              : '日志',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (v) {
+              final url = htmlBlogPage(widget.id);
+              final title = async.valueOrNull?.title ?? '日志';
+              if (v == 'browser') {
+                openExternalUrl(url);
+                return;
+              }
+              if (v == 'copy') {
+                Clipboard.setData(ClipboardData(text: url));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('已复制链接')));
+                return;
+              }
+              if (v == 'share') {
+                Clipboard.setData(
+                  ClipboardData(text: '【链接】$title | Bangumi番组计划\n$url'),
+                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('已复制分享文案')));
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
+              PopupMenuItem(value: 'copy', child: Text('复制链接')),
+
+              PopupMenuItem(value: 'share', child: Text('复制分享')),
+            ],
+          ),
+        ],
       ),
+
       body: async.when(
         loading: () => const Loading(height: double.infinity),
         error: (e, _) => Center(
@@ -100,7 +145,11 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
                 children: [
                   Text(
                     data.title,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 1.35),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      height: 1.35,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Row(
@@ -113,13 +162,13 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
                           children: [
                             Text(
                               data.userName.isEmpty ? '匿名' : data.userName,
-                              style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: theme.colorScheme.onSurface,
+                              ),
                             ),
                             if (data.time.isNotEmpty)
-                              Text(
-                                data.time,
-                                style: context.ds.tiny,
-                              ),
+                              Text(data.time, style: context.ds.tiny),
                           ],
                         ),
                       ),
@@ -127,7 +176,10 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
                   ),
                   if (data.contentHtml.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    BgmHtml(data: data.contentHtml, showImages: settings.loadImages),
+                    BgmHtml(
+                      data: data.contentHtml,
+                      showImages: settings.loadImages,
+                    ),
                   ],
                 ],
               ),
@@ -137,19 +189,25 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
               Padding(
                 padding: const EdgeInsets.all(24),
                 child: Center(
-                  child: Text('还没有评论', style: TextStyle(color: theme.colorScheme.outline)),
+                  child: Text(
+                    '还没有评论',
+                    style: TextStyle(color: theme.colorScheme.outline),
+                  ),
                 ),
               ),
             for (final (index, floor) in data.floors.indexed)
               FloorView(
                 floor: floor,
-                floorLabel: floor.floor.isNotEmpty ? floor.floor : '${index + 1}',
+                floorLabel: floor.floor.isNotEmpty
+                    ? floor.floor
+                    : '${index + 1}',
                 isAuthor: false,
                 settings: settings,
                 onReply: (name) {
                   _replyController.text = '@$name ';
-                  _replyController.selection =
-                      TextSelection.collapsed(offset: _replyController.text.length);
+                  _replyController.selection = TextSelection.collapsed(
+                    offset: _replyController.text.length,
+                  );
                 },
                 expanded: _expandedSubs.contains(floor.id),
                 onExpand: () => setState(() => _expandedSubs.add(floor.id)),
@@ -199,7 +257,10 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
                     Expanded(
                       child: Text(
                         '登录后评论',
-                        style: TextStyle(fontSize: 13, color: theme.colorScheme.outline),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.outline,
+                        ),
                       ),
                     ),
                     TextButton(

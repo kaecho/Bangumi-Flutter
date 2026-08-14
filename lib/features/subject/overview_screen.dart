@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/models/ep.dart';
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
+
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
 
@@ -20,7 +23,18 @@ class OverviewScreen extends ConsumerWidget {
     final detail = ref.watch(subjectDetailProvider(id));
     final eps = ref.watch(epListProvider(id)).valueOrNull;
     return Scaffold(
-      appBar: BgmAppBar(title: '概览', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '概览',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(htmlSubjectRelations(id)),
+          ),
+        ],
+      ),
+
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -44,16 +58,27 @@ class OverviewScreen extends ConsumerWidget {
           }
           // 按 disc 分组 (书籍卷 / 音乐碟)
           final groups = <int, List<Ep>>{};
-          for (final ep in [...eps.eps, ...eps.type1, ...eps.type2, ...eps.type3, ...eps.type4, ...eps.type6]) {
+          for (final ep in [
+            ...eps.eps,
+            ...eps.type1,
+            ...eps.type2,
+            ...eps.type3,
+            ...eps.type4,
+            ...eps.type6,
+          ]) {
             groups.putIfAbsent(ep.disc, () => []).add(ep);
           }
-          final sorted = groups.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+          final sorted = groups.entries.toList()
+            ..sort((a, b) => a.key.compareTo(b.key));
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               Text(
                 value.subject.displayName,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -69,12 +94,16 @@ class OverviewScreen extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(
                         entry.key > 0 ? 'Disc ${entry.key}' : '本篇',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     for (final ep in entry.value)
                       InkWell(
-                        onTap: () => context.push('/subject/$id/ep/${ep.id}/comments'),
+                        onTap: () =>
+                            context.push('/subject/$id/ep/${ep.id}/comments'),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Row(
@@ -88,17 +117,16 @@ class OverviewScreen extends ConsumerWidget {
                               ),
                               Expanded(
                                 child: Text(
-                                  ep.displayName.isEmpty ? '第 ${ep.sort} 话' : ep.displayName,
+                                  ep.displayName.isEmpty
+                                      ? '第 ${ep.sort} 话'
+                                      : ep.displayName,
                                   style: const TextStyle(fontSize: 13),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               if (ep.duration.isNotEmpty)
-                                Text(
-                                  ep.duration,
-                                  style: context.ds.meta,
-                                ),
+                                Text(ep.duration, style: context.ds.meta),
                             ],
                           ),
                         ),

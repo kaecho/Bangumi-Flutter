@@ -2,9 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../core/utils/display.dart';
+
 import '../../design_system/design_system.dart';
+import 'origin_utils.dart';
 
 /// 源头类型
 const kOriginTypes = [
@@ -31,14 +34,19 @@ class OriginItem {
     this.active = true,
   });
 
-  Map<String, dynamic> toJson() => {'uuid': uuid, 'name': name, 'url': url, 'active': active};
+  Map<String, dynamic> toJson() => {
+    'uuid': uuid,
+    'name': name,
+    'url': url,
+    'active': active,
+  };
 
   factory OriginItem.fromJson(Map<String, dynamic> json) => OriginItem(
-        uuid: json['uuid'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        url: json['url'] as String? ?? '',
-        active: (json['active'] as num?)?.toInt() != 0,
-      );
+    uuid: json['uuid'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    url: json['url'] as String? ?? '',
+    active: (json['active'] as num?)?.toInt() != 0,
+  );
 }
 
 /// 源头设置 (每个类型维护自定义数据源列表, 本地持久化)
@@ -54,7 +62,10 @@ class OriginStore {
       return {
         for (final e in map.entries)
           e.key: (e.value as List)
-              .map((item) => OriginItem.fromJson(Map<String, dynamic>.from(item as Map)))
+              .map(
+                (item) =>
+                    OriginItem.fromJson(Map<String, dynamic>.from(item as Map)),
+              )
               .toList(),
       };
     } catch (_) {
@@ -64,9 +75,13 @@ class OriginStore {
 
   Future<void> save(Map<String, List<OriginItem>> data) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, jsonEncode({
-          for (final e in data.entries) e.key: [for (final item in e.value) item.toJson()],
-        }));
+    await prefs.setString(
+      _key,
+      jsonEncode({
+        for (final e in data.entries)
+          e.key: [for (final item in e.value) item.toJson()],
+      }),
+    );
   }
 }
 
@@ -75,7 +90,8 @@ class OriginSettingScreen extends ConsumerStatefulWidget {
   const OriginSettingScreen({super.key});
 
   @override
-  ConsumerState<OriginSettingScreen> createState() => _OriginSettingScreenState();
+  ConsumerState<OriginSettingScreen> createState() =>
+      _OriginSettingScreenState();
 }
 
 class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
@@ -98,7 +114,10 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
     });
   }
 
-  Future<void> _save() => _store.save(_data);
+  Future<void> _save() async {
+    await _store.save(_data);
+    ref.invalidate(originConfigProvider);
+  }
 
   Future<void> _edit(String type, [OriginItem? item]) async {
     final nameCtrl = TextEditingController(text: item?.name ?? '');
@@ -110,16 +129,27 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: '名称')),
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: '名称'),
+            ),
             const SizedBox(height: 8),
-            TextField(controller: urlCtrl, decoration: const InputDecoration(labelText: '网址')),
+            TextField(
+              controller: urlCtrl,
+              decoration: const InputDecoration(labelText: '网址'),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
             onPressed: () {
-              if (nameCtrl.text.trim().isEmpty || urlCtrl.text.trim().isEmpty) return;
+              if (nameCtrl.text.trim().isEmpty || urlCtrl.text.trim().isEmpty) {
+                return;
+              }
               Navigator.pop(context, true);
             },
             child: const Text('保存'),
@@ -132,11 +162,13 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
     setState(() {
       final list = [...?_data[type]];
       if (item == null) {
-        list.add(OriginItem(
-          uuid: DateTime.now().microsecondsSinceEpoch.toString(),
-          name: nameCtrl.text.trim(),
-          url: urlCtrl.text.trim(),
-        ));
+        list.add(
+          OriginItem(
+            uuid: DateTime.now().microsecondsSinceEpoch.toString(),
+            name: nameCtrl.text.trim(),
+            url: urlCtrl.text.trim(),
+          ),
+        );
       } else {
         final index = list.indexWhere((e) => e.uuid == item.uuid);
         if (index >= 0) {
@@ -169,7 +201,10 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
         ..._data,
         type: [
           for (final e in _data[type] ?? const <OriginItem>[])
-            if (e.uuid == uuid) OriginItem(uuid: e.uuid, name: e.name, url: e.url, active: active) else e,
+            if (e.uuid == uuid)
+              OriginItem(uuid: e.uuid, name: e.name, url: e.url, active: active)
+            else
+              e,
         ],
       };
     });
@@ -180,7 +215,17 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('源头设置')),
+      appBar: AppBar(
+        title: const Text('自定义源头'),
+        actions: [
+          IconButton(
+            tooltip: '说明',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => context.push('/tips'),
+          ),
+        ],
+      ),
+
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -188,18 +233,21 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text(
-                    '自定义数据源, 供条目页跳转使用',
-                    style: context.ds.caption,
-                  ),
+                  child: Text('自定义数据源, 供条目页跳转使用', style: context.ds.caption),
                 ),
                 for (final (type, label) in kOriginTypes)
                   Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     child: Column(
                       children: [
                         ListTile(
-                          title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          title: Text(
+                            label,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
                           trailing: IconButton(
                             icon: const Icon(Icons.add),
                             tooltip: '添加',
@@ -208,7 +256,10 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
                         ),
                         for (final item in _data[type] ?? const <OriginItem>[])
                           SwitchListTile(
-                            title: Text(item.name, style: const TextStyle(fontSize: 13)),
+                            title: Text(
+                              item.name,
+                              style: const TextStyle(fontSize: 13),
+                            ),
                             subtitle: Text(
                               item.url,
                               maxLines: 1,
@@ -225,10 +276,13 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
                               children: [
                                 IconButton(
                                   icon: const Icon(Icons.open_in_new, size: 18),
-                                  onPressed: () => launchUrl(Uri.parse(item.url)),
+                                  onPressed: () => openExternalUrl(item.url),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 18),
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 18,
+                                  ),
                                   onPressed: () => _edit(type, item),
                                 ),
                                 IconButton(

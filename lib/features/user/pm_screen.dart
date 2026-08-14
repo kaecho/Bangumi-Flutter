@@ -21,12 +21,31 @@ final pmInboxProvider = FutureProvider<List<PmItem>>((ref) async {
   return parsePmInbox(html as String);
 });
 
-/// 短信详情 (bgm.tv/pm/conversation/ID.chii)
+/// 短信详情 (bgm.tv/pm/conversation/ID.chii?thread=)
 final pmChatProvider =
-    FutureProvider.family<({List<PmMessage> list, PmForm form}), int>((ref, convId) async {
+    FutureProvider.family<
+      ({List<PmMessage> list, PmForm form}),
+      ({int convId, String thread})
+    >((ref, arg) async {
+      final client = ref.read(apiClientProvider);
+      final html = await client.get(
+        apiPmConversationHtml(
+          arg.convId,
+          thread: arg.thread.isEmpty ? null : arg.thread,
+        ),
+        host: kHost,
+      );
+      return parsePmChat(html as String);
+    });
+
+/// 新短信表单 (bgm.tv/pm/compose/{uid}.chii)
+final pmComposeProvider = FutureProvider.family<PmForm, String>((
+  ref,
+  userId,
+) async {
   final client = ref.read(apiClientProvider);
-  final html = await client.get(apiPmConversationHtml(convId), host: kHost);
-  return parsePmChat(html as String);
+  final html = await client.get(apiPmComposeParamsHtml(userId), host: kHost);
+  return parsePmCompose(html as String);
 });
 
 /// 短信 (收件箱)
@@ -39,7 +58,7 @@ class PmScreen extends ConsumerWidget {
     final hasSiteCookies = ref.watch(siteCookiesProvider).hasCookies;
     return Scaffold(
       appBar: AppBar(title: const Text('短信')),
-      body: isLogin || hasSiteCookies ? const _PmInbox() : const _PmLoginGate(),
+      body: isLogin || hasSiteCookies ? const PmInbox() : const _PmLoginGate(),
     );
   }
 }
@@ -72,8 +91,8 @@ class _PmLoginGate extends StatelessWidget {
   }
 }
 
-class _PmInbox extends ConsumerWidget {
-  const _PmInbox();
+class PmInbox extends ConsumerWidget {
+  const PmInbox({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -141,7 +160,8 @@ class _PmInbox extends ConsumerWidget {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              onTap: () => context.push('/pm/chat/${item.userId}?conv=${item.id}'),
+              onTap: () =>
+                  context.push('/pm/chat/${item.userId}?conv=${item.id}'),
             );
           },
         );
@@ -165,6 +185,7 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   bool _sending = false;
+  String _thread = '';
 
   @override
   void dispose() {
@@ -173,7 +194,7 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
     super.dispose();
   }
 
-  Future<void> _send(PmForm form) async {
+  Future<void> _send(PmForm form, {bool compose = false}) async {
     final text = _input.text.trim();
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
@@ -183,156 +204,260 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
         apiPmCreateHtml(),
         data: {
           'related': form.related,
-          'msg_receivers': form.msgReceivers.isEmpty ? widget.userId : form.msgReceivers,
+          'msg_receivers': form.msgReceivers.isEmpty
+              ? widget.userId
+              : form.msgReceivers,
           'current_msg_id': form.currentMsgId,
           'formhash': form.formhash,
-          'msg_title': form.msgTitle.isEmpty ? 'Re: ${form.msgTitle}' : form.msgTitle,
+          'msg_title': form.msgTitle.isEmpty ? '短信' : form.msgTitle,
           'msg_body': text,
-          'chat': 'on',
-          'submit': '回复',
+          if (!compose) 'chat': 'on',
+          'submit': compose ? '发送' : '回复',
         },
         host: kHost,
       );
       if (!mounted) return;
       _input.clear();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已发送')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已发送')));
       final convId = int.tryParse(widget.convId ?? '');
-      if (convId != null) ref.invalidate(pmChatProvider(convId));
+      if (convId != null) {
+        ref.invalidate(pmChatProvider((convId: convId, thread: _thread)));
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('发送失败: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('发送失败: $e')));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
+  ({int convId, String thread})? get _chatQuery {
+    final convId = int.tryParse(widget.convId ?? '');
+    if (convId == null) return null;
+    return (convId: convId, thread: _thread);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final convId = int.tryParse(widget.convId ?? '');
+    final query = _chatQuery;
+    final chat = query == null ? null : ref.watch(pmChatProvider(query));
+    final form = chat?.valueOrNull?.form;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.userId)),
-      body: convId == null
-          ? const Center(child: Text('请从短信列表进入会话'))
-          : Column(
-              children: [
-                Expanded(
-                  child: ref.watch(pmChatProvider(convId)).when(
-                        loading: () => const Loading(),
-                        error: (_, _) => const Center(child: Text('加载失败')),
-                        data: (data) {
-                          if (data.list.isEmpty) {
-                            return const Center(child: Text('暂无消息 (需网页端登录后可见)'));
-                          }
-                          return ListView.builder(
-                            controller: _scroll,
-                            padding: const EdgeInsets.all(12),
-                            itemCount: data.list.length,
-                            itemBuilder: (context, index) {
-                              final msg = data.list[index];
-                              if (msg.type == 'label') {
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
-                                  child: Center(
-                                    child: Text(
-                                      msg.threadTitle,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Theme.of(context).colorScheme.primary,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }
-                              final isSelf = msg.name == '我';
-                              return Align(
-                                alignment: isSelf
-                                    ? Alignment.centerRight
-                                    : Alignment.centerLeft,
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(vertical: 4),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  constraints: BoxConstraints(
-                                    maxWidth: MediaQuery.of(context).size.width * 0.75,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isSelf
-                                        ? Theme.of(context).colorScheme.primaryContainer
-                                        : Theme.of(context).cardTheme.color,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      if (!isSelf)
-                                        Text(
-                                          msg.name,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        stripHtml(msg.content),
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                      if (msg.time.isNotEmpty)
-                                        Text(
-                                          msg.time,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Theme.of(context).colorScheme.outline,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                ),
-                // 输入栏
-                SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _input,
-                            maxLines: 4,
-                            minLines: 1,
-                            decoration: const InputDecoration(
-                              hintText: '输入消息…',
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: _sending
-                              ? null
-                              : () {
-                                  final form =
-                                      ref.read(pmChatProvider(convId)).valueOrNull?.form ??
-                                          const PmForm();
-                                  unawaited(_send(form));
-                                },
-                          child: const Text('发送'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+      appBar: AppBar(
+        title: Text(
+          form != null && form.peerUserName.isNotEmpty
+              ? form.peerUserName
+              : widget.userId,
+        ),
+        actions: [
+          if (query != null) ...[
+            IconButton(
+              tooltip: '回全部',
+              icon: const Icon(Icons.list_alt_outlined),
+              onPressed: () => context.go('/pm'),
+            ),
+            IconButton(
+              tooltip: '顶部',
+              icon: const Icon(Icons.vertical_align_top),
+              onPressed: () {
+                if (!_scroll.hasClients) return;
+                _scroll.animateTo(
+                  0,
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOut,
+                );
+              },
+            ),
+            IconButton(
+              tooltip: '底部',
+              icon: const Icon(Icons.vertical_align_bottom),
+              onPressed: () {
+                if (!_scroll.hasClients) return;
+
+                _scroll.animateTo(
+                  _scroll.position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOut,
+                );
+              },
+            ),
+            PopupMenuButton<String>(
+              tooltip: '相关短信',
+              icon: const Icon(Icons.more_horiz),
+              onSelected: (v) {
+                if (v == 'new') {
+                  final peer = form?.peerUserId.isNotEmpty == true
+                      ? form!.peerUserId
+                      : widget.userId;
+                  context.push('/pm/chat/$peer');
+                  return;
+                }
+                if (v.startsWith('thread:')) {
+                  setState(() => _thread = v.substring(7));
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'new', child: Text('新短信')),
+
+                if (form != null)
+                  for (final t in form.threads)
+                    PopupMenuItem(value: 'thread:${t.$1}', child: Text(t.$2)),
               ],
             ),
+          ],
+        ],
+      ),
+      body: query == null ? _composeBody() : _conversationBody(query),
+    );
+  }
+
+  Widget _composeBody() {
+    final async = ref.watch(pmComposeProvider(widget.userId));
+    return async.when(
+      loading: () => const Loading(),
+      error: (_, _) => const Center(child: Text('加载发信表单失败')),
+      data: (form) => Column(
+        children: [
+          const Expanded(child: Center(child: Text('给 TA 发一条新短信'))),
+          _composer(onSend: () => unawaited(_send(form, compose: true))),
+        ],
+      ),
+    );
+  }
+
+  Widget _conversationBody(({int convId, String thread}) query) {
+    return Column(
+      children: [
+        Expanded(
+          child: ref
+              .watch(pmChatProvider(query))
+              .when(
+                loading: () => const Loading(),
+                error: (_, _) => const Center(child: Text('加载失败')),
+                data: (data) {
+                  if (data.list.isEmpty) {
+                    return const Center(child: Text('暂无消息 (需网页端登录后可见)'));
+                  }
+                  return ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.all(12),
+                    itemCount: data.list.length,
+                    itemBuilder: (context, index) {
+                      final msg = data.list[index];
+                      if (msg.type == 'label') {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Center(
+                            child: Text(
+                              msg.threadTitle,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      final isSelf = msg.name == '我';
+                      return Align(
+                        alignment: isSelf
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.75,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelf
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).cardTheme.color,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (!isSelf)
+                                Text(
+                                  msg.name,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              const SizedBox(height: 2),
+                              Text(
+                                stripHtml(msg.content),
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              if (msg.time.isNotEmpty)
+                                Text(
+                                  msg.time,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outline,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+        ),
+        _composer(
+          onSend: () {
+            final form =
+                ref.read(pmChatProvider(query)).valueOrNull?.form ??
+                const PmForm();
+            unawaited(_send(form));
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _composer({required VoidCallback onSend}) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _input,
+                maxLines: 4,
+                minLines: 1,
+                decoration: const InputDecoration(
+                  hintText: '输入消息…',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _sending ? null : onSend,
+              child: const Text('发送'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

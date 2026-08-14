@@ -3,15 +3,25 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'user_notes.dart';
 
 /// 本地备份: 导出/导入 设置 + 缓存 (JSON 文件)
 class BackupScreen extends ConsumerWidget {
   const BackupScreen({super.key});
 
-  static const _kCacheBoxes = ['settings', 'subject', 'user', 'collection', 'timeline', 'topic'];
+  static const _kCacheBoxes = [
+    'settings',
+    'subject',
+    'user',
+    'collection',
+    'timeline',
+    'topic',
+  ];
 
   Future<Map<String, dynamic>> _exportJson() async {
     final prefs = await SharedPreferences.getInstance();
@@ -43,14 +53,21 @@ class BackupScreen extends ConsumerWidget {
     try {
       final json = jsonEncode(await _exportJson());
       final dir = await Directory.systemTemp.createTemp('bangumi_backup');
-      final file = File('${dir.path}/bangumi_backup_${DateTime.now().millisecondsSinceEpoch}.json');
+      final file = File(
+        '${dir.path}/bangumi_backup_${DateTime.now().millisecondsSinceEpoch}.json',
+      );
       await file.writeAsString(json, flush: true);
       await SharePlus.instance.share(
-        ShareParams(files: [XFile(file.path, mimeType: 'application/json')], text: 'Bangumi 本地备份'),
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'application/json')],
+          text: 'Bangumi 本地备份',
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('导出失败: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导出失败: $e')));
     }
   }
 
@@ -97,7 +114,10 @@ class BackupScreen extends ConsumerWidget {
         } else if (value is num) {
           await prefs.setInt(entry.key, value.toInt());
         } else if (value is List) {
-          await prefs.setStringList(entry.key, value.map((e) => e.toString()).toList());
+          await prefs.setStringList(
+            entry.key,
+            value.map((e) => e.toString()).toList(),
+          );
         }
       }
 
@@ -114,12 +134,14 @@ class BackupScreen extends ConsumerWidget {
       }
 
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('导入成功, 重启后完全生效')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('导入成功, 重启后完全生效')));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('导入失败: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导入失败: $e')));
     }
   }
 
@@ -127,13 +149,26 @@ class BackupScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('本地备份')),
+      appBar: AppBar(
+        title: const Text('本地备份'),
+        actions: [
+          IconButton(
+            tooltip: '说明',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => context.push(backupNotePath()),
+          ),
+        ],
+      ),
+
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
           Card(
             child: ListTile(
-              leading: Icon(Icons.upload_file, color: theme.colorScheme.primary),
+              leading: Icon(
+                Icons.upload_file,
+                color: theme.colorScheme.primary,
+              ),
               title: const Text('导出备份'),
               subtitle: const Text('将设置与缓存导出为 JSON 文件并分享'),
               onTap: () => _export(context),

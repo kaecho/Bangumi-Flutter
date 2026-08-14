@@ -21,8 +21,10 @@ String? bgmUrlToRoute(String url) {
   final uri = Uri.tryParse(url);
   if (uri == null) return null;
   final host = uri.host;
-  if (!host.endsWith('bgm.tv') && !host.endsWith('bangumi.tv') &&
-      !host.endsWith('chii.in') && !host.endsWith('next.bgm.tv')) {
+  if (!host.endsWith('bgm.tv') &&
+      !host.endsWith('bangumi.tv') &&
+      !host.endsWith('chii.in') &&
+      !host.endsWith('next.bgm.tv')) {
     return null;
   }
   final segs = uri.pathSegments.where((s) => s.isNotEmpty).toList();
@@ -34,18 +36,27 @@ String? bgmUrlToRoute(String url) {
       if (segs.length >= 2 && RegExp(r'^\d+$').hasMatch(segs[1])) {
         return '/subject/${segs[1]}';
       }
-      if (segs.length >= 3 && segs[1] == 'topic' && RegExp(r'^\d+$').hasMatch(segs[2])) {
+      if (segs.length >= 3 &&
+          segs[1] == 'topic' &&
+          RegExp(r'^\d+$').hasMatch(segs[2])) {
         return '/rakuen/topic/group/${segs[2]}';
       }
-      if (segs.length >= 3 && segs[1] == 'ep' && RegExp(r'^\d+$').hasMatch(segs[2])) {
+      if (segs.length >= 3 &&
+          segs[1] == 'ep' &&
+          RegExp(r'^\d+$').hasMatch(segs[2])) {
         return '/rakuen/topic/ep/${segs[2]}';
       }
       return null;
     case 'group':
-      if (segs.length >= 3 && segs[1] == 'topic' && RegExp(r'^\d+$').hasMatch(segs[2])) {
+      if (segs.length >= 3 &&
+          segs[1] == 'topic' &&
+          RegExp(r'^\d+$').hasMatch(segs[2])) {
         return '/rakuen/topic/group/${segs[2]}';
       }
-      if (segs.length >= 2 && segs[1] == 'topics') return '/rakuen/group/${segs[0]}';
+      if (segs.length >= 2 && segs[1] == 'topics') {
+        return '/rakuen/group/${segs[0]}';
+      }
+
       if (segs.length >= 2) return '/rakuen/group/${segs[1]}';
       return null;
     case 'rakuen':
@@ -59,8 +70,31 @@ String? bgmUrlToRoute(String url) {
       if (segs.length >= 2) return '/rakuen/topic/${segs.sublist(1).join('/')}';
       return null;
     case 'user':
-      if (segs.length >= 2) return '/user/${segs[1]}';
-      return null;
+      if (segs.length < 2) return null;
+      final userId = segs[1];
+      if (segs.length >= 3) {
+        switch (segs[2]) {
+          case 'index':
+            return '/user/$userId/catalogs';
+          case 'blog':
+            return '/user/$userId/blogs';
+          case 'mono':
+            return '/user/$userId/mono';
+          case 'friends':
+            return '/user/$userId/friends';
+          case 'rev_friends':
+            return '/user/$userId/friends?rev=1';
+          case 'timeline':
+            return '/user/$userId/timeline';
+        }
+      }
+      return '/user/$userId';
+    case 'tag':
+      if (segs.length >= 2) {
+        return '/tags/anime/${Uri.encodeComponent(segs[1])}';
+      }
+      return '/tags';
+
     case 'character':
       if (segs.length >= 2 && RegExp(r'^\d+$').hasMatch(segs[1])) {
         return '/mono/character/${segs[1]}';
@@ -90,7 +124,22 @@ String? bgmUrlToRoute(String url) {
     case 'book':
     case 'game':
     case 'real':
-      return '/anime';
+      if (segs.length >= 3 && segs[1] == 'tag') {
+        final type = switch (head) {
+          'book' => 'book',
+          'game' => 'game',
+          'real' => 'real',
+          _ => 'anime',
+        };
+        return '/tags/$type/${Uri.encodeComponent(segs[2])}';
+      }
+      return switch (head) {
+        'game' => '/game',
+        'book' => '/wenku',
+        'real' => '/browser',
+        _ => '/anime',
+      };
+
     case 'calendar':
       return '/calendar';
     case 'rakuen2':

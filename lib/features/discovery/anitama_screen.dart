@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import 'widgets/paged.dart';
 import '../../design_system/design_system.dart';
@@ -50,7 +51,9 @@ class NewsArticle {
 /// 原项目聚合机核 / 异世界 / 游民星空 三个资讯源, 其中机核使用公开
 /// JSON:API, 这里移植机核源 (其余为 HTML 抓取, 不稳定)。
 final newsListProvider =
-    AsyncNotifierProvider.family<NewsList, PagedData<NewsArticle>, int>(NewsList.new);
+    AsyncNotifierProvider.family<NewsList, PagedData<NewsArticle>, int>(
+      NewsList.new,
+    );
 
 class NewsList extends PagedNotifier<NewsArticle, int> {
   @override
@@ -69,18 +72,99 @@ class NewsList extends PagedNotifier<NewsArticle, int> {
   }
 }
 
-class AnitamaScreen extends ConsumerWidget {
+class AnitamaScreen extends ConsumerStatefulWidget {
   const AnitamaScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AnitamaScreen> createState() => _AnitamaScreenState();
+}
+
+class _AnitamaScreenState extends ConsumerState<AnitamaScreen> {
+  int _source = 0; // 0 机核 1 异世界 2 游民
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: BgmAppBar(title: '资讯', showBackButton: true),
-      body: PagedListView<NewsArticle, int>(
-        provider: newsListProvider,
-        arg: 0,
-        emptyText: '暂无资讯',
-        itemBuilder: (context, item, index) => _NewsRow(article: item),
+      appBar: BgmAppBar(
+        title: '业界资讯',
+        showBackButton: true,
+        actions: [
+          PopupMenuButton<int>(
+            tooltip: '更多',
+            onSelected: (value) {
+              if (value == -1) {
+                openExternalUrl('https://www.gcores.com/');
+              } else {
+                setState(() => _source = value);
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 0, child: Text('机核')),
+              PopupMenuItem(value: 1, child: Text('异世界')),
+              PopupMenuItem(value: 2, child: Text('游民星空')),
+              PopupMenuDivider(),
+              PopupMenuItem(value: -1, child: Text('浏览器查看')),
+            ],
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(value: 0, label: Text('机核')),
+                ButtonSegment(value: 1, label: Text('异世界')),
+                ButtonSegment(value: 2, label: Text('游民星空')),
+              ],
+              selected: {_source},
+              onSelectionChanged: (s) => setState(() => _source = s.first),
+            ),
+          ),
+          Expanded(
+            child: switch (_source) {
+              1 => _ExternalNewsHint(
+                name: '异世界动画',
+                url: 'https://www.iyingshi.com/',
+              ),
+              2 => _ExternalNewsHint(
+                name: '游民星空动漫',
+                url: 'https://acg.gamersky.com/',
+              ),
+              _ => PagedListView<NewsArticle, int>(
+                provider: newsListProvider,
+                arg: 0,
+                emptyText: '暂无资讯',
+                itemBuilder: (context, item, index) => _NewsRow(article: item),
+              ),
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExternalNewsHint extends StatelessWidget {
+  final String name;
+  final String url;
+
+  const _ExternalNewsHint({required this.name, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$name 无稳定公开 API, 打开网页浏览'),
+          const SizedBox(height: 12),
+          FilledButton.tonal(
+            onPressed: () => context.push('/web/${Uri.encodeComponent(url)}'),
+            child: Text('打开$name'),
+          ),
+        ],
       ),
     );
   }
@@ -107,7 +191,9 @@ class _NewsRow extends StatelessWidget {
                 width: 96,
                 height: 64,
                 child: article.thumb.isEmpty
-                    ? Container(color: theme.colorScheme.surfaceContainerHighest)
+                    ? Container(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                      )
                     : Image.network(
                         'https://image.gcores.com/${article.thumb}',
                         fit: BoxFit.cover,

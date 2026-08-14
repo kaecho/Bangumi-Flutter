@@ -28,7 +28,10 @@ class TinygrailSacrificeScreen extends ConsumerWidget {
                 children: [
                   const Text('请先授权登录小圣杯'),
                   const SizedBox(height: 8),
-                  FilledButton(onPressed: () => context.push('/tinygrail/login'), child: const Text('去授权')),
+                  FilledButton(
+                    onPressed: () => context.push('/tinygrail/login'),
+                    child: const Text('去授权'),
+                  ),
                 ],
               ),
             );
@@ -67,7 +70,10 @@ class _SacrificeBody extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('持 ${c.state} 股', style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(
+                          '持 ${c.state} 股',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         Text(
                           '献祭 ${tgAmount(c.sacrifices)}',
                           style: context.ds.meta,
@@ -82,6 +88,9 @@ class _SacrificeBody extends ConsumerWidget {
   }
 }
 
-final sacrificeProvider = FutureProvider.family<List<TinygrailChara>, String>((ref, hash) async {
+final sacrificeProvider = FutureProvider.family<List<TinygrailChara>, String>((
+  ref,
+  hash,
+) async {
   return ref.read(tinygrailApiProvider).fetchCharaAll(hash);
 });

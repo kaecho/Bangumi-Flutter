@@ -4,6 +4,7 @@ import 'bilibili_sync_screen.dart';
 import 'douban_sync_screen.dart';
 import 'information_screen.dart';
 import 'log_screen.dart';
+import 'note_screen.dart';
 import 'playground_screen.dart';
 import 'proxy_help_screen.dart';
 import 'share_screen.dart';
@@ -22,7 +23,10 @@ final List<GoRoute> webviewRoutes = [
       title: state.uri.queryParameters['title'],
     ),
   ),
-  GoRoute(path: '/sync/bilibili', builder: (_, _) => const BilibiliSyncScreen()),
+  GoRoute(
+    path: '/sync/bilibili',
+    builder: (_, _) => const BilibiliSyncScreen(),
+  ),
   GoRoute(path: '/sync/douban', builder: (_, _) => const DoubanSyncScreen()),
   GoRoute(
     path: '/share/:subjectId',
@@ -36,5 +40,10 @@ final List<GoRoute> webviewRoutes = [
   GoRoute(path: '/webhook', builder: (_, _) => const WebhookScreen()),
   GoRoute(path: '/log', builder: (_, _) => const LogScreen()),
   GoRoute(path: '/about', builder: (_, _) => const InformationScreen()),
+  GoRoute(
+    path: '/note',
+    builder: (_, state) => ExtraNoteScreen.fromUri(state.uri),
+  ),
+
   GoRoute(path: '/playground', builder: (_, _) => const PlaygroundScreen()),
 ];

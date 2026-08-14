@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/api_endpoints.dart';
+import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
+
 import 'subject_models.dart';
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
@@ -18,7 +21,18 @@ class WikiScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final edits = ref.watch(wikiProvider(id));
     return Scaffold(
-      appBar: BgmAppBar(title: '维基修订历史', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '维基修订历史',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: '浏览器查看',
+            icon: const Icon(Icons.open_in_browser),
+            onPressed: () => openExternalUrl(htmlSubjectWikiEdit(id)),
+          ),
+        ],
+      ),
+
       body: edits.when(
         loading: () => const Loading(text: '加载中...'),
         error: (e, _) => Center(
@@ -41,7 +55,8 @@ class WikiScreen extends ConsumerWidget {
             : ListView.separated(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: items.length,
-                separatorBuilder: (_, _) => const Divider(height: 1, indent: 16, endIndent: 16),
+                separatorBuilder: (_, _) =>
+                    const Divider(height: 1, indent: 16, endIndent: 16),
                 itemBuilder: (_, i) => _WikiRow(edit: items[i]),
               ),
       ),
@@ -62,7 +77,10 @@ class _WikiRow extends StatelessWidget {
         backgroundColor: theme.colorScheme.surfaceContainerHighest,
         child: Text(
           edit.userName.isEmpty ? '?' : edit.userName.characters.first,
-          style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurfaceVariant),
+          style: TextStyle(
+            fontSize: 14,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
       title: Text(
@@ -72,20 +90,14 @@ class _WikiRow extends StatelessWidget {
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 2),
         child: Text(
-          [
-            edit.time,
-            if (edit.summary.isNotEmpty) edit.summary,
-          ].join(' · '),
+          [edit.time, if (edit.summary.isNotEmpty) edit.summary].join(' · '),
           style: context.ds.meta,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
       ),
       trailing: edit.rev > 0
-          ? Text(
-              '#${edit.rev}',
-              style: context.ds.meta,
-            )
+          ? Text('#${edit.rev}', style: context.ds.meta)
           : null,
     );
   }

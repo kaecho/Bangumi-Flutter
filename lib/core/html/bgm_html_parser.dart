@@ -187,17 +187,19 @@ List<RakuenItem> parseRakuenList(String html) {
     final group = rowInner?.querySelector('a');
     final avatarLink = row.querySelector('a.avatar');
 
-    result.add(RakuenItem(
-      title: htmlDecode(cText(title ?? row)),
-      avatar: matchAvatar(avatarNeue),
-      userId: cData(avatarNeue, 'data-user'),
-      userName: htmlDecode(cData(avatarLink, 'title')),
-      href: cData(title, 'href'),
-      replies: cText(inner?.querySelector('small.grey') ?? row),
-      group: htmlDecode(cText(group ?? row)),
-      groupHref: cData(group, 'href'),
-      time: cText(rowInner?.querySelector('small.time') ?? row),
-    ));
+    result.add(
+      RakuenItem(
+        title: htmlDecode(cText(title ?? row)),
+        avatar: matchAvatar(avatarNeue),
+        userId: cData(avatarNeue, 'data-user'),
+        userName: htmlDecode(cData(avatarLink, 'title')),
+        href: cData(title, 'href'),
+        replies: cText(inner?.querySelector('small.grey') ?? row),
+        group: htmlDecode(cText(group ?? row)),
+        groupHref: cData(group, 'href'),
+        time: cText(rowInner?.querySelector('small.time') ?? row),
+      ),
+    );
   }
   return result;
 }
@@ -207,42 +209,74 @@ List<RakuenItem> parseRakuenList(String html) {
 class RakuenFloor {
   final String id;
   final String time;
+  final String source;
   final String floor;
   final String avatar;
   final String userId;
   final String userName;
   final String userSign;
   final String messageHtml;
+  final int likes;
   final List<RakuenFloor> subReplies;
 
   const RakuenFloor({
     this.id = '',
     this.time = '',
+    this.source = '',
     this.floor = '',
     this.avatar = '',
     this.userId = '',
     this.userName = '',
     this.userSign = '',
     this.messageHtml = '',
+    this.likes = 0,
     this.subReplies = const [],
   });
+}
+
+int _parseFloorLikes(Element row) {
+  final like =
+      row.querySelector('.likes_grid') ??
+      row.querySelector('.ico_like') ??
+      row.querySelector('a.like_dropdown');
+  if (like == null) return 0;
+  final text = cText(like);
+  final n = int.tryParse(RegExp(r'(\d+)').firstMatch(text)?.group(1) ?? '');
+  if (n != null && n > 0) return n;
+  return like.querySelectorAll('img, span.like').length;
+}
+
+({String time, String source}) _splitTimeSource(String raw) {
+  final idx = raw.indexOf(' · ');
+  if (idx < 0) return (time: raw.trim(), source: '');
+  return (
+    time: raw.substring(0, idx).trim(),
+    source: raw.substring(idx + 3).trim(),
+  );
 }
 
 RakuenFloor _parseFloor(Element row) {
   final action = cText(row.querySelector('.action small') ?? row);
   final info = action.split(' - ');
-  final name = row.querySelector('.inner .userInfo a.l') ?? row.querySelector('a.l');
+  final split = _splitTimeSource(info.length > 1 ? info[1] : '');
+  final name =
+      row.querySelector('.inner .userInfo a.l') ?? row.querySelector('a.l');
   return RakuenFloor(
     id: cData(row, 'id').replaceFirst('post_', ''),
-    time: info.length > 1 ? info[1] : '',
+    time: split.time,
+    source: split.source,
     floor: info.isNotEmpty ? info[0] : '',
     avatar: matchAvatar(row.querySelector('span.avatarNeue')),
     userId: matchAttr(name, 'href', RegExp(r'/user/(\d+)')),
     userName: htmlDecode(cText(name)),
     userSign: cText(row.querySelector('.inner .sign')),
-    messageHtml: row.querySelector('.reply_content > .message')?.innerHtml ?? '',
+    messageHtml:
+        row.querySelector('.reply_content > .message')?.innerHtml ?? '',
+    likes: _parseFloorLikes(row),
     subReplies: [
-      for (final sub in row.querySelectorAll('div.topic_sub_reply > div.sub_reply_bg'))
+      for (final sub in row.querySelectorAll(
+        'div.topic_sub_reply > div.sub_reply_bg',
+      ))
         _parseSubFloor(sub),
     ],
   );
@@ -252,38 +286,54 @@ RakuenFloor _parseFloor(Element row) {
 RakuenFloor _parseSubFloor(Element row) {
   final action = cText(row.querySelector('.action small') ?? row);
   final info = action.split(' - ');
-  final name = row.querySelector('.inner .userInfo a.l') ?? row.querySelector('a.l');
+  final split = _splitTimeSource(info.length > 1 ? info[1] : '');
+  final name =
+      row.querySelector('.inner .userInfo a.l') ?? row.querySelector('a.l');
   return RakuenFloor(
     id: cData(row, 'id').replaceFirst('post_', ''),
-    time: info.length > 1 ? info[1] : '',
+    time: split.time,
+    source: split.source,
     floor: info.isNotEmpty ? info[0] : '',
     avatar: matchAvatar(row.querySelector('span.avatarNeue')),
     userId: matchAttr(name, 'href', RegExp(r'/user/(\d+)')),
     userName: htmlDecode(cText(name)),
     userSign: cText(row.querySelector('.inner .sign')),
     messageHtml: row.querySelector('.cmt_sub_content')?.innerHtml ?? '',
+    likes: _parseFloorLikes(row),
   );
 }
 
 List<RakuenFloor> parseRakuenFloors(String html) {
-  final fragment = htmlMatch(html, '<div id="comment_list"', '<div id="footer">');
+  final fragment = htmlMatch(
+    html,
+    '<div id="comment_list"',
+    '<div id="footer">',
+  );
   if (fragment.isEmpty) return const [];
   final doc = parseDom(removeCF(fragment));
   return [
-    for (final row in doc.querySelectorAll('#comment_list > div.row_reply')) _parseFloor(row),
+    for (final row in doc.querySelectorAll('#comment_list > div.row_reply'))
+      _parseFloor(row),
   ];
 }
 
 /// 解析分页: 当前页/总页数 (bgm.tv 分页 DOM)
 ({int page, int pageTotal}) cPagination(String html) {
-  final fragment = htmlMatch(html, '<div id="comment_list"', '<div id="footer">');
+  final fragment = htmlMatch(
+    html,
+    '<div id="comment_list"',
+    '<div id="footer">',
+  );
   final doc = parseDom(removeCF(fragment.isEmpty ? html : fragment));
   final pageInfo = doc.querySelector('.page_inner');
   if (pageInfo == null) return (page: 1, pageTotal: 1);
   final text = cText(pageInfo);
   final m = RegExp(r'(\d+)\s*/\s*(\d+)').firstMatch(text);
   if (m != null) {
-    return (page: int.tryParse(m.group(1)!) ?? 1, pageTotal: int.tryParse(m.group(2)!) ?? 1);
+    return (
+      page: int.tryParse(m.group(1)!) ?? 1,
+      pageTotal: int.tryParse(m.group(2)!) ?? 1,
+    );
   }
   return (page: 1, pageTotal: 1);
 }
@@ -303,14 +353,16 @@ List<RakuenItem> parseTopicList(String html) {
     final replies = row.querySelector('td.posts');
     final time = row.querySelector('td.lastpost small.time');
 
-    result.add(RakuenItem(
-      title: htmlDecode(cText(title ?? row)),
-      href: cData(title, 'href'),
-      userName: htmlDecode(cText(user)),
-      userId: matchAttr(user, 'href', RegExp(r'/user/(\d+)')),
-      replies: cText(replies),
-      time: cText(time),
-    ));
+    result.add(
+      RakuenItem(
+        title: htmlDecode(cText(title ?? row)),
+        href: cData(title, 'href'),
+        userName: htmlDecode(cText(user)),
+        userId: matchAttr(user, 'href', RegExp(r'/user/(\d+)')),
+        replies: cText(replies),
+        time: cText(time),
+      ),
+    );
   }
   return result;
 }
@@ -348,15 +400,17 @@ List<GroupTopicRow> parseGroupForum(String html) {
     final user = row.querySelector('td.subject a.l');
     final replies = row.querySelector('td.posts');
     final time = row.querySelector('td.lastpost small.time');
-    result.add(GroupTopicRow(
-      title: htmlDecode(cText(title ?? row)),
-      href: cData(title, 'href'),
-      userName: htmlDecode(cText(user)),
-      userId: matchAttr(user, 'href', RegExp(r'/user/(\d+)')),
-      replies: cText(replies),
-      time: cText(time),
-      pin: row.className.contains('row_top'),
-    ));
+    result.add(
+      GroupTopicRow(
+        title: htmlDecode(cText(title ?? row)),
+        href: cData(title, 'href'),
+        userName: htmlDecode(cText(user)),
+        userId: matchAttr(user, 'href', RegExp(r'/user/(\d+)')),
+        replies: cText(replies),
+        time: cText(time),
+        pin: row.className.contains('row_top'),
+      ),
+    );
   }
   return result;
 }
@@ -376,8 +430,10 @@ List<String> parseGroupMembers(String html) {
 /// 小组信息解析: 标题/成员数 (页面 https://bgm.tv/group/{name})
 ({String title, String content, int members}) parseGroupInfo(String html) {
   final doc = parseDom(removeCF(html));
-  final title = doc.querySelector('#group_subject h1') ?? doc.querySelector('h1');
-  final members = doc.querySelector('.member_list .title') ?? doc.querySelector('span.tip');
+  final title =
+      doc.querySelector('#group_subject h1') ?? doc.querySelector('h1');
+  final members =
+      doc.querySelector('.member_list .title') ?? doc.querySelector('span.tip');
   final m = members != null ? RegExp(r'(\d+)').firstMatch(members.text) : null;
   return (
     title: htmlDecode(title?.text.trim() ?? ''),
@@ -388,23 +444,35 @@ List<String> parseGroupMembers(String html) {
 
 /// 帖子标题 + 主楼内容 (页面 https://bgm.tv/group/topic/{id})
 /// 主楼: div.postTopic .topic_content; 标题 h1 (换行分隔 中文/日文名)
-({String title, String user, String contentHtml}) parseTopicHeader(String html) {
+({String title, String user, String contentHtml}) parseTopicHeader(
+  String html,
+) {
   final doc = parseDom(removeCF(html));
   final title = doc.querySelector('h1') ?? doc.querySelector('#topic_subject');
-  final user = doc.querySelector('.postTopic a.l') ?? doc.querySelector('a.avatar');
-  final content = doc.querySelector('.postTopic .topic_content') ??
+  final user =
+      doc.querySelector('.postTopic a.l') ?? doc.querySelector('a.avatar');
+  final content =
+      doc.querySelector('.postTopic .topic_content') ??
       doc.querySelector('#comment_list .message');
   return (
-    title: htmlDecode((title?.text ?? '').replaceFirst(RegExp(r'\s*<br\s*/?>'), ' ').trim()),
+    title: htmlDecode(
+      (title?.text ?? '').replaceFirst(RegExp(r'\s*<br\s*/?>'), ' ').trim(),
+    ),
     user: htmlDecode(user?.text.trim() ?? ''),
     contentHtml: content?.innerHtml ?? '',
   );
 }
 
-/// 生成抓取用的 URL (列表页: /rakuen/{scope}/topiclist?type={type})
+/// 生成抓取用的 URL (原项目 HTML_RAKUEN: /rakuen/{scope}?type={type})
 String rakueHtmlUrl(String scope, String type) {
-  final t = type.isEmpty ? '' : '?type=$type';
-  return 'https://bgm.tv/rakuen/$scope/topiclist$t';
+  if (type.isEmpty) return 'https://bgm.tv/rakuen/$scope';
+  if (type.contains('&')) {
+    final parts = type.split('&');
+    final first = parts.first;
+    final extra = parts.skip(1).join('&');
+    return 'https://bgm.tv/rakuen/$scope?type=$first&$extra';
+  }
+  return 'https://bgm.tv/rakuen/$scope?type=$type';
 }
 
 /// 主题页 URL (注意: /rakuen/topic/group/N 会 JS 跳转到 /group/topic/N)

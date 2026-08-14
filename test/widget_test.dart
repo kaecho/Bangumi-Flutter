@@ -11,8 +11,18 @@ void main() {
       'name_cn': '测试',
       'type': 'anime',
       'images': {'common': '//lain.bgm.tv/pic/cover/m/123.jpg'},
-      'rating': {'total': 100, 'score': 8.5, 'count': {'10': 50, '9': 50}},
-      'collection': {'wish': 10, 'collect': 20, 'doing': 30, 'on_hold': 4, 'dropped': 5},
+      'rating': {
+        'total': 100,
+        'score': 8.5,
+        'count': {'10': 50, '9': 50},
+      },
+      'collection': {
+        'wish': 10,
+        'collect': 20,
+        'doing': 30,
+        'on_hold': 4,
+        'dropped': 5,
+      },
     });
 
     expect(subject.id, 123);
@@ -48,5 +58,11 @@ void main() {
     expect(CollectionStatus.text(3), '在看');
     expect(CollectionStatus.text(4), '搁置');
     expect(CollectionStatus.text(5), '抛弃');
+    expect(SubjectType.action('book'), '读');
+    expect(SubjectType.action('game'), '玩');
+    expect(SubjectType.action('music'), '听');
+    expect(SubjectType.statusText(1, 'book'), '想读');
+    expect(SubjectType.statusText(2, 'game'), '玩过');
+    expect(SubjectType.statusText(3, 'music'), '在听');
   });
 }

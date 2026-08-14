@@ -26,7 +26,27 @@ class _RecommendScreenState extends ConsumerState<RecommendScreen> {
   Widget build(BuildContext context) {
     final loggedIn = ref.watch(isLoggedInProvider);
     return Scaffold(
-      appBar: BgmAppBar(title: '推荐', showBackButton: true),
+      appBar: BgmAppBar(
+        title: 'AI 推荐',
+        showBackButton: true,
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (value) {
+              if (value == 'tips') {
+                context.push('/tips');
+              } else if (value == 'topic') {
+                context.push('/rakuen/topic/group/382655');
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'tips', child: Text('说明')),
+              PopupMenuItem(value: 'topic', child: Text('帖子讨论')),
+            ],
+          ),
+        ],
+      ),
+
       body: !loggedIn
           ? Center(
               child: Column(

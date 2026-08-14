@@ -11,28 +11,32 @@ class RakuenSettingScreen extends ConsumerStatefulWidget {
   const RakuenSettingScreen({super.key});
 
   @override
-  ConsumerState<RakuenSettingScreen> createState() => _RakuenSettingScreenState();
+  ConsumerState<RakuenSettingScreen> createState() =>
+      _RakuenSettingScreenState();
 }
 
 class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
   final _userController = TextEditingController();
   final _groupController = TextEditingController();
   final _keywordController = TextEditingController();
+  final _trackController = TextEditingController();
 
   @override
   void dispose() {
     _userController.dispose();
     _groupController.dispose();
     _keywordController.dispose();
+    _trackController.dispose();
     super.dispose();
   }
 
   Future<void> _add(String kind) async {
-    final controller = kind == 'user'
-        ? _userController
-        : kind == 'group'
-            ? _groupController
-            : _keywordController;
+    final controller = switch (kind) {
+      'user' => _userController,
+      'group' => _groupController,
+      'track' => _trackController,
+      _ => _keywordController,
+    };
     final text = controller.text.trim();
     if (text.isEmpty) return;
     final settings = ref.read(rakuenSettingsProvider.notifier);
@@ -42,6 +46,9 @@ class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
     } else if (kind == 'group') {
       await settings.addBlockGroup(text);
       _groupController.clear();
+    } else if (kind == 'track') {
+      await settings.trackUser(text);
+      _trackController.clear();
     } else {
       await settings.addBlockKeyword(text);
       _keywordController.clear();
@@ -62,18 +69,22 @@ class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
             title: '展开引用',
             subtitle: '展开子回复中上一级的回复内容',
             value: settings.quote,
-            onChanged: (v) => ref.read(rakuenSettingsProvider.notifier).setBool('quote', v),
+            onChanged: (v) =>
+                ref.read(rakuenSettingsProvider.notifier).setBool('quote', v),
           ),
           if (settings.quote)
             _SwitchItem(
               title: '显示引用头像',
               value: settings.quoteAvatar,
-              onChanged: (v) => ref.read(rakuenSettingsProvider.notifier).setBool('quoteAvatar', v),
+              onChanged: (v) => ref
+                  .read(rakuenSettingsProvider.notifier)
+                  .setBool('quoteAvatar', v),
             ),
           _SwitchItem(
             title: '楼层加宽展示',
             value: settings.wide,
-            onChanged: (v) => ref.read(rakuenSettingsProvider.notifier).setBool('wide', v),
+            onChanged: (v) =>
+                ref.read(rakuenSettingsProvider.notifier).setBool('wide', v),
           ),
           _SegmentedItem<String>(
             title: '子楼层折叠',
@@ -81,44 +92,126 @@ class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
             options: kSubExpandOptions,
             value: settings.subExpand,
             label: (v) => v,
-            onChanged: (v) => ref.read(rakuenSettingsProvider.notifier).setString('subExpand', v),
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setString('subExpand', v),
           ),
           _SegmentedItem<String>(
             title: '楼层样式',
             options: [for (final o in kFloorStyleOptions) o.$2],
             value: settings.floorStyle,
-            label: (v) => kFloorStyleOptions.firstWhere((o) => o.$2 == v, orElse: () => ('', v)).$1,
-            onChanged: (v) => ref.read(rakuenSettingsProvider.notifier).setString('floorStyle', v),
+            label: (v) => kFloorStyleOptions
+                .firstWhere((o) => o.$2 == v, orElse: () => ('', v))
+                .$1,
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setString('floorStyle', v),
           ),
           _SegmentedItem<String>(
             title: '图片自动加载',
             subtitle: '楼层中图片自动加载 (建议谨慎开启自动加载)',
             options: [for (final o in kAutoLoadImageOptions) o.$2],
             value: settings.autoLoadImage,
-            label: (v) =>
-                kAutoLoadImageOptions.firstWhere((o) => o.$2 == v, orElse: () => ('', v)).$1,
-            onChanged: (v) =>
-                ref.read(rakuenSettingsProvider.notifier).setString('autoLoadImage', v),
+            label: (v) => kAutoLoadImageOptions
+                .firstWhere((o) => o.$2 == v, orElse: () => ('', v))
+                .$1,
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setString('autoLoadImage', v),
           ),
           _SwitchItem(
             title: '过滤用户删除的楼层',
             value: settings.filterDelete,
-            onChanged: (v) =>
-                ref.read(rakuenSettingsProvider.notifier).setBool('filterDelete', v),
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setBool('filterDelete', v),
           ),
           _SwitchItem(
             title: '标记坟贴',
             subtitle: '超过 90 天未回复的主题显示提醒',
             value: settings.markOldTopic,
-            onChanged: (v) =>
-                ref.read(rakuenSettingsProvider.notifier).setBool('markOldTopic', v),
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setBool('markOldTopic', v),
           ),
+          _SwitchItem(
+            title: '长楼层收起按钮',
+            subtitle: '超长回复显示收起按钮',
+            value: settings.showFoldButton,
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setBool('showFoldButton', v),
+          ),
+          _SwitchItem(
+            title: '长楼层漂浮收起',
+            subtitle: '展开后右下角再显示收起按钮',
+            value: settings.showFixedToggleFloorBtn,
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setBool('showFixedToggleFloorBtn', v),
+          ),
+
+          _SwitchItem(
+            title: '贴贴模块',
+            subtitle: '帖子回复显示贴贴数, 不建议关闭',
+            value: settings.likes,
+            onChanged: (v) =>
+                ref.read(rakuenSettingsProvider.notifier).setBool('likes', v),
+          ),
+          _SegmentedItem<String>(
+            title: '楼层直达条',
+            options: [for (final o in kScrollDirectionOptions) o.$2],
+            value: settings.scrollDirection,
+            label: (v) => kScrollDirectionOptions
+                .firstWhere((o) => o.$2 == v, orElse: () => ('', v))
+                .$1,
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setString('scrollDirection', v),
+          ),
+          _SwitchItem(
+            title: '楼层链接显示成信息块',
+            subtitle: '条目链接改成卡片而不是纯文字',
+            value: settings.matchLink,
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setBool('matchLink', v),
+          ),
+          _SegmentedItem<int>(
+            title: '大表情尺寸',
+            options: const [28, 36, 48],
+            value: settings.bigEmojiSize,
+            label: (v) => switch (v) {
+              28 => '小',
+              48 => '大',
+              _ => '中',
+            },
+            onChanged: (v) =>
+                ref.read(rakuenSettingsProvider.notifier).setBigEmojiSize(v),
+          ),
+          _SwitchItem(
+            title: '楼层跳转滚动动画',
+            value: settings.sliderAnimated,
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setBool('sliderAnimated', v),
+          ),
+          _SwitchItem(
+            title: '交换跳转按钮',
+            subtitle: '上一层 / 下一层 对调',
+            value: settings.switchSlider,
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setBool('switchSlider', v),
+          ),
+
           _SectionTitle('屏蔽'),
           _SwitchItem(
             title: '屏蔽默认头像用户的帖子',
             value: settings.blockDefaultUser,
-            onChanged: (v) =>
-                ref.read(rakuenSettingsProvider.notifier).setBool('blockDefaultUser', v),
+            onChanged: (v) => ref
+                .read(rakuenSettingsProvider.notifier)
+                .setBool('blockDefaultUser', v),
           ),
           _BlockListEditor(
             title: '屏蔽用户',
@@ -127,7 +220,8 @@ class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
             controller: _userController,
             addHint: '输入用户 ID 或用户名',
             onAdd: () => _add('user'),
-            onDelete: (v) => ref.read(rakuenSettingsProvider.notifier).removeBlockUser(v),
+            onDelete: (v) =>
+                ref.read(rakuenSettingsProvider.notifier).removeBlockUser(v),
           ),
           _BlockListEditor(
             title: '屏蔽小组 / 条目 / 人物',
@@ -136,7 +230,8 @@ class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
             controller: _groupController,
             addHint: '输入小组名',
             onAdd: () => _add('group'),
-            onDelete: (v) => ref.read(rakuenSettingsProvider.notifier).removeBlockGroup(v),
+            onDelete: (v) =>
+                ref.read(rakuenSettingsProvider.notifier).removeBlockGroup(v),
           ),
           _BlockListEditor(
             title: '屏蔽关键词',
@@ -145,8 +240,20 @@ class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
             controller: _keywordController,
             addHint: '输入关键词',
             onAdd: () => _add('keyword'),
-            onDelete: (v) => ref.read(rakuenSettingsProvider.notifier).removeBlockKeyword(v),
+            onDelete: (v) =>
+                ref.read(rakuenSettingsProvider.notifier).removeBlockKeyword(v),
           ),
+          _BlockListEditor(
+            title: '追踪回复',
+            subtitle: '楼层菜单也可追踪, 头像会加标记',
+            items: settings.commentTrack,
+            controller: _trackController,
+            addHint: '输入用户 ID',
+            onAdd: () => _add('track'),
+            onDelete: (v) =>
+                ref.read(rakuenSettingsProvider.notifier).untrackUser(v),
+          ),
+
           ListTile(
             title: const Text('用户协议'),
             trailing: const Icon(Icons.chevron_right),
@@ -197,7 +304,9 @@ class _SwitchItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return SwitchListTile(
       title: Text(title, style: const TextStyle(fontSize: 14)),
-      subtitle: subtitle == null ? null : Text(subtitle!, style: const TextStyle(fontSize: 12)),
+      subtitle: subtitle == null
+          ? null
+          : Text(subtitle!, style: const TextStyle(fontSize: 12)),
       value: value,
       onChanged: onChanged,
       dense: true,
@@ -238,7 +347,8 @@ class _SegmentedItem<T> extends StatelessWidget {
           const SizedBox(height: 8),
           SegmentedButton<T>(
             segments: [
-              for (final option in options) ButtonSegment(value: option, label: Text(label(option))),
+              for (final option in options)
+                ButtonSegment(value: option, label: Text(label(option))),
             ],
             selected: {value},
             onSelectionChanged: (selection) => onChanged(selection.first),

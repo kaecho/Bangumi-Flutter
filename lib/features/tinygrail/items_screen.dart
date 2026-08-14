@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
+import 'tinygrail_notes.dart';
 
 /// 我的道具
 class TinygrailItemsScreen extends ConsumerWidget {
@@ -13,7 +15,21 @@ class TinygrailItemsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(itemsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('我的道具')),
+      appBar: AppBar(
+        title: const Text('我的道具'),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: '说明',
+            icon: const Icon(Icons.info_outline),
+            onSelected: (name) => context.push(tinygrailItemNotePath(name)),
+            itemBuilder: (_) => [
+              for (final name in kTinygrailItemNoteNames)
+                PopupMenuItem(value: name, child: Text(name)),
+            ],
+          ),
+        ],
+      ),
+
       body: async.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('请先登录')),
@@ -29,8 +45,15 @@ class TinygrailItemsScreen extends ConsumerWidget {
                     return ListTile(
                       leading: _ItemIcon(name: item.name),
                       title: Text(item.name),
-                      subtitle: Text(item.line, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      trailing: Text('x${item.amount}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text(
+                        item.line,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Text(
+                        'x${item.amount}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     );
                   },
                 ),
@@ -58,7 +81,10 @@ class _ItemIcon extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         name.isEmpty ? '?' : name.characters.first,
-        style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w700),
+        style: TextStyle(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

@@ -7,7 +7,11 @@ class RakuenListData<T> {
   final int page;
   final bool hasMore;
 
-  const RakuenListData({this.items = const [], this.page = 1, this.hasMore = true});
+  const RakuenListData({
+    this.items = const [],
+    this.page = 1,
+    this.hasMore = true,
+  });
 }
 
 /// 电波提醒列表
@@ -16,7 +20,11 @@ class NotifyListData {
   final int page;
   final bool hasMore;
 
-  const NotifyListData({this.items = const [], this.page = 1, this.hasMore = true});
+  const NotifyListData({
+    this.items = const [],
+    this.page = 1,
+    this.hasMore = true,
+  });
 }
 
 /// 条目长评 (移植自原项目 ReviewsItem)
@@ -40,14 +48,16 @@ class Review {
   });
 
   factory Review.fromJson(Map<String, dynamic> json) => Review(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        title: json['title'] as String? ?? '',
-        user: json['user'] == null ? null : User.fromJson(json['user'] as Map<String, dynamic>),
-        userId: (json['user_id'] as num?)?.toInt() ?? 0,
-        content: json['content'] as String? ?? '',
-        createdAt: json['created_at'] as String? ?? '',
-        replies: (json['replies'] as num?)?.toInt() ?? 0,
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    title: json['title'] as String? ?? '',
+    user: json['user'] == null
+        ? null
+        : User.fromJson(json['user'] as Map<String, dynamic>),
+    userId: (json['user_id'] as num?)?.toInt() ?? 0,
+    content: json['content'] as String? ?? '',
+    createdAt: json['created_at'] as String? ?? '',
+    replies: (json['replies'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 条目长评列表
@@ -56,7 +66,11 @@ class ReviewListData {
   final int page;
   final bool hasMore;
 
-  const ReviewListData({this.reviews = const [], this.page = 1, this.hasMore = true});
+  const ReviewListData({
+    this.reviews = const [],
+    this.page = 1,
+    this.hasMore = true,
+  });
 }
 
 /// 浏览历史条目 (hive box 'rakuen', key 'history')
@@ -78,22 +92,22 @@ class HistoryItem {
   });
 
   Map<String, dynamic> toJson() => {
-        'topicId': topicId,
-        'title': title,
-        'group': group,
-        'userName': userName,
-        'replies': replies,
-        'time': time,
-      };
+    'topicId': topicId,
+    'title': title,
+    'group': group,
+    'userName': userName,
+    'replies': replies,
+    'time': time,
+  };
 
   factory HistoryItem.fromJson(Map<String, dynamic> json) => HistoryItem(
-        topicId: json['topicId'] as String? ?? '',
-        title: json['title'] as String? ?? '',
-        group: json['group'] as String? ?? '',
-        userName: json['userName'] as String? ?? '',
-        replies: (json['replies'] as num?)?.toInt() ?? 0,
-        time: (json['time'] as num?)?.toInt() ?? 0,
-      );
+    topicId: json['topicId'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    group: json['group'] as String? ?? '',
+    userName: json['userName'] as String? ?? '',
+    replies: (json['replies'] as num?)?.toInt() ?? 0,
+    time: (json['time'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 我的数据 (主题/日志/动态)
@@ -102,5 +116,9 @@ class MineData {
   final List<Blog> blogs;
   final List<dynamic> timeline;
 
-  const MineData({this.topics = const [], this.blogs = const [], this.timeline = const []});
+  const MineData({
+    this.topics = const [],
+    this.blogs = const [],
+    this.timeline = const [],
+  });
 }

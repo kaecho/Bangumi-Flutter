@@ -14,16 +14,28 @@ class AuthState {
   final String token;
   final User? user;
   final bool loading;
+  final bool outdate;
 
-  const AuthState({this.token = '', this.user, this.loading = false});
+  const AuthState({
+    this.token = '',
+    this.user,
+    this.loading = false,
+    this.outdate = false,
+  });
 
   bool get isLoggedIn => token.isNotEmpty && user != null;
 
-  AuthState copyWith({String? token, User? user, bool? loading}) => AuthState(
-        token: token ?? this.token,
-        user: user ?? this.user,
-        loading: loading ?? this.loading,
-      );
+  AuthState copyWith({
+    String? token,
+    User? user,
+    bool? loading,
+    bool? outdate,
+  }) => AuthState(
+    token: token ?? this.token,
+    user: user ?? this.user,
+    loading: loading ?? this.loading,
+    outdate: outdate ?? this.outdate,
+  );
 }
 
 /// 认证控制器: token 持久化 + 用户信息
@@ -57,7 +69,9 @@ class AuthController extends Notifier<AuthState> {
   Future<bool> loginWithCode(String code) async {
     state = state.copyWith(loading: true);
     try {
-      final data = await ref.read(apiClientProvider).post(
+      final data = await ref
+          .read(apiClientProvider)
+          .post(
             kApiAccessToken,
             data: {
               'grant_type': 'authorization_code',
@@ -87,20 +101,57 @@ class AuthController extends Notifier<AuthState> {
     try {
       final data = await ref.read(apiClientProvider).get(apiV0Me());
       final user = User.fromJson(data as Map<String, dynamic>);
-      state = state.copyWith(user: user);
+      state = state.copyWith(user: user, outdate: false);
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kUserKey, jsonEncode({
-            'id': user.id,
-            'url': user.url,
-            'username': user.username,
-            'nickname': user.nickname,
-            'avatar': {'large': user.avatar.large, 'medium': user.avatar.medium, 'small': user.avatar.small},
-            'sign': user.sign,
-            'user_group': user.userGroup,
-          }));
+      await prefs.setString(
+        _kUserKey,
+        jsonEncode({
+          'id': user.id,
+          'url': user.url,
+          'username': user.username,
+          'nickname': user.nickname,
+          'avatar': {
+            'large': user.avatar.large,
+            'medium': user.avatar.medium,
+            'small': user.avatar.small,
+          },
+          'sign': user.sign,
+          'user_group': user.userGroup,
+        }),
+      );
     } catch (_) {
       // 网络失败静默, 保留旧用户信息
     }
+  }
+
+  /// 授权过期 (原项目 userStore.outdate)
+  void markOutdate() {
+    if (!state.outdate) state = state.copyWith(outdate: true);
+  }
+
+  /// 直接使用 access token 登录 (原项目 login/token 页)
+  /// 校验失败时回滚旧 token
+  Future<bool> loginWithToken(String token) async {
+    final trimmed = token.trim();
+    if (trimmed.isEmpty) return false;
+    final old = state.token;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kTokenKey, trimmed);
+    state = state.copyWith(token: trimmed);
+    final before = state.user;
+    await refreshUser();
+    if (state.user == null) {
+      // 校验失败: 恢复旧 token (原项目逻辑)
+      if (old.isEmpty) {
+        await prefs.remove(_kTokenKey);
+        state = const AuthState();
+      } else {
+        await prefs.setString(_kTokenKey, old);
+        state = AuthState(token: old, user: before);
+      }
+      return false;
+    }
+    return true;
   }
 
   /// 退出登录
@@ -133,8 +184,14 @@ final isLoggedInProvider = Provider<bool>((ref) {
   return ref.watch(authControllerProvider).isLoggedIn;
 });
 
+/// 授权是否过期 (原项目 userStore.outdate)
+final authOutdateProvider = Provider<bool>((ref) {
+  return ref.watch(authControllerProvider).outdate;
+});
+
 /// 能否以登录态操作: OAuth 登录 或 站点 Cookie 登录 任一
 /// 站点 Cookie 可支持: 短信/电波提醒/点赞/时间线/回复 等站点认证功能
 final canActAsLoggedInProvider = Provider<bool>((ref) {
-  return ref.watch(isLoggedInProvider) || ref.watch(siteCookiesProvider).hasCookies;
+  return ref.watch(isLoggedInProvider) ||
+      ref.watch(siteCookiesProvider).hasCookies;
 });

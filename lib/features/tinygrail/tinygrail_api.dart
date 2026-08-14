@@ -13,13 +13,18 @@ import 'tinygrail_models.dart';
 /// 请求同时携带 bgm Bearer token (已登录时, 部分接口兼容) 与 tinygrail cookie。
 class TinygrailApi {
   TinygrailApi(this._cookie) {
-    _dio = Dio(BaseOptions(
-      baseUrl: kTinygrailHost,
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 20),
-      sendTimeout: const Duration(seconds: 15),
-      headers: {'User-Agent': 'Bangumi/Flutter (https://github.com/kaecho/Bangumi-Flutter)'},
-    ));
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: kTinygrailHost,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 20),
+        sendTimeout: const Duration(seconds: 15),
+        headers: {
+          'User-Agent':
+              'Bangumi/Flutter (https://github.com/kaecho/Bangumi-Flutter)',
+        },
+      ),
+    );
   }
 
   late final Dio _dio;
@@ -46,22 +51,22 @@ class TinygrailApi {
     Map<String, dynamic>? query,
     bool auth = true,
   }) {
-    return _unwrap(() => _dio.getUri(
-          Uri.parse('$kTinygrailHost$path').replace(queryParameters: query),
-          options: _options(auth),
-        ));
+    return _unwrap(
+      () => _dio.getUri(
+        Uri.parse('$kTinygrailHost$path').replace(queryParameters: query),
+        options: _options(auth),
+      ),
+    );
   }
 
-  Future<dynamic> post(
-    String path, {
-    Object? data,
-    bool auth = true,
-  }) {
-    return _unwrap(() => _dio.postUri(
-          Uri.parse('$kTinygrailHost$path'),
-          data: data,
-          options: _options(auth),
-        ));
+  Future<dynamic> post(String path, {Object? data, bool auth = true}) {
+    return _unwrap(
+      () => _dio.postUri(
+        Uri.parse('$kTinygrailHost$path'),
+        data: data,
+        options: _options(auth),
+      ),
+    );
   }
 
   Options _options(bool auth) {
@@ -69,7 +74,9 @@ class TinygrailApi {
     if (_cookie.isNotEmpty) headers['Cookie'] = _cookie;
     if (auth) {
       final token = _token;
-      if (token != null && token.isNotEmpty) headers['Authorization'] = 'Bearer $token';
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
     }
     return Options(headers: headers.isEmpty ? null : headers);
   }
@@ -126,14 +133,29 @@ class TinygrailApi {
     if (ids.isEmpty) return const [];
     final value = await post(apiTinygrailCharaList2(), data: ids);
     final list = value is List ? value : <dynamic>[];
-    return list.map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 列表 (type 见 apiTinygrailRankList 注释)
-  Future<List<TinygrailChara>> fetchList(String type, {int page = 1, int limit = 400}) async {
-    final value = await get(apiTinygrailRankList(type, page, limit), auth: false);
-    final list = value is List ? value : (value is Map && value['Items'] is List ? value['Items'] as List : <dynamic>[]);
-    return list.map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>)).toList();
+  Future<List<TinygrailChara>> fetchList(
+    String type, {
+    int page = 1,
+    int limit = 400,
+  }) async {
+    final value = await get(
+      apiTinygrailRankList(type, page, limit),
+      auth: false,
+    );
+    final list = value is List
+        ? value
+        : (value is Map && value['Items'] is List
+              ? value['Items'] as List
+              : <dynamic>[]);
+    return list
+        .map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// K 线
@@ -141,7 +163,9 @@ class TinygrailApi {
     date ??= _today();
     final value = await get(apiTinygrailCharts2(monoId, date), auth: false);
     if (value is! List) return const [];
-    return value.map((e) => TinygrailKline.fromJson(e as Map<String, dynamic>)).toList();
+    return value
+        .map((e) => TinygrailKline.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   String _today() {
@@ -154,7 +178,9 @@ class TinygrailApi {
   Future<int> fetchIssuePrice(int monoId) async {
     final value = await get(apiTinygrailIssuePrice2(monoId), auth: false);
     if (value is List && value.isNotEmpty) {
-      return ((value.first as Map<String, dynamic>)['Begin'] as num?)?.toInt() ?? 0;
+      return ((value.first as Map<String, dynamic>)['Begin'] as num?)
+              ?.toInt() ??
+          0;
     }
     return 0;
   }
@@ -162,7 +188,9 @@ class TinygrailApi {
   /// 深度
   Future<TinygrailDepth> fetchDepth(int monoId) async {
     final value = await get(apiTinygrailCharaDepth(monoId), auth: false);
-    return value is Map<String, dynamic> ? TinygrailDepth.fromJson(value) : const TinygrailDepth();
+    return value is Map<String, dynamic>
+        ? TinygrailDepth.fromJson(value)
+        : const TinygrailDepth();
   }
 
   /// 奖池
@@ -175,17 +203,24 @@ class TinygrailApi {
   Future<List<TinygrailSearchItem>> search(String keyword) async {
     final value = await get(apiTinygrailSearch2(keyword), auth: false);
     if (value is! List) return const [];
-    return value.map((e) => TinygrailSearchItem.fromJson(e as Map<String, dynamic>)).toList();
+    return value
+        .map((e) => TinygrailSearchItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // -------------------- 用户数据 --------------------
 
   /// 我的持仓 (chara + ico)
-  Future<({List<TinygrailChara> chara, List<TinygrailChara> ico})> fetchMyCharaAssets() async {
+  Future<({List<TinygrailChara> chara, List<TinygrailChara> ico})>
+  fetchMyCharaAssets() async {
     final value = await get(apiTinygrailMyCharaAssets2());
-    if (value is! Map<String, dynamic>) return (chara: <TinygrailChara>[], ico: <TinygrailChara>[]);
+    if (value is! Map<String, dynamic>) {
+      return (chara: <TinygrailChara>[], ico: <TinygrailChara>[]);
+    }
     List<TinygrailChara> parse(dynamic raw) => (raw is List)
-        ? raw.map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>)).toList()
+        ? raw
+              .map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>))
+              .toList()
         : <TinygrailChara>[];
     return (chara: parse(value['Characters']), ico: parse(value['Initials']));
   }
@@ -195,7 +230,9 @@ class TinygrailApi {
     final value = await get(apiTinygrailUserCharaAll2(hash));
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 我的买单
@@ -212,7 +249,9 @@ class TinygrailApi {
     final value = await get(path);
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 我的拍卖
@@ -245,14 +284,16 @@ class TinygrailApi {
     final value = await get(apiTinygrailAuctionLastWeek(monoId), auth: false);
     if (value is! List) return const [];
     return value
-        .map((e) => TinygrailLog.fromJson({
-              'Id': (e as Map<String, dynamic>)['CharacterId'],
-              'CharacterId': e['CharacterId'],
-              'Amount': e['Amount'],
-              'Price': e['Price'],
-              'Type': e['State'],
-              'TradeTime': e['Bid'] ?? '',
-            }))
+        .map(
+          (e) => TinygrailLog.fromJson({
+            'Id': (e as Map<String, dynamic>)['CharacterId'],
+            'CharacterId': e['CharacterId'],
+            'Amount': e['Amount'],
+            'Price': e['Price'],
+            'Type': e['State'],
+            'TradeTime': e['Bid'] ?? '',
+          }),
+        )
         .toList();
   }
 
@@ -272,18 +313,23 @@ class TinygrailApi {
     final value = await get(apiTinygrailBalance2(page));
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailBalance.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailBalance.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 用户挂单 + 交易记录
-  Future<({
-    List<TinygrailLog> bids,
-    List<TinygrailLog> asks,
-    List<TinygrailLog> bidHistory,
-    List<TinygrailLog> askHistory,
-    int sacrifices,
-    int amount,
-  })> fetchUserLogs(int monoId) async {
+  Future<
+    ({
+      List<TinygrailLog> bids,
+      List<TinygrailLog> asks,
+      List<TinygrailLog> bidHistory,
+      List<TinygrailLog> askHistory,
+      int sacrifices,
+      int amount,
+    })
+  >
+  fetchUserLogs(int monoId) async {
     final value = await get(apiTinygrailCharaUserLogs(monoId));
     if (value is! Map<String, dynamic>) {
       return (
@@ -296,7 +342,9 @@ class TinygrailApi {
       );
     }
     List<TinygrailLog> parse(dynamic raw) => (raw is List)
-        ? raw.map((e) => TinygrailLog.fromJson(e as Map<String, dynamic>)).toList()
+        ? raw
+              .map((e) => TinygrailLog.fromJson(e as Map<String, dynamic>))
+              .toList()
         : <TinygrailLog>[];
     return (
       bids: parse(value['Bids']),
@@ -313,22 +361,31 @@ class TinygrailApi {
     final value = await get(apiTinygrailUserTemple2(hash));
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailTemple.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailTemple.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 最近圣殿
-  Future<List<TinygrailTemple>> fetchTempleLast({int page = 1, int limit = 24}) async {
+  Future<List<TinygrailTemple>> fetchTempleLast({
+    int page = 1,
+    int limit = 24,
+  }) async {
     final value = await get(apiTinygrailTempleLast2(page, limit), auth: false);
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailTemple.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailTemple.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 角色圣殿
   Future<List<TinygrailTemple>> fetchCharaTemple(int monoId) async {
     final value = await get(apiTinygrailCharaTemple(monoId), auth: false);
     if (value is! List) return const [];
-    return value.map((e) => TinygrailTemple.fromJson(e as Map<String, dynamic>)).toList();
+    return value
+        .map((e) => TinygrailTemple.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 董事会
@@ -336,7 +393,9 @@ class TinygrailApi {
     final value = await get(apiTinygrailUsers2(monoId), auth: false);
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailUserBoard.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailUserBoard.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// ICO 参与者
@@ -344,12 +403,21 @@ class TinygrailApi {
     final value = await get(apiTinygrailInitialUsers(icoId, page), auth: false);
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailInitial.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailInitial.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
-  /// 富豪榜
-  Future<List<TinygrailRich>> fetchRich(int page, int limit) async {
-    final value = await get(apiTinygrailRichList(page, limit), auth: false);
+  /// 富豪榜 (extra: 0 周股息 / 1 流动资产)
+  Future<List<TinygrailRich>> fetchRich(
+    int page,
+    int limit, {
+    int? extra,
+  }) async {
+    final value = await get(
+      apiTinygrailRichList(page, limit, extra: extra),
+      auth: false,
+    );
     if (value is! List) return const [];
     return [
       for (var i = 0; i < value.length; i++)
@@ -361,7 +429,9 @@ class TinygrailApi {
   Future<List<TinygrailChara>> fetchStar(int page, int limit) async {
     final value = await get(apiTinygrailBabel(page, limit), auth: false);
     if (value is! List) return const [];
-    return value.map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>)).toList();
+    return value
+        .map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 圣星记录
@@ -369,30 +439,47 @@ class TinygrailApi {
     final value = await get(apiTinygrailStarLogList(page, limit), auth: false);
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailStarLog.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailStarLog.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 英灵殿 / 幻想乡
-  Future<List<TinygrailChara>> fetchValhalla({int page = 1, int limit = 400}) async {
+  Future<List<TinygrailChara>> fetchValhalla({
+    int page = 1,
+    int limit = 400,
+  }) async {
     final value = await get(apiTinygrailValhalla(page, limit), auth: false);
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<List<TinygrailChara>> fetchFantasy({int page = 1, int limit = 100}) async {
+  Future<List<TinygrailChara>> fetchFantasy({
+    int page = 1,
+    int limit = 100,
+  }) async {
     final value = await get(apiTinygrailFantasy(page, limit), auth: false);
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailChara.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 精炼排行
-  Future<List<TinygrailRefine>> fetchRefineRank({int page = 1, int limit = 100}) async {
+  Future<List<TinygrailRefine>> fetchRefineRank({
+    int page = 1,
+    int limit = 100,
+  }) async {
     final value = await get(apiTinygrailRefineRank(page, limit), auth: false);
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailRefine.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailRefine.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 每周萌王
@@ -401,7 +488,10 @@ class TinygrailApi {
     if (value is! List) return const [];
     return [
       for (var i = 0; i < value.length; i++)
-        TinygrailTopWeek.fromJson(value[i] as Map<String, dynamic>, rank: i + 1),
+        TinygrailTopWeek.fromJson(
+          value[i] as Map<String, dynamic>,
+          rank: i + 1,
+        ),
     ];
   }
 
@@ -412,7 +502,10 @@ class TinygrailApi {
     final items = value['Items'] as List? ?? const [];
     return [
       for (var i = 0; i < items.length; i++)
-        TinygrailTopWeek.fromJson(items[i] as Map<String, dynamic>, rank: i + 1),
+        TinygrailTopWeek.fromJson(
+          items[i] as Map<String, dynamic>,
+          rank: i + 1,
+        ),
     ];
   }
 
@@ -421,7 +514,9 @@ class TinygrailApi {
     final value = await get(apiTinygrailMyItems());
     if (value is! Map<String, dynamic>) return const [];
     final items = value['Items'] as List? ?? const [];
-    return items.map((e) => TinygrailItems.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => TinygrailItems.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // -------------------- 交易动作 --------------------
@@ -487,14 +582,20 @@ class TinygrailApi {
   }
 
   /// 使用道具
-  Future<bool> doMagic(int monoId, String type, int toMonoId, int amount, bool isTemple) async {
+  Future<bool> doMagic(
+    int monoId,
+    String type,
+    int toMonoId,
+    int amount,
+    bool isTemple,
+  ) async {
     await post(apiTinygrailMagic(monoId, type, toMonoId, amount, isTemple));
     return true;
   }
 
   /// 刮刮乐
-  Future<dynamic> doScratch() async {
-    return post(apiTinygrailScratch());
+  Future<dynamic> doScratch({bool fantasy = false}) async {
+    return post(fantasy ? apiTinygrailScratchFantasy() : apiTinygrailScratch());
   }
 
   /// 今日刮刮乐次数
@@ -506,6 +607,15 @@ class TinygrailApi {
       return 0;
     }
   }
+
+  /// 每周分红
+  Future<dynamic> doBonus() => post(apiTinygrailBonus());
+
+  /// 每日签到
+  Future<dynamic> doBonusDaily() => post(apiTinygrailBonusDaily());
+
+  /// 节日奖励
+  Future<dynamic> doBonusHoliday() => post(apiTinygrailBonusHoliday());
 
   /// 登出
   Future<void> doLogout() async {
@@ -525,7 +635,9 @@ class TinygrailException implements Exception {
 }
 
 /// tinygrail cookie (SharedPreferences 持久化)
-final tinygrailCookieProvider = NotifierProvider<TinygrailCookie, String>(TinygrailCookie.new);
+final tinygrailCookieProvider = NotifierProvider<TinygrailCookie, String>(
+  TinygrailCookie.new,
+);
 
 class TinygrailCookie extends Notifier<String> {
   static const _key = 'tinygrail_cookie';
@@ -580,7 +692,9 @@ String tgMoney(num fen) {
   final v = fen.toDouble() / 100;
   if (v.abs() >= 100000000) return '${(v / 100000000).toStringAsFixed(2)}亿';
   if (v.abs() >= 10000) return '${(v / 10000).toStringAsFixed(2)}万';
-  return v == v.roundToDouble() ? '¥${v.toStringAsFixed(0)}' : '¥${v.toStringAsFixed(2)}';
+  return v == v.roundToDouble()
+      ? '¥${v.toStringAsFixed(0)}'
+      : '¥${v.toStringAsFixed(2)}';
 }
 
 /// 数字缩略 (分, 不显示货币符号)
@@ -597,6 +711,8 @@ String tgPrice(num fen) => (fen / 100).toStringAsFixed(2);
 /// 涨跌幅显示
 String tgFluctuation(num fluctuation) {
   if (fluctuation == 0) return '-%';
-  final f = fluctuation > 0 ? '+${fluctuation.toStringAsFixed(2)}%' : '${fluctuation.toStringAsFixed(2)}%';
+  final f = fluctuation > 0
+      ? '+${fluctuation.toStringAsFixed(2)}%'
+      : '${fluctuation.toStringAsFixed(2)}%';
   return f;
 }

@@ -4,12 +4,20 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
+import '../../core/storage/settings_store.dart';
+import '../../core/utils/display.dart';
+import '../../shared/models/collection.dart';
 import '../../shared/models/subject.dart';
 import '../../shared/models/timeline.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
+import '../../shared/widgets/horizontal_mask.dart';
+
 import '../../shared/widgets/loading.dart';
 import '../../design_system/design_system.dart';
+import '../progress/progress_screen.dart';
+import '../subject/collection_sheet.dart';
+import 'calendar_notes.dart';
 
 /// 每日放送
 ///
@@ -18,14 +26,105 @@ import '../../design_system/design_system.dart';
 /// - bangumi-data 放送时间表 (https://bangumi-data.github.io/bangumi-data/data.json,
 ///   与原项目 protobuf 版 bangumi-data 同源) — 每条目的放送时间
 /// 放送时间表获取失败时仅不显示时间, 不影响条目列表。
-class CalendarScreen extends ConsumerWidget {
+class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
+}
+
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+  String _adapt = '全部';
+  String _tag = '全部';
+  String _studio = '全部';
+  bool _listLayout = false;
+  bool _collectedOnly = false;
+  bool _expandUnknown = false;
+  final _scroll = ScrollController();
+
+  static const _adaptOptions = ['全部', '原创', '漫画改', '小说改', '游戏改'];
+
+  static const _tagOptions = ['全部', '科幻', '战斗', '恋爱', '日常', '奇幻', '校园'];
+  static const _studioOptions = [
+    '全部',
+    'MAPPA',
+    '京都动画',
+    'ufotable',
+    'CloverWorks',
+  ];
+
+  bool _match(Subject s, {required bool collected}) {
+    if (_collectedOnly && !collected) return false;
+    if (SettingsStore.instance.filter18x &&
+        isSensitiveSubject(
+          nsfw: s.nsfw,
+          name: s.name,
+          nameCn: s.nameCn,
+          extra: s.summary,
+        )) {
+      return false;
+    }
+    final names = s.tags.map((t) => t.name).join(' ');
+    final blob = '${s.summary} $names ${s.name} ${s.nameCn}';
+    if (_adapt != '全部' && !blob.contains(_adapt.replaceAll('改', ''))) {
+      return names.isEmpty; // 无标签时不过滤掉
+    }
+    if (_tag != '全部' && names.isNotEmpty && !names.contains(_tag)) return false;
+    if (_studio != '全部' && names.isNotEmpty && !blob.contains(_studio)) {
+      return false;
+    }
+    return true;
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final days = ref.watch(calendarProvider);
     return Scaffold(
-      appBar: const BgmAppBar(title: '每日放送', showBackButton: true),
+      appBar: BgmAppBar(
+        title: '每日放送',
+        showBackButton: true,
+        actions: [
+          if (SettingsStore.instance.exportICS)
+            IconButton(
+              tooltip: '导出 ICS',
+              icon: const Icon(Icons.event_available_outlined),
+              onPressed: () => _exportWeekIcs(context, ref),
+            ),
+          if (_listLayout)
+            IconButton(
+              tooltip: '跳到今天',
+              icon: const Icon(Icons.radio_button_checked, size: 18),
+              onPressed: () => _jumpToday(days.valueOrNull ?? const []),
+            ),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: _onMenu,
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'layout',
+                child: Text(_listLayout ? '布局 · 列表' : '布局 · 网格'),
+              ),
+              PopupMenuItem(
+                value: 'favor',
+                child: Text(_collectedOnly ? '收藏 · 只显示收藏' : '收藏 · 显示全部'),
+              ),
+              PopupMenuItem(
+                value: 'unknown',
+                child: Text(_expandUnknown ? '未知时间番剧 · 显示' : '未知时间番剧 · 不显示'),
+              ),
+              const PopupMenuItem(value: 'info', child: Text('补充说明')),
+              const PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
+            ],
+          ),
+        ],
+      ),
+
       body: days.when(
         loading: () => const Center(child: Loading()),
         error: (error, _) => Center(
@@ -41,38 +140,223 @@ class CalendarScreen extends ConsumerWidget {
             ],
           ),
         ),
-        data: (list) => RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(calendarProvider);
-            ref.invalidate(onAirTimeProvider);
-            await ref.read(calendarProvider.future);
-          },
-          child: ListView.builder(
-            padding: const EdgeInsets.only(bottom: 24),
-            itemCount: list.length,
-            itemBuilder: (context, index) =>
-                _DaySection(day: list[index]),
-          ),
+        data: (list) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+              child: Row(
+                children: [
+                  _CalFilter(
+                    label: _adapt == '全部' ? '改编' : _adapt,
+                    options: _adaptOptions,
+                    selected: _adapt,
+                    onSelected: (v) => setState(() => _adapt = v),
+                  ),
+                  const SizedBox(width: 8),
+                  _CalFilter(
+                    label: _tag == '全部' ? '标签' : _tag,
+                    options: _tagOptions,
+                    selected: _tag,
+                    onSelected: (v) => setState(() => _tag = v),
+                  ),
+                  const SizedBox(width: 8),
+                  _CalFilter(
+                    label: _studio == '全部' ? '制作' : _studio,
+                    options: _studioOptions,
+                    selected: _studio,
+                    onSelected: (v) => setState(() => _studio = v),
+                  ),
+                  const Spacer(),
+                  if (_adapt != '全部' || _tag != '全部' || _studio != '全部')
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _adapt = '全部';
+                        _tag = '全部';
+                        _studio = '全部';
+                      }),
+                      child: const Text('清除'),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(calendarProvider);
+                  ref.invalidate(onAirTimeProvider);
+                  await ref.read(calendarProvider.future);
+                },
+                child: ListView.builder(
+                  controller: _scroll,
+                  padding: const EdgeInsets.only(bottom: 24),
+                  itemCount: list.length,
+                  itemBuilder: (context, index) => _DaySection(
+                    day: list[index],
+                    filter: _match,
+                    highlight: [
+                      if (_adapt != '全部') _adapt,
+                      if (_tag != '全部') _tag,
+                      if (_studio != '全部') _studio,
+                    ],
+                    listLayout: _listLayout,
+                    expandUnknown: _expandUnknown,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Future<void> _onMenu(String value) async {
+    switch (value) {
+      case 'layout':
+        setState(() => _listLayout = !_listLayout);
+      case 'favor':
+        setState(() => _collectedOnly = !_collectedOnly);
+      case 'unknown':
+        setState(() => _expandUnknown = !_expandUnknown);
+      case 'info':
+        if (!mounted) return;
+        await context.push(calendarNotePath());
+
+      case 'browser':
+        await openExternalUrl('https://bgm.tv/calendar');
+    }
+  }
+
+  void _jumpToday(List<CalendarDay> days) {
+    if (days.isEmpty || !_scroll.hasClients) return;
+    final today = DateTime.now().weekday % 7;
+    final index = days.indexWhere((d) => d.weekday % 7 == today);
+    if (index < 0) return;
+    _scroll.animateTo(
+      index * 280.0,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
+    );
+  }
+}
+
+class _CalFilter extends StatelessWidget {
+  final String label;
+  final List<String> options;
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  const _CalFilter({
+    required this.label,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      onSelected: onSelected,
+      itemBuilder: (_) => [
+        for (final o in options) PopupMenuItem(value: o, child: Text(o)),
+      ],
+      child: Chip(label: Text(label), visualDensity: VisualDensity.compact),
     );
   }
 }
 
 class _DaySection extends ConsumerWidget {
   final CalendarDay day;
+  final bool Function(Subject s, {required bool collected}) filter;
+  final List<String> highlight;
+  final bool listLayout;
+  final bool expandUnknown;
 
-  const _DaySection({required this.day});
+  const _DaySection({
+    required this.day,
+    required this.filter,
+    this.highlight = const [],
+    this.listLayout = false,
+    this.expandUnknown = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final items = day.items;
+    final collections =
+        ref.watch(progressProvider('all')).valueOrNull?.items ?? const [];
+    final collectionById = {
+      for (final item in collections) item.subject.id: item.type,
+    };
+    final items = day.items
+        .where((s) => filter(s, collected: collectionById.containsKey(s.id)))
+        .toList();
     // 按放送时间排序 (未知时间排最后)
-    final sorted = [...items]
+    var sorted = [...items]
       ..sort((a, b) => _timeOf(ref, a.id).compareTo(_timeOf(ref, b.id)));
+    if (!expandUnknown) {
+      sorted = [
+        for (final subject in sorted)
+          if (_timeOf(ref, subject.id) != '99:99') subject,
+      ];
+    }
     // 同一时间只保留第一个显示
     final shownTimes = <String>{};
+    final now = DateTime.now();
+    final today = now.weekday % 7;
+    final isToday = day.weekday % 7 == today;
+    final nowMinutes = now.hour * 60 + now.minute;
+    var nowIndex = -1;
+    if (isToday && sorted.isNotEmpty) {
+      nowIndex = sorted.indexWhere((subject) {
+        final time = _timeOf(ref, subject.id);
+        if (time.isEmpty || time == '99:99' || !time.contains(':')) {
+          return false;
+        }
+        final parts = time.split(':');
+        final minutes =
+            (int.tryParse(parts[0]) ?? 99) * 60 +
+            (int.tryParse(parts[1]) ?? 99);
+        return minutes > nowMinutes;
+      });
+      if (nowIndex < 0) nowIndex = sorted.length;
+    }
+    final itemCount = sorted.length + (nowIndex >= 0 ? 1 : 0);
+
+    Widget itemAt(int index) {
+      if (nowIndex >= 0 && index == nowIndex) {
+        return _CalendarNowLine(
+          clock:
+              '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}',
+        );
+      }
+      final subjectIndex = nowIndex >= 0 && index > nowIndex
+          ? index - 1
+          : index;
+      final subject = sorted[subjectIndex];
+      final time = _timeOf(ref, subject.id);
+      final showTime = time.isNotEmpty && shownTimes.add(time);
+      if (listLayout) {
+        return _CalendarLine(
+          subject: subject,
+          time: showTime ? time : '',
+          collection: SubjectType.statusText(
+            collectionById[subject.id] ?? 0,
+            subject.type,
+          ),
+          highlight: highlight,
+        );
+      }
+      return _CalendarCard(
+        subject: subject,
+        time: showTime ? time : '',
+        collection: SubjectType.statusText(
+          collectionById[subject.id] ?? 0,
+          subject.type,
+        ),
+        highlight: highlight,
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,38 +374,35 @@ class _DaySection extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                _sectionDate(day.weekday),
-                style: context.ds.caption,
-              ),
+              Text(_sectionDate(day.weekday), style: context.ds.caption),
             ],
           ),
         ),
         if (sorted.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Text(
-              '暂无放送',
-              style: context.ds.caption,
+            child: Text('暂无放送', style: context.ds.caption),
+          )
+        else if (listLayout)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Column(
+              children: [
+                for (var index = 0; index < itemCount; index++) itemAt(index),
+              ],
             ),
           )
         else
           SizedBox(
-            height: 186,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: sorted.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                final subject = sorted[index];
-                final time = _timeOf(ref, subject.id);
-                final showTime = time.isNotEmpty && shownTimes.add(time);
-                return _CalendarCard(
-                  subject: subject,
-                  time: showTime ? time : '',
-                );
-              },
+            height: highlight.isEmpty ? 204 : 220,
+            child: HorizontalMask(
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: itemCount,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, index) => itemAt(index),
+              ),
             ),
           ),
       ],
@@ -144,68 +425,99 @@ class _DaySection extends ConsumerWidget {
   }
 }
 
-class _CalendarCard extends StatelessWidget {
+class _CalendarCard extends ConsumerWidget {
   final Subject subject;
   final String time;
+  final String collection;
+  final List<String> highlight;
 
-  const _CalendarCard({required this.subject, required this.time});
+  const _CalendarCard({
+    required this.subject,
+    required this.time,
+    this.collection = '',
+    this.highlight = const [],
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final rating = subject.rating;
-    final info = rating != null && rating.score > 0
-        ? '${rating.score.toStringAsFixed(1)}分'
-        : (subject.eps > 0 ? '全 ${subject.eps} 话' : '');
+    final hideScore = SettingsStore.instance.hideScore;
+    final score = !hideScore && rating != null && rating.score > 0
+        ? rating.score.toStringAsFixed(1)
+        : '';
+    final clock = time.isNotEmpty && time != '99:99' ? time : '';
+    final title = subject.displayName;
+    final fontSize = visualFontSize(title, const [(18, 10), (14, 11), (0, 11)]);
+    final titleStyle = TextStyle(
+      fontSize: fontSize,
+      height: 1.25,
+      fontWeight: FontWeight.w600,
+      color: theme.colorScheme.onSurface,
+    );
+    final matched = highlight.where((word) {
+      final blob =
+          '${subject.summary} ${subject.name} ${subject.nameCn} $title';
+      return blob.contains(word.replaceAll('改', '')) || blob.contains(word);
+    }).toList();
 
     return GestureDetector(
       onTap: () => context.push('/subject/${subject.id}'),
+      onLongPress: () {
+        showCollectionSheet(context, subject.id).then((_) {
+          ref.invalidate(progressProvider('all'));
+        });
+      },
       child: SizedBox(
         width: 104,
+
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Stack(
-              children: [
-                Cover(
-                  url: subject.images.medium,
-                  width: 104,
-                  height: 139,
-                  radius: 6,
-                ),
-                if (time.isNotEmpty)
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        time,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onPrimary,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+            Cover(
+              url: subject.images.medium,
+              width: 104,
+              height: 139,
+              radius: 6,
+              type: subject.type,
             ),
             const SizedBox(height: 5),
-            Text(
-              subject.displayName,
-              maxLines: 2,
+            Text.rich(
+              TextSpan(
+                children: [
+                  if (collection.isNotEmpty) ...[
+                    TextSpan(
+                      text: collection,
+                      style: titleStyle.copyWith(
+                        color: _collectionColor(context, collection),
+                      ),
+                    ),
+                    TextSpan(text: '·', style: titleStyle),
+                  ],
+                  TextSpan(text: title, style: titleStyle),
+                ],
+              ),
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, height: 1.25, color: theme.colorScheme.onSurface),
             ),
-            const SizedBox(height: 2),
-            if (info.isNotEmpty)
+            if (matched.isNotEmpty)
               Text(
-                info,
+                matched.join(' / '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: context.ds.accent,
+                ),
+              ),
+            if (score.isNotEmpty || clock.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                [
+                  if (score.isNotEmpty) score,
+                  if (clock.isNotEmpty) clock,
+                ].join(' · '),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -213,11 +525,195 @@ class _CalendarCard extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+            ],
           ],
         ),
       ),
     );
   }
+}
+
+class _CalendarLine extends ConsumerWidget {
+  final Subject subject;
+  final String time;
+  final String collection;
+  final List<String> highlight;
+
+  const _CalendarLine({
+    required this.subject,
+    required this.time,
+    this.collection = '',
+    this.highlight = const [],
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final clock = time.isNotEmpty && time != '99:99' ? time : '';
+    final rating = subject.rating;
+    final hideScore = SettingsStore.instance.hideScore;
+    final score = !hideScore && rating != null && rating.score > 0
+        ? rating.score.toStringAsFixed(1)
+        : '';
+    final matched = highlight.where((word) {
+      final blob =
+          '${subject.summary} ${subject.name} ${subject.nameCn} ${subject.displayName}';
+      return blob.contains(word.replaceAll('改', '')) || blob.contains(word);
+    }).toList();
+    return InkWell(
+      onTap: () => context.push('/subject/${subject.id}'),
+      onLongPress: () {
+        showCollectionSheet(context, subject.id).then((_) {
+          ref.invalidate(progressProvider('all'));
+        });
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 48,
+              child: Text(
+                clock.isEmpty ? '' : clock,
+                style: context.ds.caption.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Cover(
+              url: subject.images.medium,
+              width: 56,
+              height: 75,
+              radius: 6,
+              type: subject.type,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        if (collection.isNotEmpty) ...[
+                          TextSpan(
+                            text: collection,
+                            style: context.ds.bodyStrong.copyWith(
+                              color: _collectionColor(context, collection),
+                            ),
+                          ),
+                          TextSpan(text: '·', style: context.ds.bodyStrong),
+                        ],
+                        TextSpan(
+                          text: subject.displayName,
+                          style: context.ds.bodyStrong,
+                        ),
+                      ],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (matched.isNotEmpty)
+                    Text(
+                      matched.join(' / '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.ds.tiny.copyWith(
+                        color: context.ds.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  if (score.isNotEmpty)
+                    Text(
+                      score,
+                      style: context.ds.tiny.copyWith(color: context.ds.accent),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Color _collectionColor(BuildContext context, String collection) {
+  if (collection.contains('在')) return context.ds.success;
+  if (collection.contains('过')) return context.ds.accent;
+  if (collection.contains('想')) return context.ds.star;
+  if (collection.contains('搁置') || collection.contains('抛弃')) {
+    return context.ds.textHint;
+  }
+  return context.ds.textSecondary;
+}
+
+class _CalendarNowLine extends StatelessWidget {
+  final String clock;
+  const _CalendarNowLine({required this.clock});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 72,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(width: 18, height: 1, color: context.ds.accent),
+          const SizedBox(height: 8),
+          Icon(Icons.access_time, size: 16, color: context.ds.accent),
+          const SizedBox(height: 4),
+          Text(
+            clock,
+            style: context.ds.caption.copyWith(
+              color: context.ds.accent,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(width: 18, height: 1, color: context.ds.accent),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _exportWeekIcs(BuildContext context, WidgetRef ref) async {
+  final days = ref.read(calendarProvider).valueOrNull;
+  if (days == null || days.isEmpty) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('暂无放送数据')));
+    return;
+  }
+  final times = ref.read(onAirTimeProvider).valueOrNull ?? const {};
+  final now = DateTime.now();
+  final items = <({int id, String title, String airdate, String clock})>[];
+  for (final day in days) {
+    final diff = (day.weekday - (now.weekday % 7) + 7) % 7;
+    final date = now.add(Duration(days: diff));
+    final stamp =
+        '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    for (final subject in day.items) {
+      final raw = times[subject.id] ?? '2000';
+      final clock = raw.contains(':')
+          ? raw.replaceAll(':', '')
+          : (raw.length == 4 ? raw : '2000');
+      items.add((
+        id: subject.id,
+        title: subject.displayName,
+        airdate: stamp,
+        clock: clock,
+      ));
+    }
+  }
+  if (items.isEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('没有可导出的条目')));
+    }
+    return;
+  }
+  await shareWeekOnAirIcs(items);
 }
 
 /// 每日放送 (按星期 0=周日..6=周六)
@@ -227,9 +723,11 @@ final calendarProvider = FutureProvider<List<CalendarDay>>((ref) async {
   final days = (data as List)
       .map((e) => CalendarDay.fromJson(e as Map<String, dynamic>))
       .toList();
-  // 排序: 从今天开始
-  final today = DateTime.now().weekday % 7;
-  return [...days.sublist(today), ...days.sublist(0, today)];
+  // 早上 9 点前先显示前一天 (原项目 PREV_DAY_HOUR)
+  final now = DateTime.now();
+  var start = now.weekday % 7;
+  if (now.hour < 9) start = (start + 6) % 7;
+  return [...days.sublist(start), ...days.sublist(0, start)];
 });
 
 /// 放送时间表: subjectId -> 'HH:MM' (bangumi-data 开源数据)

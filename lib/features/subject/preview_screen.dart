@@ -41,7 +41,10 @@ class PreviewScreen extends ConsumerWidget {
           ),
         ),
         data: (list) => list.isEmpty
-            ? const Empty(text: '暂无预览截图', icon: Icons.image_not_supported_outlined)
+            ? const Empty(
+                text: '暂无预览截图',
+                icon: Icons.image_not_supported_outlined,
+              )
             : GridView.builder(
                 padding: const EdgeInsets.all(8),
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -66,14 +69,19 @@ class PreviewScreen extends ConsumerWidget {
                                 child: SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                               ),
                             ),
                       errorBuilder: (_, _, _) => Container(
                         color: Colors.black12,
                         child: Center(
-                          child: Icon(Icons.broken_image_outlined, color: context.ds.textHint),
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: context.ds.textHint,
+                          ),
                         ),
                       ),
                     ),
@@ -105,7 +113,9 @@ class _PreviewViewer extends StatefulWidget {
 }
 
 class _PreviewViewerState extends State<_PreviewViewer> {
-  late final PageController _controller = PageController(initialPage: widget.initialIndex);
+  late final PageController _controller = PageController(
+    initialPage: widget.initialIndex,
+  );
   late int _current = widget.initialIndex;
 
   @override
@@ -128,11 +138,12 @@ class _PreviewViewerState extends State<_PreviewViewer> {
               imageProvider: NetworkImage(widget.images[i].url),
               minScale: PhotoViewComputedScale.contained,
               maxScale: PhotoViewComputedScale.covered * 2,
-              heroAttributes: PhotoViewHeroAttributes(tag: 'preview_${widget.images[i].url}'),
+              heroAttributes: PhotoViewHeroAttributes(
+                tag: 'preview_${widget.images[i].url}',
+              ),
             ),
-            loadingBuilder: (_, event) => const Center(
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            loadingBuilder: (_, event) =>
+                const Center(child: CircularProgressIndicator(strokeWidth: 2)),
           ),
           SafeArea(
             child: Align(
@@ -140,7 +151,10 @@ class _PreviewViewerState extends State<_PreviewViewer> {
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black45,
                     borderRadius: BorderRadius.circular(16),
