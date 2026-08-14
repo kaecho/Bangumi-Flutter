@@ -20,6 +20,7 @@
 - 主站 502 / 授权过期提示 (对齐 ErrorNotice / LoginNotice)
 - 头像协议 `//lain.bgm.tv` 补 https
 - Release 工作流按版本截取 CHANGELOG 段落
+- Android 资源重复: 删除与官方 `ic_launcher_background.xml` 冲突的 `colors.xml`
 
 ## 1.0.2 - 2026-08-12
 
