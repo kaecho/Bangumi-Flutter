@@ -7,7 +7,10 @@ import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import 'subject_notes.dart';
+
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 番剧截屏预览
 /// 路由: /subject/:id/preview
@@ -22,24 +25,19 @@ class PreviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final preview = ref.watch(previewProvider(id));
     return Scaffold(
-      appBar: BgmAppBar(title: '预览', showBackButton: true),
+      appBar: BgmAppBar(
+        title: extraNamedTitle(
+          ref.watch(subjectDetailProvider(id)).valueOrNull?.subject.displayName,
+          '预览',
+          named: (n) => '$n的预览',
+        ),
+        showBackButton: true,
+      ),
+
       body: preview.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(previewProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (e, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(previewProvider(id))),
         data: (list) => list.isEmpty
             ? const Empty(
                 text: '暂无预览截图',
@@ -65,15 +63,7 @@ class PreviewScreen extends ConsumerWidget {
                           ? child
                           : Container(
                               color: Colors.black12,
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
+                              child: const Center(child: BgmSpinner(size: 20)),
                             ),
                       errorBuilder: (_, _, _) => Container(
                         color: Colors.black12,
@@ -142,8 +132,7 @@ class _PreviewViewerState extends State<_PreviewViewer> {
                 tag: 'preview_${widget.images[i].url}',
               ),
             ),
-            loadingBuilder: (_, event) =>
-                const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            loadingBuilder: (_, event) => const Center(child: BgmSpinner()),
           ),
           SafeArea(
             child: Align(
@@ -170,7 +159,7 @@ class _PreviewViewerState extends State<_PreviewViewer> {
           SafeArea(
             child: Align(
               alignment: Alignment.topLeft,
-              child: IconButton(
+              child: BgmHeaderAction(
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: () => Navigator.pop(context),
               ),

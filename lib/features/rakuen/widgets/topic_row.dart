@@ -8,16 +8,44 @@ import '../../../core/utils/format.dart';
 import '../../../design_system/design_system.dart';
 import '../../../shared/widgets/score.dart';
 
+/// 原版小组时间格式: 最近 = 相对时间, 日期 = 绝对时间
+String formatRakuenTopicTime(String time, {required bool lastDate}) {
+  if (time.isEmpty) return '';
+  final looksAbsolute =
+      time.contains(RegExp(r'[年月]')) || time.contains(RegExp(r'^\d{4}-\d'));
+  if (looksAbsolute) return time;
+  return lastDate ? friendlyTime(time) : absoluteTime(time);
+}
+
 /// 帖子列表行 (小组/板块/搜索通用)
 class RakuenTopicRow extends StatelessWidget {
   final RakuenTopicItem topic;
   final bool showGroup;
+  final bool lastDate;
 
-  const RakuenTopicRow({super.key, required this.topic, this.showGroup = true});
+  const RakuenTopicRow({
+    super.key,
+    required this.topic,
+    this.showGroup = true,
+    this.lastDate = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isBlog = topic.topicId.startsWith('blog/');
+    final isMono =
+        topic.topicId.startsWith('prsn/') || topic.topicId.startsWith('crt/');
+    final isEp = topic.topicId.startsWith('ep/');
+    final showUser = !isMono && !isEp;
+    final showGroupLabel = showGroup && !isMono && topic.group.isNotEmpty;
+    final timeText = formatRakuenTopicTime(topic.time, lastDate: lastDate);
+
+    final meta = [
+      if (timeText.isNotEmpty) timeText,
+      if (showGroupLabel) topic.group,
+      if (showUser && topic.userName.isNotEmpty) topic.userName,
+    ].join(' / ');
 
     return InkWell(
       onTap: () {
@@ -32,7 +60,7 @@ class RakuenTopicRow extends StatelessWidget {
         context.push('/rakuen/topic/$id');
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -44,89 +72,67 @@ class RakuenTopicRow extends StatelessWidget {
               name: topic.userName,
               userId: topic.userId,
             ),
-
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    topic.title,
-                    style: TextStyle(
-                      fontSize: visualFontSize(topic.title, const [
-                        (20, 13),
-                        (0, 14),
-                      ]),
-                      fontWeight: FontWeight.w500,
-                    ),
-
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      if (showGroup && topic.group.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.08,
-                            ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            topic.group,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                      if (showGroup && topic.group.isNotEmpty)
-                        const SizedBox(width: 6),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                topic.userName,
-                                style: context.ds.meta,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: topic.title),
+                          if (topic.replyCount > 0)
+                            TextSpan(
+                              text: ' +${topic.replyCount}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.primary,
                               ),
                             ),
-                            UserAgeBadge(userId: topic.userId),
-                          ],
-                        ),
+                          if (isBlog)
+                            TextSpan(
+                              text: '  日志',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                        ],
                       ),
-                      if (topic.time.isNotEmpty)
-                        Text(
-                          topic.time.contains(RegExp(r'[年月]')) ||
-                                  topic.time.contains(RegExp(r'^\d{4}-\d'))
-                              ? topic.time
-                              : friendlyTime(topic.time),
-                          style: context.ds.tiny,
-                        ),
+                      style: TextStyle(
+                        fontSize: visualFontSize(topic.title, const [
+                          (20, 13),
+                          (0, 14),
+                        ]),
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              meta,
+                              style: context.ds.meta,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (showUser && topic.userId.isNotEmpty)
+                            UserAgeBadge(userId: topic.userId),
+                        ],
+                      ),
                     ],
-                  ),
-                ],
-              ),
-            ),
-            if (topic.replyCount > 0)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(
-                  '${topic.replyCount}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.primary,
-                  ),
+                  ],
                 ),
               ),
+            ),
           ],
         ),
       ),

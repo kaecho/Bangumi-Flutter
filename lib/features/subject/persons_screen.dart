@@ -10,61 +10,142 @@ import '../../shared/widgets/loading.dart';
 
 import 'subject_models.dart';
 import 'subject_providers.dart';
-import '../../design_system/design_system.dart';
+import 'subject_notes.dart';
 
-/// 制作人员
+import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+
+/// 制作人员 Extra Filter: 全部职位 + 职位计数, 动画制作排最前
 /// 路由: /subject/:id/persons
-class PersonsScreen extends ConsumerWidget {
+class PersonsScreen extends ConsumerStatefulWidget {
   final int id;
 
   const PersonsScreen({super.key, required this.id});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PersonsScreen> createState() => _PersonsScreenState();
+}
+
+class _PersonsScreenState extends ConsumerState<PersonsScreen> {
+  String _position = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final id = widget.id;
     final persons = ref.watch(subjectPersonsProvider(id));
+    final name = ref
+        .watch(subjectDetailProvider(id))
+        .valueOrNull
+        ?.subject
+        .displayName;
     return Scaffold(
       appBar: BgmAppBar(
-        title: '制作人员',
+        title: extraNamedTitle(name, '更多制作人员', named: (n) => '$n的制作人员'),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlSubjectPersons(id)),
-          ),
+          BgmHeaderMore.browser(() => openExternalUrl(htmlSubjectPersons(id))),
         ],
       ),
-
       body: persons.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        error: (e, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(subjectPersonsProvider(id))),
+        data: (list) {
+          if (list.isEmpty) return const Empty(text: '暂无制作人员');
+          final filters = personsFilters(list);
+          final selected = _position.isEmpty
+              ? personsFilterValue(filters.first.title, filters.first.value)
+              : _position;
+          final visible = filterPersons(list, selected);
+          return Column(
             children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(subjectPersonsProvider(id)),
-                child: const Text('重试'),
+              if (filters.length > 1)
+                _PersonsToolBar(
+                  filters: filters,
+                  selected: selected,
+                  onSelect: (v) => setState(() => _position = v),
+                ),
+              Expanded(
+                child: visible.isEmpty
+                    ? const Empty(text: '暂无制作人员')
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 120,
+                              mainAxisSpacing: 14,
+                              crossAxisSpacing: 14,
+                              childAspectRatio: 0.62,
+                            ),
+                        itemCount: visible.length,
+                        itemBuilder: (_, i) => _PersonCard(person: visible[i]),
+                      ),
               ),
             ],
-          ),
-        ),
-        data: (list) => list.isEmpty
-            ? const Empty(text: '暂无制作人员')
-            : GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 120,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: 0.62,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PersonsToolBar extends StatelessWidget {
+  final List<({String title, int value})> filters;
+  final String selected;
+  final ValueChanged<String> onSelect;
+
+  const _PersonsToolBar({
+    required this.filters,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final options = [
+      for (final item in filters) personsFilterValue(item.title, item.value),
+    ];
+    return Material(
+      color: context.ds.surfaceBase,
+      child: SizedBox(
+        height: 44,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          children: [
+            PopupMenuButton<String>(
+              tooltip: selected,
+              padding: EdgeInsets.zero,
+              onSelected: onSelect,
+              itemBuilder: (_) => [
+                for (final option in options)
+                  PopupMenuItem(
+                    value: option,
+                    child: Text(
+                      option,
+                      style: TextStyle(
+                        fontWeight: option == selected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+              ],
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 30),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                alignment: Alignment.center,
+                child: Text(
+                  selected,
+                  style: context.ds.caption.copyWith(
+                    color: context.ds.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                itemCount: list.length,
-                itemBuilder: (_, i) => _PersonCard(person: list[i]),
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -95,16 +176,16 @@ class _PersonCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          if (person.relation.isNotEmpty)
+          if (person.jobs.isNotEmpty)
             Text(
-              person.relation,
+              person.jobs.join(' / '),
               style: TextStyle(fontSize: 10, color: theme.colorScheme.primary),
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-          if (person.career.isNotEmpty)
+          if (person.info.isNotEmpty)
             Text(
-              person.career.join(' / '),
+              person.info,
               style: context.ds.tiny,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,

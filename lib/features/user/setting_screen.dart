@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_endpoints.dart';
 import '../../core/storage/settings_store.dart';
-import '../../core/utils/display.dart';
+import '../../core/status/server_status.dart';
+
 import '../../design_system/colors.dart';
-import '../../shared/widgets/breathing_light.dart';
 import '../discovery/discovery_screen.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 首页 Tab 开关项 (与原项目 homeRenderTabs 一致)
 const kHomeRenderTabOptions = [
@@ -94,6 +96,13 @@ const kSubjectSplitOptions = [
   ('underline-success', '标题 B (绿)'),
 ];
 
+/// 原版 SETTING_SERVER_STATUS
+const kServerStatusNotifyItems = <(String, String)>[
+  ('none', '不显示'),
+  ('degraded', '降级时'),
+  ('down', '中断时'),
+];
+
 /// 设置
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -102,17 +111,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final store = ref.watch(settingsStoreProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('设置'),
-        actions: [
-          IconButton(
-            tooltip: '服务状态',
-            icon: const Icon(Icons.show_chart),
-            onPressed: () => openExternalUrl(kStatusHost),
-          ),
-          const ServerStatusLight(),
-        ],
-      ),
+      appBar: BgmAppBar(title: '设置', actions: [const SettingsStatusAction()]),
 
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
@@ -182,50 +181,40 @@ class SettingsScreen extends ConsumerWidget {
             value: store.horizontalShowMask,
             onChanged: (v) => store.setHorizontalShowMask(v),
           ),
-          ListTile(
-            leading: const Icon(Icons.format_size),
-            title: const Text('字号'),
-            subtitle: Text(
-              store.fontSizeAdjust == 0
-                  ? '默认'
-                  : store.fontSizeAdjust > 0
-                  ? '+${store.fontSizeAdjust}'
-                  : '${store.fontSizeAdjust}',
-            ),
-            trailing: DropdownButton<int>(
+          BgmSettingRow(
+            title: '字号',
+            subtitle: store.fontSizeAdjust == 0
+                ? '默认'
+                : store.fontSizeAdjust > 0
+                ? '+${store.fontSizeAdjust}'
+                : '${store.fontSizeAdjust}',
+            trailing: BgmSelect<int>(
               value: const [-2, -1, 0, 1, 2, 4].contains(store.fontSizeAdjust)
                   ? store.fontSizeAdjust
                   : 0,
-              underline: const SizedBox.shrink(),
               items: const [
-                DropdownMenuItem(value: -2, child: Text('-2')),
-                DropdownMenuItem(value: -1, child: Text('-1')),
-                DropdownMenuItem(value: 0, child: Text('标准')),
-                DropdownMenuItem(value: 1, child: Text('+1')),
-                DropdownMenuItem(value: 2, child: Text('+2')),
-                DropdownMenuItem(value: 4, child: Text('+4')),
+                (-2, '-2'),
+                (-1, '-1'),
+                (0, '标准'),
+                (1, '+1'),
+                (2, '+2'),
+                (4, '+4'),
               ],
-              onChanged: (v) {
-                if (v != null) store.setFontSizeAdjust(v);
-              },
+              onChanged: store.setFontSizeAdjust,
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.space_bar),
-            title: const Text('字间距'),
-            trailing: DropdownButton<double>(
+          BgmSettingRow(
+            title: '字间距',
+            trailing: BgmSelect<double>(
               value: store.letterSpacing,
-              underline: const SizedBox.shrink(),
               items: const [
-                DropdownMenuItem(value: -1, child: Text('-1')),
-                DropdownMenuItem(value: -0.5, child: Text('-0.5')),
-                DropdownMenuItem(value: 0, child: Text('标准')),
-                DropdownMenuItem(value: 0.5, child: Text('+0.5')),
-                DropdownMenuItem(value: 1, child: Text('+1')),
+                (-1, '-1'),
+                (-0.5, '-0.5'),
+                (0, '标准'),
+                (0.5, '+0.5'),
+                (1, '+1'),
               ],
-              onChanged: (v) {
-                if (v != null) store.setLetterSpacing(v);
-              },
+              onChanged: store.setLetterSpacing,
             ),
           ),
 
@@ -237,6 +226,13 @@ class SettingsScreen extends ConsumerWidget {
             value: store.cnFirst,
             onChanged: (v) => store.setCnFirst(v),
           ),
+          _SwitchTile(
+            title: '繁体',
+            subtitle: '开启后搜索可把输入转为简体; 已于 24 年 4 月使用 OpenCC 替换原来的暴力转换',
+            value: store.s2t,
+            onChanged: (v) => store.setS2t(v),
+          ),
+
           _SwitchTile(
             title: '隐藏评分',
             subtitle: '列表和详情不显示条目评分',
@@ -281,18 +277,16 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (v) => store.setUserAge(v),
           ),
           if (store.userAge)
-            ListTile(
-              title: const Text('站龄单位'),
-              subtitle: const Text('不满一年时可显示月份'),
-              trailing: SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'year', label: Text('年')),
-                  ButtonSegment(value: 'month', label: Text('月')),
-                ],
-                selected: {store.userAgeType},
-                onSelectionChanged: (s) => store.setUserAgeType(s.first),
+            BgmSettingRow(
+              title: '站龄显示',
+              subtitle: '不满一年时可显示月份',
+              trailing: BgmSegmented<String>(
+                values: const [('year', '年'), ('month', '月')],
+                selected: store.userAgeType,
+                onSelect: store.setUserAgeType,
               ),
             ),
+
           _SwitchTile(
             title: '自动文字排版',
             subtitle: '中文和半形英文、数字之间自动插空',
@@ -306,23 +300,16 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (v) => store.setTimelinePopable(v),
           ),
           _SectionHeader('时光机'),
-          ListTile(
-            leading: const Icon(Icons.grid_view),
-            title: const Text('网格布局个数'),
-            subtitle: const Text('用户空间收藏网格列数'),
-            trailing: DropdownButton<int>(
+          BgmSettingRow(
+            title: '网格布局个数',
+            subtitle: '用户空间收藏网格列数',
+            trailing: BgmSelect<int>(
               value: store.userGridNum,
-              underline: const SizedBox.shrink(),
-              items: const [
-                DropdownMenuItem(value: 3, child: Text('3')),
-                DropdownMenuItem(value: 4, child: Text('4')),
-                DropdownMenuItem(value: 5, child: Text('5')),
-              ],
-              onChanged: (v) {
-                if (v != null) store.setUserGridNum(v);
-              },
+              items: const [(3, '3'), (4, '4'), (5, '5')],
+              onChanged: store.setUserGridNum,
             ),
           ),
+
           _SwitchTile(
             title: '默认列表布局',
             subtitle: '关闭后「我的」收藏默认用网格',
@@ -366,20 +353,12 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (v) => store.setZoneAlignCenter(v),
           ),
 
-          ListTile(
-            leading: const Icon(Icons.notes),
-            title: const Text('评论默认展示行数'),
-            trailing: DropdownButton<int>(
+          BgmSettingRow(
+            title: '评论默认展示行数',
+            trailing: BgmSelect<int>(
               value: store.userCommentsLines,
-              underline: const SizedBox.shrink(),
-              items: const [
-                DropdownMenuItem(value: 4, child: Text('4')),
-                DropdownMenuItem(value: 8, child: Text('8')),
-                DropdownMenuItem(value: 100, child: Text('不限制')),
-              ],
-              onChanged: (v) {
-                if (v != null) store.setUserCommentsLines(v);
-              },
+              items: const [(4, '4'), (8, '8'), (100, '不限制')],
+              onChanged: store.setUserCommentsLines,
             ),
           ),
 
@@ -560,22 +539,16 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (v) => store.setAutoCompleteEps(v),
           ),
 
-          ListTile(
-            leading: const Icon(Icons.horizontal_rule),
-            title: const Text('版块分割线样式'),
-            subtitle: const Text('条目页区块之间的分割'),
-            trailing: DropdownButton<String>(
+          BgmSettingRow(
+            title: '版块分割线样式',
+            subtitle: '条目页区块之间的分割',
+            trailing: BgmSelect<String>(
               value: store.subjectSplitStyles,
-              underline: const SizedBox.shrink(),
-              items: [
-                for (final (key, label) in kSubjectSplitOptions)
-                  DropdownMenuItem(value: key, child: Text(label)),
-              ],
-              onChanged: (v) {
-                if (v != null) store.setSubjectSplitStyles(v);
-              },
+              items: kSubjectSplitOptions,
+              onChanged: store.setSubjectSplitStyles,
             ),
           ),
+
           const _SectionHeader('条目布局'),
 
           for (final (key, label) in kSubjectBlockOptions)
@@ -625,33 +598,12 @@ class SettingsScreen extends ConsumerWidget {
           _LinkTile('开发沙盒', Icons.science_outlined, '/playground'),
           _SectionHeader('其他'),
           _LinkTile('站点 Cookie 登录', Icons.cookie_outlined, '/settings/cookies'),
-          ListTile(
-            leading: const Icon(Icons.monitor_heart_outlined),
-            title: const Text('提示服务可用性'),
-            subtitle: const Text('主 Tab 标题旁显示呼吸灯, 对齐原版 notifyServerStatus'),
-            trailing: DropdownButton<String>(
-              value: store.serverStatusNotify,
-              underline: const SizedBox.shrink(),
-              items: const [
-                DropdownMenuItem(value: 'none', child: Text('不显示')),
-                DropdownMenuItem(value: 'degraded', child: Text('降级时')),
-                DropdownMenuItem(value: 'down', child: Text('中断时')),
-              ],
-              onChanged: (v) {
-                if (v != null) store.setServerStatusNotify(v);
-              },
-            ),
-          ),
-          _SwitchTile(
-            title: '呼吸灯效果',
-            subtitle: '服务异常时标题旁闪烁',
-            value: store.serverStatusBreathing,
-            onChanged: (v) => store.setServerStatusBreathing(v),
-          ),
-          _LinkTile('服务器状态', Icons.monitor_heart_outlined, '/settings/status'),
+          _LinkTile('网络探针', Icons.monitor_heart_outlined, '/settings/status'),
 
-          _LinkTile('操作记录', Icons.history, '/settings/actions'),
-          _LinkTile('我的卡片', Icons.badge_outlined, '/settings/qiafan'),
+          _LinkTile('自定义跳转', Icons.history, '/settings/actions'),
+
+          _LinkTile('关于客户端', Icons.badge_outlined, '/settings/qiafan'),
+
           _LinkTile('本地管理', Icons.folder_outlined, '/settings/smb'),
           _LinkTile('本地备份', Icons.inbox_outlined, '/settings/backup'),
           _LinkTile('赞助', Icons.favorite_outline, '/settings/sponsor'),
@@ -690,17 +642,16 @@ class _ThemeModeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.brightness_6_outlined),
-      title: const Text('主题模式'),
-      trailing: SegmentedButton<ThemeMode>(
-        segments: const [
-          ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
-          ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
-          ButtonSegment(value: ThemeMode.system, label: Text('跟随系统')),
+    return BgmSettingRow(
+      title: '主题模式',
+      trailing: BgmSegmented<ThemeMode>(
+        values: const [
+          (ThemeMode.light, '浅色'),
+          (ThemeMode.dark, '深色'),
+          (ThemeMode.system, '跟随系统'),
         ],
-        selected: {store.themeMode},
-        onSelectionChanged: (s) => store.setThemeMode(s.first),
+        selected: store.themeMode,
+        onSelect: store.setThemeMode,
       ),
     );
   }
@@ -714,17 +665,15 @@ class _ColorTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = store.primaryColor;
-    return ListTile(
-      leading: const Icon(Icons.palette_outlined),
-      title: const Text('主题色'),
-      subtitle: Wrap(
+    return BgmSettingRow(
+      title: '主题色',
+      below: Wrap(
         spacing: 10,
         runSpacing: 8,
         children: [
           for (final color in AppPalette.accentColors)
-            InkWell(
+            GestureDetector(
               onTap: () => store.setPrimaryColor(color),
-              borderRadius: BorderRadius.circular(18),
               child: Container(
                 width: 30,
                 height: 30,
@@ -757,23 +706,22 @@ class _HomeTabsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = store.homeRenderTabs;
-    return ListTile(
-      leading: const Icon(Icons.tab_outlined),
-      title: const Text('首页 Tabs'),
-      subtitle: Wrap(
+    return BgmSettingRow(
+      title: '首页 Tabs',
+      below: Wrap(
         spacing: 8,
         runSpacing: 6,
         children: [
           for (final (key, label) in kHomeRenderTabOptions)
-            FilterChip(
-              label: Text(label),
+            BgmFilterChip(
+              label: label,
               selected: enabled.contains(key),
-              onSelected: (on) {
+              onTap: () {
                 final next = [...enabled];
-                if (on) {
-                  if (!next.contains(key)) next.add(key);
-                } else {
+                if (next.contains(key)) {
                   next.remove(key);
+                } else {
+                  next.add(key);
                 }
                 store.setHomeRenderTabs(next);
               },
@@ -792,23 +740,22 @@ class _ProgressHomeTabsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = store.homeTabs;
-    return ListTile(
-      leading: const Icon(Icons.view_week_outlined),
-      title: const Text('进度选项卡'),
-      subtitle: Wrap(
+    return BgmSettingRow(
+      title: '进度选项卡',
+      below: Wrap(
         spacing: 8,
         runSpacing: 6,
         children: [
           for (final (key, label) in kProgressHomeTabOptions)
-            FilterChip(
-              label: Text(label),
+            BgmFilterChip(
+              label: label,
               selected: enabled.contains(key),
-              onSelected: (on) {
+              onTap: () {
                 final next = [...enabled];
-                if (on) {
-                  if (!next.contains(key)) next.add(key);
-                } else if (next.length > 1) {
-                  next.remove(key);
+                if (next.contains(key)) {
+                  if (next.length > 1) next.remove(key);
+                } else {
+                  next.add(key);
                 }
                 store.setHomeTabs(next);
               },
@@ -827,21 +774,14 @@ class _InitialPageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = store.initialPage;
-    return ListTile(
-      leading: const Icon(Icons.home_outlined),
-      title: const Text('初始页面'),
-      trailing: DropdownButton<String>(
+    return BgmSettingRow(
+      title: '初始页面',
+      trailing: BgmSelect<String>(
         value: kInitialPageOptions.any((e) => e.$1 == current)
             ? current
             : 'Home',
-        underline: const SizedBox.shrink(),
-        items: [
-          for (final (key, label) in kInitialPageOptions)
-            DropdownMenuItem(value: key, child: Text(label)),
-        ],
-        onChanged: (v) {
-          if (v != null) store.setInitialPage(v);
-        },
+        items: kInitialPageOptions,
+        onChanged: store.setInitialPage,
       ),
     );
   }
@@ -854,19 +794,12 @@ class _DiscoveryMenuNumTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.grid_view_outlined),
-      title: const Text('菜单每行个数'),
-      trailing: DropdownButton<int>(
+    return BgmSettingRow(
+      title: '菜单每行个数',
+      trailing: BgmSelect<int>(
         value: store.discoveryMenuNum,
-        underline: const SizedBox.shrink(),
-        items: const [
-          DropdownMenuItem(value: 4, child: Text('4')),
-          DropdownMenuItem(value: 5, child: Text('5')),
-        ],
-        onChanged: (v) {
-          if (v != null) store.setDiscoveryMenuNum(v);
-        },
+        items: const [(4, '4'), (5, '5')],
+        onChanged: store.setDiscoveryMenuNum,
       ),
     );
   }
@@ -880,21 +813,14 @@ class _ImageQualityTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = store.imageQuality;
-    return ListTile(
-      leading: const Icon(Icons.image_outlined),
-      title: const Text('图片质量'),
-      trailing: DropdownButton<String>(
+    return BgmSettingRow(
+      title: '图片质量',
+      trailing: BgmSelect<String>(
         value: kImageQualityOptions.any((e) => e.$1 == current)
             ? current
             : 'medium',
-        underline: const SizedBox.shrink(),
-        items: [
-          for (final (key, label) in kImageQualityOptions)
-            DropdownMenuItem(value: key, child: Text(label)),
-        ],
-        onChanged: (v) {
-          if (v != null) store.setImageQuality(v);
-        },
+        items: kImageQualityOptions,
+        onChanged: store.setImageQuality,
       ),
     );
   }
@@ -907,20 +833,13 @@ class _HomeCountViewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.filter_1_outlined),
-      title: const Text('放送数字显示'),
-      subtitle: const Text('例: 4 看到 / 6 已放送 / 12 总集数'),
-      trailing: DropdownButton<String>(
+    return BgmSettingRow(
+      title: '放送数字显示',
+      subtitle: '例: 4 看到 / 6 已放送 / 12 总集数',
+      trailing: BgmSelect<String>(
         value: store.homeCountView,
-        underline: const SizedBox.shrink(),
-        items: [
-          for (final (key, label) in kHomeCountViewOptions)
-            DropdownMenuItem(value: key, child: Text(label)),
-        ],
-        onChanged: (v) {
-          if (v != null) store.setHomeCountView(v);
-        },
+        items: kHomeCountViewOptions,
+        onChanged: store.setHomeCountView,
       ),
     );
   }
@@ -933,20 +852,13 @@ class _HomeSortingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.sort),
-      title: const Text('首页排序'),
-      subtitle: const Text('网页=收藏顺序, 放送=今天优先, APP=当季优先'),
-      trailing: DropdownButton<String>(
+    return BgmSettingRow(
+      title: '首页排序',
+      subtitle: '网页=收藏顺序, 放送=今天优先, APP=当季优先',
+      trailing: BgmSelect<String>(
         value: store.homeSorting,
-        underline: const SizedBox.shrink(),
-        items: [
-          for (final (key, label) in kHomeSortingOptions)
-            DropdownMenuItem(value: key, child: Text(label)),
-        ],
-        onChanged: (v) {
-          if (v != null) store.setHomeSorting(v);
-        },
+        items: kHomeSortingOptions,
+        onChanged: store.setHomeSorting,
       ),
     );
   }
@@ -959,20 +871,13 @@ class _HomeOriginTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.more_horiz),
-      title: const Text('收藏项右侧菜单'),
-      subtitle: const Text('全部含源头, 基本只保留置顶等'),
-      trailing: DropdownButton<String>(
+    return BgmSettingRow(
+      title: '收藏项右侧菜单',
+      subtitle: '全部含源头, 基本只保留置顶等',
+      trailing: BgmSelect<String>(
         value: store.homeOrigin,
-        underline: const SizedBox.shrink(),
-        items: [
-          for (final (key, label) in kHomeOriginOptions)
-            DropdownMenuItem(value: key, child: Text(label)),
-        ],
-        onChanged: (v) {
-          if (v != null) store.setHomeOrigin(v);
-        },
+        items: kHomeOriginOptions,
+        onChanged: store.setHomeOrigin,
       ),
     );
   }
@@ -985,20 +890,13 @@ class _HomeAnimeInfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.info_outline),
-      title: const Text('放送及额外信息'),
-      subtitle: const Text('播送进度、下一集、季度徽章'),
-      trailing: DropdownButton<int>(
+    return BgmSettingRow(
+      title: '放送及额外信息',
+      subtitle: '播送进度、下一集、季度徽章',
+      trailing: BgmSelect<int>(
         value: store.homeAnimeInfoInline,
-        underline: const SizedBox.shrink(),
-        items: [
-          for (final (key, label) in kHomeAnimeInfoOptions)
-            DropdownMenuItem(value: key, child: Text(label)),
-        ],
-        onChanged: (v) {
-          if (v != null) store.setHomeAnimeInfoInline(v);
-        },
+        items: kHomeAnimeInfoOptions,
+        onChanged: store.setHomeAnimeInfoInline,
       ),
     );
   }
@@ -1019,11 +917,10 @@ class _SwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
-      title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle!),
-      value: value,
-      onChanged: onChanged,
+    return BgmSettingRow(
+      title: title,
+      subtitle: subtitle,
+      trailing: BgmSwitch(value: value, onChanged: onChanged),
     );
   }
 }
@@ -1037,10 +934,9 @@ class _LinkTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, size: 22),
-      title: Text(title),
-      trailing: const Icon(Icons.chevron_right, size: 18),
+    return BgmSettingRow(
+      title: title,
+      arrow: true,
       onTap: () => context.push(path),
     );
   }
@@ -1053,20 +949,13 @@ class _HomeGridCoverTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.crop_square),
-      title: const Text('网格封面形状'),
-      subtitle: const Text('宫格布局时的封面比例'),
-      trailing: DropdownButton<String>(
+    return BgmSettingRow(
+      title: '网格封面形状',
+      subtitle: '宫格布局时的封面比例',
+      trailing: BgmSelect<String>(
         value: store.homeGridCoverLayout,
-        underline: const SizedBox.shrink(),
-        items: [
-          for (final (key, label) in kHomeGridCoverOptions)
-            DropdownMenuItem(value: key, child: Text(label)),
-        ],
-        onChanged: (v) {
-          if (v != null) store.setHomeGridCoverLayout(v);
-        },
+        items: kHomeGridCoverOptions,
+        onChanged: store.setHomeGridCoverLayout,
       ),
     );
   }
@@ -1097,20 +986,13 @@ class _HomeTopCustomTile extends StatelessWidget {
         if (item.key != 'Open') (item.key, item.name),
     ];
     final current = items.any((e) => e.$1 == value) ? value : items.first.$1;
-    return ListTile(
-      leading: const Icon(Icons.tune_outlined),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: DropdownButton<String>(
+    return BgmSettingRow(
+      title: title,
+      subtitle: subtitle,
+      trailing: BgmSelect<String>(
         value: current,
-        underline: const SizedBox.shrink(),
-        items: [
-          for (final (key, label) in items)
-            DropdownMenuItem(value: key, child: Text(label)),
-        ],
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
+        items: items,
+        onChanged: onChanged,
       ),
     );
   }
@@ -1130,16 +1012,106 @@ class _SubjectBlockTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = store.subjectBlock(blockKey);
-    return ListTile(
-      title: Text(title),
-      trailing: SegmentedButton<String>(
-        segments: const [
-          ButtonSegment(value: 'show', label: Text('显示')),
-          ButtonSegment(value: 'fold', label: Text('折叠')),
-          ButtonSegment(value: 'hide', label: Text('隐藏')),
+    return BgmSettingRow(
+      title: title,
+      trailing: BgmSegmented<String>(
+        values: const [('show', '显示'), ('fold', '折叠'), ('hide', '隐藏')],
+        selected: value == 'fold' || value == 'hide' ? value : 'show',
+        onSelect: (next) => store.setSubjectBlock(blockKey, next),
+      ),
+    );
+  }
+}
+
+/// 原版设置顶栏 Status: 波形图标点开 Bangumi Status
+class SettingsStatusAction extends ConsumerWidget {
+  const SettingsStatusAction({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(serverStatusProvider).valueOrNull;
+    final warn = status != null && (status.isDegraded || status.isDown);
+    return BgmHeaderAction(
+      tooltip: 'Bangumi Status',
+      icon: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.show_chart, size: 20),
+          if (warn) ...[
+            const SizedBox(width: 4),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: status.isDown
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).colorScheme.tertiary,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
         ],
-        selected: {value == 'fold' || value == 'hide' ? value : 'show'},
-        onSelectionChanged: (s) => store.setSubjectBlock(blockKey, s.first),
+      ),
+      onPressed: () => showBgmSheet<void>(
+        context: context,
+        builder: (_) => const _SettingsStatusSheet(),
+      ),
+    );
+  }
+}
+
+class _SettingsStatusSheet extends ConsumerWidget {
+  const _SettingsStatusSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final store = ref.watch(settingsStoreProvider);
+    final status = ref.watch(serverStatusProvider).valueOrNull;
+    final label = switch (status?.status) {
+      'ok' => '正常',
+      'degraded' => '服务降级',
+      'down' => '服务器崩溃',
+      _ => '未知',
+    };
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Bangumi Status',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            BgmSettingRow(
+              title: '当前服务状态',
+              subtitle: '绿色：正常，橙色：服务降级、延迟很大，红色：服务器崩溃、无法操作，灰色：未知',
+              trailing: Text(label),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/web/${Uri.encodeComponent(kStatusHost)}');
+              },
+            ),
+            BgmSettingRow(
+              title: '提示服务可用性',
+              subtitle: '定期获取最新服务状态，在顶部 LOGO 旁显示当前状态的亮点',
+              trailing: BgmSelect<String>(
+                value: store.serverStatusNotify,
+                items: kServerStatusNotifyItems,
+                onChanged: store.setServerStatusNotify,
+              ),
+            ),
+            BgmSettingRow(
+              title: '呼吸灯效果',
+              trailing: BgmSwitch(
+                value: store.serverStatusBreathing,
+                onChanged: store.setServerStatusBreathing,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

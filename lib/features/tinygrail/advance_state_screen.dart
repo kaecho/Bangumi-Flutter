@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'advance_list.dart';
+import 'tinygrail_notes.dart';
+
 
 /// 低价股
 class TinygrailAdvanceStateScreen extends StatelessWidget {
@@ -12,6 +14,7 @@ class TinygrailAdvanceStateScreen extends StatelessWidget {
       title: '低价股',
       provider: advanceStateProvider,
       valueLabel: '一档价',
+      notePath: tinygrailAdvanceStateNotePath(),
     );
   }
 }

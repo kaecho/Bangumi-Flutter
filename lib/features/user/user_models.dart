@@ -47,6 +47,118 @@ const kCollectionStatusTabs = [
   (CollectionStatus.dropped, '抛弃'),
 ];
 
+class ZoneCollectionCover {
+  final int id;
+  final String name;
+  final String nameCn;
+  final String cover;
+
+  const ZoneCollectionCover({
+    this.id = 0,
+    this.name = '',
+    this.nameCn = '',
+    this.cover = '',
+  });
+
+  String get displayName => nameCn.isNotEmpty ? nameCn : name;
+}
+
+class ZoneCollectionSection {
+  final int status;
+  final String title;
+  final int count;
+  final List<ZoneCollectionCover> items;
+
+  const ZoneCollectionSection({
+    this.status = 0,
+    this.title = '',
+    this.count = 0,
+    this.items = const [],
+  });
+}
+
+int zoneCollectionStatusId(String name) {
+  final n = name.trim();
+  if (n.contains('想')) return CollectionStatus.wish;
+  if (n.contains('过')) return CollectionStatus.collect;
+  if (n.contains('在')) return CollectionStatus.doing;
+  if (n == '搁置') return CollectionStatus.onHold;
+  if (n == '抛弃') return CollectionStatus.dropped;
+  return 0;
+}
+
+List<int> zoneExpandOrder() => const [
+  CollectionStatus.doing,
+  CollectionStatus.collect,
+  CollectionStatus.wish,
+  CollectionStatus.onHold,
+  CollectionStatus.dropped,
+];
+
+List<ZoneCollectionSection> parseZoneCollectionsOverview(Object? json) {
+  Object? source = json;
+  if (json is List && json.isNotEmpty && json.first is Map) {
+    final first = Map<String, dynamic>.from(json.first as Map);
+    if (first['collects'] is List) source = first['collects'];
+  } else if (json is Map && json['collects'] is List) {
+    source = json['collects'];
+  }
+  if (source is! List) return const [];
+  final sections = <ZoneCollectionSection>[];
+  for (final raw in source) {
+    if (raw is! Map) continue;
+    final entry = Map<String, dynamic>.from(raw);
+    final title = entry['status'] is Map
+        ? (entry['status'] as Map)['name']?.toString() ?? ''
+        : entry['status']?.toString() ?? '';
+    final status = zoneCollectionStatusId(title);
+    if (status == 0) continue;
+    final items = <ZoneCollectionCover>[];
+    final list = entry['list'] as List? ?? const [];
+    for (final row in list) {
+      if (row is! Map) continue;
+      final map = Map<String, dynamic>.from(row);
+      final subjectRaw = map['subject'] is Map
+          ? Map<String, dynamic>.from(map['subject'] as Map)
+          : map;
+      final images = subjectRaw['images'] is Map
+          ? Map<String, dynamic>.from(subjectRaw['images'] as Map)
+          : const <String, dynamic>{};
+      final id = (subjectRaw['id'] as num?)?.toInt() ?? 0;
+      if (id == 0) continue;
+      items.add(
+        ZoneCollectionCover(
+          id: id,
+          name: subjectRaw['name'] as String? ?? '',
+          nameCn: subjectRaw['name_cn'] as String? ?? '',
+          cover: absUrl(
+            images['medium'] as String? ?? images['common'] as String? ?? '',
+          ),
+        ),
+      );
+    }
+    sections.add(
+      ZoneCollectionSection(
+        status: status,
+        title: title,
+        count: (entry['count'] as num?)?.toInt() ?? items.length,
+        items: items,
+      ),
+    );
+  }
+  sections.sort(
+    (a, b) =>
+        zoneExpandOrder().indexOf(a.status) -
+        zoneExpandOrder().indexOf(b.status),
+  );
+  return sections;
+}
+
+List<String> zoneCollectionMoreItems({
+  required bool collapse,
+  required bool alignCenter,
+}) => ['自动折叠〔${collapse ? '开' : '关'}〕', '标题居中〔${alignCenter ? '开' : '关'}〕'];
+
 /// 绝对化图片地址 (//lain.bgm.tv/... → https://lain.bgm.tv/...)
 String absUrl(String url) {
   if (url.isEmpty) return '';
@@ -142,6 +254,9 @@ class PmItem {
     this.isNew = false,
   });
 }
+
+/// 原版 userStore.hasNewPM: 收件箱任一条 isNew
+bool hasNewPm(Iterable<PmItem> items) => items.any((item) => item.isNew);
 
 /// 短信详情消息 (type: label=线程分隔 / message=消息)
 class PmMessage {
@@ -280,11 +395,26 @@ TimelineItem _timelineItemFromElement(Element li) {
   if (tip != null) createdAt = tip.attributes['title'] ?? '';
 
   final clear = li.querySelector('a.tml_del')?.attributes['href'] ?? '';
+  final likeType =
+      int.tryParse(
+        li.querySelector('a.like_dropdown')?.attributes['data-like-type'] ?? '',
+      ) ??
+      40;
+  final relatedId =
+      int.tryParse(
+        (li.querySelector('.likes_grid')?.id ?? '').replaceFirst(
+          'likes_grid_',
+          '',
+        ),
+      ) ??
+      0;
   return TimelineItem(
     id: int.tryParse(idMatch?.group(1) ?? '') ?? 0,
     createdAt: createdAt,
     content: text,
     clearHref: clear,
+    likeType: likeType,
+    relatedId: relatedId,
     subject: subjectId > 0
         ? Subject(
             id: subjectId,
@@ -620,6 +750,165 @@ PmForm parsePmCompose(String html) {
     currentMsgId: inputValue('current_msg_id'),
     formhash: inputValue('formhash'),
     msgTitle: inputValue('msg_title'),
+  );
+}
+
+/// 用户收藏概览标签 (原项目 UserCollectionsTags / cheerioUserCollectionsTags)
+class UserCollectionTag {
+  final String tag;
+  final int count;
+
+  const UserCollectionTag({this.tag = '', this.count = 0});
+}
+
+/// 只取一级文本节点, 对齐原版 cText(\$row, true)
+String cTextFirst(Element? el) {
+  if (el == null) return '';
+  final text = el.nodes
+      .where((n) => n.nodeType == Node.TEXT_NODE)
+      .map((n) => n.text ?? '')
+      .join();
+  return htmlDecode(text).trim();
+}
+
+List<UserCollectionTag> parseUserCollectionsTags(String html) {
+  final fragment = htmlMatch(
+    html,
+    '<ul id="userTagList"',
+    '<div class="menu_inner"',
+  );
+  if (fragment.isEmpty) return const [];
+  final doc = parser.parse(fragment);
+  final items = <UserCollectionTag>[];
+  for (final a in doc.querySelectorAll('li a.l')) {
+    final tag = cTextFirst(a);
+    if (tag.isEmpty) continue;
+    items.add(
+      UserCollectionTag(
+        tag: tag,
+        count: int.tryParse(cText(a.querySelector('small'))) ?? 0,
+      ),
+    );
+  }
+  return items;
+}
+
+List<String> userCollectionTagMenuItems(
+  List<UserCollectionTag> tags, {
+  bool reset = true,
+}) => [if (reset) '重置' else '全部', ...tags.map((e) => '${e.tag} (${e.count})')];
+
+String userCollectionTagLabel(String tag) => tag.isEmpty ? '标签' : tag;
+
+String parseUserCollectionTagSelect(String label) {
+  if (label == '重置' || label == '全部') return '';
+  return label.replaceFirst(RegExp(r' \(\d+\)$'), '');
+}
+
+class UserCollectionsPage {
+  final List<CollectionItem> items;
+  final int page;
+  final int pageTotal;
+
+  const UserCollectionsPage({
+    this.items = const [],
+    this.page = 1,
+    this.pageTotal = 1,
+  });
+}
+
+String _absCover(String url) {
+  if (url.isEmpty || url == '/img/info_only.png') return '';
+  if (url.startsWith('//')) return 'https:$url';
+  return url;
+}
+
+int _starFromClass(String cls) {
+  final m = RegExp(r'stars(\d+)').firstMatch(cls);
+  return int.tryParse(m?.group(1) ?? '') ?? 0;
+}
+
+({int page, int pageTotal}) parseUserCollectionsPagination(String html) {
+  final edge = RegExp(
+    r'p_edge">[^0-9]*(\d+)[^0-9]*/[^0-9]*(\d+)',
+  ).firstMatch(html);
+  if (edge != null) {
+    return (
+      page: int.tryParse(edge.group(1)!) ?? 1,
+      pageTotal: int.tryParse(edge.group(2)!) ?? 1,
+    );
+  }
+  var maxPage = 1;
+  var cur = 1;
+  for (final m in RegExp(r'[?&]page=(\d+)').allMatches(html)) {
+    final n = int.tryParse(m.group(1) ?? '') ?? 0;
+    if (n > maxPage) maxPage = n;
+  }
+  final curEl = RegExp(r'class="p_cur">(\d+)').firstMatch(html);
+  if (curEl != null) cur = int.tryParse(curEl.group(1)!) ?? 1;
+  return (page: cur, pageTotal: maxPage);
+}
+
+/// 原项目 cheerioUserCollections
+UserCollectionsPage parseUserCollections(
+  String html, {
+  required String subjectType,
+  required int status,
+}) {
+  final fragment = htmlMatch(
+    html,
+    '<ul id="browserItemList"',
+    '<div id="columnSubjectBrowserB"',
+  );
+  final doc = parser.parse(fragment.isEmpty ? html : fragment);
+  final items = <CollectionItem>[];
+  for (final li in doc.querySelectorAll('#browserItemList li.item')) {
+    final a = li.querySelector('h3 a.l');
+    final href = cData(a, 'href');
+    final id =
+        int.tryParse(
+          RegExp(r'/subject/(\d+)').firstMatch(href)?.group(1) ?? '',
+        ) ??
+        int.tryParse(RegExp(r'item_(\d+)').firstMatch(li.id)?.group(1) ?? '') ??
+        0;
+    if (id == 0) continue;
+    final nameCn = htmlDecode(cText(a));
+    final name = htmlDecode(cText(li.querySelector('small.grey')));
+    final cover = _absCover(cData(li.querySelector('img.cover'), 'src'));
+    final tagsText = htmlDecode(
+      cText(li.querySelector('.collectInfo .tip')),
+    ).replaceFirst(RegExp(r'^标签:\s*'), '');
+    final tip = htmlDecode(
+      cText(li.querySelector('.info.tip')),
+    ).replaceAll(RegExp(r'\s+'), ' ');
+    items.add(
+      CollectionItem(
+        subject: Subject(
+          id: id,
+          type: subjectType,
+          name: name,
+          nameCn: nameCn,
+          images: SubjectImages(common: cover, medium: cover),
+        ),
+        subjectId: id,
+        subjectType: subjectType,
+        rate: _starFromClass(cData(li.querySelector('.starlight'), 'class')),
+        type: status,
+        comment: htmlDecode(cText(li.querySelector('.text_main_even'))),
+        tags: [
+          for (final t in tagsText.split(RegExp(r'\s+')))
+            if (t.isNotEmpty && t != '自己可见') t,
+        ],
+        updatedAt: cText(li.querySelector('.collectInfo .tip_j')),
+        tip: tip,
+      ),
+    );
+  }
+  final page = parseUserCollectionsPagination(html);
+  return UserCollectionsPage(
+    items: items,
+    page: page.page,
+    pageTotal: page.pageTotal,
   );
 }
 

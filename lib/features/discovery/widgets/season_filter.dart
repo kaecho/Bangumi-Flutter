@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/bgm_button.dart';
 import '../../../shared/widgets/score.dart';
 
 /// 年份/季度/排序 筛选条 (找条目 / 新番 / 索引 共用)
@@ -30,7 +31,25 @@ class SeasonFilter extends StatelessWidget {
     ],
   });
 
-  static const kYears = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010];
+  static const kYears = [
+    2026,
+    2025,
+    2024,
+    2023,
+    2022,
+    2021,
+    2020,
+    2019,
+    2018,
+    2017,
+    2016,
+    2015,
+    2014,
+    2013,
+    2012,
+    2011,
+    2010,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -40,61 +59,22 @@ class SeasonFilter extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
-          _Dropdown<int>(
+          BgmSelect<int>(
             value: year,
             items: [for (final y in kYears) (y, '$y 年')],
             onChanged: onYear,
           ),
           if (showMonth) ...[
             const SizedBox(width: 8),
-            _Dropdown<int?>(
+            BgmSelect<int?>(
               value: month,
-              items: [
-                (null, '全年'),
-                for (var m = 1; m <= 12; m++) (m, '$m 月'),
-              ],
+              items: [(null, '全年'), for (var m = 1; m <= 12; m++) (m, '$m 月')],
               onChanged: onMonth,
             ),
           ],
           const SizedBox(width: 8),
-          _Dropdown<String>(
-            value: sort,
-            items: sortOptions,
-            onChanged: onSort,
-          ),
+          BgmSelect<String>(value: sort, items: sortOptions, onChanged: onSort),
         ],
-      ),
-    );
-  }
-}
-
-class _Dropdown<T> extends StatelessWidget {
-  final T value;
-  final List<(T, String)> items;
-  final ValueChanged<T> onChanged;
-
-  const _Dropdown({required this.value, required this.items, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          isDense: true,
-          borderRadius: BorderRadius.circular(8),
-          style: TextStyle(
-            fontSize: 12,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          items: [
-            for (final (v, label) in items)
-              DropdownMenuItem(value: v, child: Text(label)),
-          ],
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
-        ),
       ),
     );
   }

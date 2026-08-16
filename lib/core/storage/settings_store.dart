@@ -135,6 +135,14 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 简体转繁体 (原项目 s2t, 默认关)
+  bool get s2t => _prefs?.getBool('setting_s2t') ?? false;
+
+  Future<void> setS2t(bool value) async {
+    await _prefs?.setBool('setting_s2t', value);
+    notifyListeners();
+  }
+
   /// 隐藏评分 (原项目 hideScore)
   bool get hideScore => _prefs?.getBool('setting_hide_score') ?? false;
 
@@ -337,6 +345,14 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 找番剧 Extra 列表布局 (原项目 anime.state.layout, 默认 list)
+  bool get discoveryList => _prefs?.getBool('setting_discovery_list') ?? true;
+
+  Future<void> setDiscoveryList(bool value) async {
+    await _prefs?.setBool('setting_discovery_list', value);
+    notifyListeners();
+  }
+
   /// 条目页其他用户收藏数量 (原项目 showCount)
   bool get showCount => _prefs?.getBool('setting_show_count') ?? true;
 
@@ -411,6 +427,20 @@ class SettingsStore extends ChangeNotifier {
 
   Future<void> setExportICS(bool value) async {
     await _prefs?.setBool('setting_export_ics', value);
+    notifyListeners();
+  }
+
+  /// 条目动态 全站/好友 (原项目 subjectRecentType)
+  String get subjectRecentType {
+    final v = _prefs?.getString('setting_subject_recent_type') ?? '全站';
+    return v == '好友' ? '好友' : '全站';
+  }
+
+  Future<void> setSubjectRecentType(String value) async {
+    await _prefs?.setString(
+      'setting_subject_recent_type',
+      value == '好友' ? '好友' : '全站',
+    );
     notifyListeners();
   }
 
@@ -914,7 +944,8 @@ class SettingsStore extends ChangeNotifier {
   }
 
   /// 收藏管理: 0=公开 1=私密 (原项目 NAMESPACE_PRIVACY)
-  int get collectionPrivacy => _prefs?.getInt('setting_collection_privacy') ?? 0;
+  int get collectionPrivacy =>
+      _prefs?.getInt('setting_collection_privacy') ?? 0;
 
   Future<void> setCollectionPrivacy(int value) async {
     await _prefs?.setInt('setting_collection_privacy', value == 1 ? 1 : 0);
@@ -934,7 +965,56 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 猜你喜欢: 显示已收藏条目 (原项目 likeCollected, 默认开)
+  bool get likeCollected => _prefs?.getBool('setting_like_collected') ?? true;
+
+  Future<void> setLikeCollected(bool value) async {
+    await _prefs?.setBool('setting_like_collected', value);
+    notifyListeners();
+  }
+
+  /// 猜你喜欢推荐维度 (原项目 likeRec, 10 项 0/1, 默认全开)
+  List<int> get likeRec {
+    final raw = _prefs?.getStringList('setting_like_rec');
+    if (raw == null || raw.length != kLikeRecReasons.length) {
+      return List<int>.filled(kLikeRecReasons.length, 1);
+    }
+    return [for (final e in raw) e == '0' ? 0 : 1];
+  }
+
+  Future<void> setLikeRecAt(int index, bool enabled) async {
+    if (index < 0 || index >= kLikeRecReasons.length) return;
+    final next = [...likeRec];
+    next[index] = enabled ? 1 : 0;
+    await _prefs?.setStringList('setting_like_rec', [
+      for (final e in next) '$e',
+    ]);
+    notifyListeners();
+  }
+
+  /// Dollars 自动刷新 (原项目 ScreenDollars.autoRefresh, 默认开)
+  bool get dollarsAutoRefresh =>
+      _prefs?.getBool('setting_dollars_auto_refresh') ?? true;
+
+  Future<void> setDollarsAutoRefresh(bool value) async {
+    await _prefs?.setBool('setting_dollars_auto_refresh', value);
+    notifyListeners();
+  }
 }
+
+/// 原版 REASONS / REASONS_INFO
+const kLikeRecReasons = [
+  ('自己评分', '已评分，高分多加分，低分多扣分'),
+  ('收藏状态', '想看加分，搁置、抛弃扣分'),
+  ('条目排名', '条目自身高排名加分，低排名扣分'),
+  ('条目分数', '条目自身高分加分，低分扣分'),
+  ('已看集数', '已看过集数多，稍微加分'),
+  ('自己点评', '进行过长评稍微加分'),
+  ('私密收藏', '私密收藏加分'),
+  ('最近收藏', '最近操作过稍微加分'),
+  ('标签倾向', '标签是你倾向打的，越多相对加越多分'),
+  ('多次推荐', '被多个条目推荐到相对加分'),
+];
 
 /// 全局设置 Provider (ChangeNotifier: 修改后自动刷新依赖方)
 final settingsStoreProvider = ChangeNotifierProvider<SettingsStore>((ref) {

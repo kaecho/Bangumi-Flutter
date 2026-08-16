@@ -8,6 +8,8 @@ import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'treemap.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 富豪树 (前百首富) — 移植自原项目 screens/tinygrail/tree-rich
 ///
@@ -16,7 +18,8 @@ class TinygrailTreeRichScreen extends ConsumerStatefulWidget {
   const TinygrailTreeRichScreen({super.key});
 
   @override
-  ConsumerState<TinygrailTreeRichScreen> createState() => _TinygrailTreeRichScreenState();
+  ConsumerState<TinygrailTreeRichScreen> createState() =>
+      _TinygrailTreeRichScreenState();
 }
 
 const kTreeRichTypes = ['周股息', '总资产', '流动资金', '初始资金'];
@@ -26,7 +29,8 @@ final treeRichProvider = FutureProvider<List<TinygrailRich>>((ref) async {
   return ref.read(tinygrailApiProvider).fetchRich(1, 100);
 });
 
-class _TinygrailTreeRichScreenState extends ConsumerState<TinygrailTreeRichScreen> {
+class _TinygrailTreeRichScreenState
+    extends ConsumerState<TinygrailTreeRichScreen> {
   String _type = '周股息';
   final Set<int> _hidden = {};
 
@@ -34,10 +38,10 @@ class _TinygrailTreeRichScreenState extends ConsumerState<TinygrailTreeRichScree
   Widget build(BuildContext context) {
     final async = ref.watch(treeRichProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('富豪树'),
+      appBar: BgmAppBar(
+        title: '前百首富',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             icon: const Icon(Icons.refresh),
             tooltip: '刷新',
             onPressed: () => ref.invalidate(treeRichProvider),
@@ -54,7 +58,7 @@ class _TinygrailTreeRichScreenState extends ConsumerState<TinygrailTreeRichScree
             }),
             onReset: () => setState(_hidden.clear),
           ),
-          const Divider(height: 1),
+          const BgmHairline(),
           Expanded(
             child: async.when(
               loading: () => const Loading(),
@@ -81,7 +85,9 @@ class _TinygrailTreeRichScreenState extends ConsumerState<TinygrailTreeRichScree
                                 onTap: () => _onCellTap(context, nodes[i]),
                                 onLongPress: nodes[i].id < 0
                                     ? null
-                                    : () => setState(() => _hidden.add(nodes[i].id)),
+                                    : () => setState(
+                                        () => _hidden.add(nodes[i].id),
+                                      ),
                               ),
                         ],
                       ),
@@ -107,19 +113,21 @@ class _TinygrailTreeRichScreenState extends ConsumerState<TinygrailTreeRichScree
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(title: Text(node.name, style: context.ds.bodyStrong)),
-            const Divider(height: 1),
-            ListTile(
+            BgmActionRow(title: node.name),
+            const BgmHairline(),
+            BgmActionRow(
               leading: const Icon(Icons.account_balance_outlined),
-              title: const Text('资产分析'),
+              title: '资产分析',
               onTap: () {
                 Navigator.of(ctx).pop();
-                context.push('/tinygrail/tree?user=${Uri.encodeComponent(node.userName)}');
+                context.push(
+                  '/tinygrail/tree?user=${Uri.encodeComponent(node.userName)}',
+                );
               },
             ),
-            ListTile(
+            BgmActionRow(
               leading: const Icon(Icons.visibility_off_outlined),
-              title: const Text('隐藏'),
+              title: '隐藏',
               onTap: () {
                 Navigator.of(ctx).pop();
                 setState(() => _hidden.add(node.id));
@@ -167,8 +175,15 @@ double _richValue(TinygrailRich item, String type) {
 }
 
 /// 构建节点: 占比 < 0.88% 聚合为"其他N个用户" (原项目固定过滤率)
-List<TreeNode> _buildNodes(List<TinygrailRich> list, String type, Set<int> hiddenIds) {
-  final visible = [for (var i = 0; i < list.length; i++) if (!hiddenIds.contains(i)) list[i]];
+List<TreeNode> _buildNodes(
+  List<TinygrailRich> list,
+  String type,
+  Set<int> hiddenIds,
+) {
+  final visible = [
+    for (var i = 0; i < list.length; i++)
+      if (!hiddenIds.contains(i)) list[i],
+  ];
   final total = visible.fold<double>(0, (a, b) => a + _richValue(b, type));
   if (total <= 0) return const [];
 
@@ -183,27 +198,31 @@ List<TreeNode> _buildNodes(List<TinygrailRich> list, String type, Set<int> hidde
       filterTotal += value;
       continue;
     }
-    nodes.add(TreeNode(
-      id: item.rank - 1,
-      name: item.nickname.isEmpty ? item.userId : item.nickname,
-      userName: item.userId,
-      avatar: item.avatar,
-      weight: value,
-      price: value,
-      percent: value / total,
-    ));
+    nodes.add(
+      TreeNode(
+        id: item.rank - 1,
+        name: item.nickname.isEmpty ? item.userId : item.nickname,
+        userName: item.userId,
+        avatar: item.avatar,
+        weight: value,
+        price: value,
+        percent: value / total,
+      ),
+    );
   }
   if (filterCount > 0) {
-    nodes.add(TreeNode(
-      id: -1,
-      name: '其他$filterCount个用户',
-      userName: '',
-      avatar: '',
-      // 其他的占比不会大于 3.2%
-      weight: filterTotal / total > 0.032 ? total * 0.032 : filterTotal,
-      price: filterTotal,
-      percent: filterTotal / total,
-    ));
+    nodes.add(
+      TreeNode(
+        id: -1,
+        name: '其他$filterCount个用户',
+        userName: '',
+        avatar: '',
+        // 其他的占比不会大于 3.2%
+        weight: filterTotal / total > 0.032 ? total * 0.032 : filterTotal,
+        price: filterTotal,
+        percent: filterTotal / total,
+      ),
+    );
   }
   return nodes;
 }
@@ -213,7 +232,11 @@ class _ToolBar extends StatelessWidget {
   final ValueChanged<String> onType;
   final VoidCallback onReset;
 
-  const _ToolBar({required this.type, required this.onType, required this.onReset});
+  const _ToolBar({
+    required this.type,
+    required this.onType,
+    required this.onReset,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -224,19 +247,16 @@ class _ToolBar extends StatelessWidget {
           PopupMenuButton<String>(
             initialValue: type,
             onSelected: onType,
-            itemBuilder: (context) =>
-                [for (final s in kTreeRichTypes) PopupMenuItem(value: s, child: Text(s))],
+            itemBuilder: (context) => [
+              for (final s in kTreeRichTypes)
+                PopupMenuItem(value: s, child: Text(s)),
+            ],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppGap.x6),
-              child: Row(
-                children: [
-                  Text(type, style: context.ds.bodyStrong),
-                  const Icon(Icons.arrow_drop_down, size: 18),
-                ],
-              ),
+              child: Row(children: [Text(type, style: context.ds.bodyStrong)]),
             ),
           ),
-          IconButton(
+          BgmHeaderAction(
             icon: const Icon(Icons.restart_alt, size: 18),
             tooltip: '重置隐藏',
             onPressed: onReset,
@@ -274,7 +294,9 @@ class _UserCell extends StatelessWidget {
         onLongPress: onLongPress,
         child: Container(
           decoration: BoxDecoration(
-            color: isOther || !showAvatar ? context.ds.surfaceBase : context.ds.surfaceCard,
+            color: isOther || !showAvatar
+                ? context.ds.surfaceBase
+                : context.ds.surfaceCard,
             border: Border.all(color: context.ds.border, width: 0.5),
             borderRadius: BorderRadius.circular(2),
           ),
@@ -284,8 +306,14 @@ class _UserCell extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 if (!isOther && showAvatar && node.avatar.isNotEmpty)
-                  Cover(url: node.avatar.replaceFirst('//', 'https://'), width: rect.w - 2, height: rect.h - 2, fit: BoxFit.cover),
-                if (!isOther && showAvatar) Container(color: Colors.black.withValues(alpha: 0.35)),
+                  Cover(
+                    url: node.avatar.replaceFirst('//', 'https://'),
+                    width: rect.w - 2,
+                    height: rect.h - 2,
+                    fit: BoxFit.cover,
+                  ),
+                if (!isOther && showAvatar)
+                  Container(color: Colors.black.withValues(alpha: 0.35)),
                 Padding(
                   padding: const EdgeInsets.all(3),
                   child: Column(
@@ -297,7 +325,9 @@ class _UserCell extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: context.ds.tiny.copyWith(
-                            color: isOther ? context.ds.textSecondary : Colors.white,
+                            color: isOther
+                                ? context.ds.textSecondary
+                                : Colors.white,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -309,7 +339,9 @@ class _UserCell extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: context.ds.tiny.copyWith(
                             fontSize: 9,
-                            color: isOther ? context.ds.textSecondary : Colors.white70,
+                            color: isOther
+                                ? context.ds.textSecondary
+                                : Colors.white70,
                           ),
                         ),
                     ],
@@ -324,7 +356,9 @@ class _UserCell extends StatelessWidget {
   }
 
   static String _price(double fen) {
-    if (fen.abs() >= 100000000) return '${(fen / 100000000).toStringAsFixed(1)}亿';
+    if (fen.abs() >= 100000000) {
+      return '${(fen / 100000000).toStringAsFixed(1)}亿';
+    }
     if (fen.abs() >= 10000) return '${(fen / 10000).toStringAsFixed(1)}万';
     return fen.toStringAsFixed(fen == fen.roundToDouble() ? 0 : 2);
   }

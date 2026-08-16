@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/utils/display.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/utils/display.dart';
+import '../../design_system/design_system.dart';
 import '../../shared/widgets/app_bar.dart';
-import '../../shared/widgets/score.dart';
 
 /// 社区项目 (与原项目 ds.ts 一致)
 class CommunityProject {
@@ -24,6 +24,17 @@ class CommunityProject {
     this.name = '',
     this.userId = '',
   });
+}
+
+bool communityTopicIsPost(String topicUrl) =>
+    topicUrl.contains('/group/topic/');
+
+String communityTopicKind(String topicUrl) =>
+    communityTopicIsPost(topicUrl) ? '讨论' : '小组';
+
+String fillCommunityUserId(String url, String userId) {
+  if (!url.contains('[USER_ID]')) return url;
+  return url.replaceAll('[USER_ID]', userId);
 }
 
 const kCommunityProjects = [
@@ -100,47 +111,70 @@ class DiscoveryUsersScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final myId = ref.watch(currentUserProvider)?.username ?? '';
     return Scaffold(
-      appBar: BgmAppBar(title: '社区项目', showBackButton: true),
+      appBar: const BgmAppBar(title: '社区项目', showBackButton: true),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
           for (final project in kCommunityProjects)
-            ListTile(
-              title: Text(
-                project.title,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (project.path.isNotEmpty) {
+                          context.push(project.path);
+                          return;
+                        }
+                        openExternalUrl(fillCommunityUserId(project.url, myId));
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(project.title, style: context.ds.bodyStrong),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${project.name}@${project.userId}',
+                            style: context.ds.caption,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      final url = project.topicUrl;
+                      if (url.isEmpty) return;
+                      if (communityTopicIsPost(url)) {
+                        final id = int.tryParse(url.split('/').last);
+                        if (id != null) {
+                          context.push('/rakuen/topic/group/$id');
+                          return;
+                        }
+                      }
+                      final name = url.split('/').last;
+                      if (name.isNotEmpty) {
+                        context.push('/rakuen/group/$name');
+                      }
+                    },
+                    child: Text(
+                      communityTopicKind(project.topicUrl),
+                      style: context.ds.caption,
+                    ),
+                  ),
+                ],
               ),
-              subtitle: Text(
-                '${project.name}@${project.userId}',
-                style: const TextStyle(fontSize: 12),
-              ),
-              trailing: Tag(
-                text: project.topicUrl.contains('/group/topic/') ? '讨论' : '小组',
-              ),
-              onTap: () {
-                if (project.path.isNotEmpty) {
-                  context.push(project.path);
-                  return;
-                }
-                var url = project.url;
-                if (url.contains('[USER_ID]')) {
-                  url = url.replaceAll(
-                    '[USER_ID]',
-                    myId.isEmpty ? '700939' : myId,
-                  );
-                }
-                openExternalUrl(url);
-              },
             ),
-          const Padding(
-            padding: EdgeInsets.all(16),
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Text(
               '不定期收录一些班友开发的社区项目（非官方）',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11),
+              style: context.ds.meta,
             ),
           ),
         ],

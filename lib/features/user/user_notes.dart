@@ -22,6 +22,31 @@ String actionsNotePath() {
   );
 }
 
+/// 原版自定义跳转 Header DATA
+const kActionsMoreItems = <(String, String)>[('info', '说明')];
+
+/// 原版 Actions Header: params.name || 自定义跳转
+String actionsTitle(String? name) {
+  final n = name?.trim() ?? '';
+  return n.isEmpty ? '自定义跳转' : n;
+}
+
+/// 原版赞助 Header DATA
+const kSponsorMoreItems = <(String, String)>[('info', '说明')];
+
+/// 原版本地备份 Header DATA
+const kBackupMoreItems = <(String, String)>[('info', '说明')];
+
+String originNotePath() {
+  return extraNotePath(
+    title: '自定义源头',
+    message: const ['自定义数据源，供条目页跳转使用。', '链接可使用 [CN] [JP] [ID] 占位，会按当前条目替换。'],
+  );
+}
+
+/// 原版源头 Header DATA
+const kOriginMoreItems = <(String, String)>[('info', '说明')];
+
 String sponsorNotePath() {
   return extraNotePath(
     title: '支持者',
@@ -35,4 +60,3 @@ String sponsorNotePath() {
     ],
   );
 }
-

@@ -72,7 +72,12 @@ final List<GoRoute> discoveryRoutes = [
   GoRoute(path: '/groups', builder: (_, _) => const GroupScreen()),
   GoRoute(path: '/series', builder: (_, _) => const SeriesScreen()),
   GoRoute(path: '/recommend', builder: (_, _) => const RecommendScreen()),
-  GoRoute(path: '/like', builder: (_, _) => const LikeScreen()),
+  GoRoute(
+    path: '/like',
+    builder: (_, state) =>
+        LikeScreen(userId: state.uri.queryParameters['userId'] ?? ''),
+  ),
+
   GoRoute(path: '/pic', builder: (_, _) => const PicScreen()),
   GoRoute(path: '/wiki', builder: (_, _) => const WikiScreen()),
   GoRoute(
@@ -83,7 +88,14 @@ final List<GoRoute> discoveryRoutes = [
   ),
 
   GoRoute(path: '/vib', builder: (_, _) => const VibScreen()),
-  GoRoute(path: '/typerank', builder: (_, _) => const TypeRankScreen()),
+  GoRoute(
+    path: '/typerank',
+    builder: (_, state) => TypeRankScreen(
+      initialType: state.uri.queryParameters['type'] ?? 'anime',
+      initialTag: state.uri.queryParameters['tag'] ?? 'TV',
+    ),
+  ),
+
   GoRoute(
     path: '/award/:year',
     builder: (_, state) => AwardScreen(
@@ -98,14 +110,19 @@ final List<GoRoute> discoveryRoutes = [
   GoRoute(path: '/manga', builder: (_, _) => const MangaScreen()),
   GoRoute(
     path: '/wenku',
-    builder: (_, _) => const MangaScreen(title: '文库'),
+    builder: (_, _) => const MangaScreen(title: '找文库'),
   ),
   GoRoute(path: '/hentai', builder: (_, _) => const HentaiScreen()),
   GoRoute(path: '/nsfw', builder: (_, _) => const NsfwScreen()),
   GoRoute(path: '/users', builder: (_, _) => const DiscoveryUsersScreen()),
   GoRoute(path: '/adv', builder: (_, _) => const AdvScreen()),
   GoRoute(path: '/browser', builder: (_, _) => const BrowserScreen()),
-  GoRoute(path: '/character', builder: (_, _) => const CharacterScreen()),
+  GoRoute(
+    path: '/character',
+    builder: (_, state) =>
+        CharacterScreen(userName: state.uri.queryParameters['userName'] ?? ''),
+  ),
+
   GoRoute(path: '/anitama', builder: (_, _) => const AnitamaScreen()),
   GoRoute(
     path: '/wordcloud',

@@ -3,6 +3,8 @@ import '../../core/utils/display.dart';
 
 import '../../design_system/design_system.dart';
 import 'wiki_data.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 游戏指南 (移植自原项目 screens/tinygrail/wiki)
 ///
@@ -14,12 +16,11 @@ class TinygrailWikiScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('小圣杯游戏指南'),
-
+      appBar: BgmAppBar(
+        title: '小圣杯游戏指南',
         actions: [
           Builder(
-            builder: (context) => IconButton(
+            builder: (context) => BgmHeaderAction(
               icon: const Icon(Icons.menu),
               tooltip: '目录',
               onPressed: () => Scaffold.of(context).openEndDrawer(),
@@ -74,7 +75,7 @@ class _ChapterSection extends StatelessWidget {
             )
           else
             _WikiLine(line: line),
-        const Divider(height: 24),
+        const BgmHairline(height: 24),
       ],
     );
   }
@@ -153,20 +154,14 @@ class _WikiDrawer extends StatelessWidget {
               child: Text('目录', style: context.ds.section),
             ),
             for (final chapter in kWikiData) ...[
-              ListTile(
-                dense: true,
-                title: Text(chapter.title, style: context.ds.bodyStrong),
+              BgmActionRow(
+                title: chapter.title,
                 onTap: () => _scrollTo(context, chapter.title),
               ),
               for (final line in chapter.message)
                 if (_ChapterSection._isHeading(line))
-                  ListTile(
-                    dense: true,
-                    contentPadding: const EdgeInsets.only(
-                      left: AppGap.x8,
-                      right: AppGap.x7,
-                    ),
-                    title: Text(line, style: context.ds.caption),
+                  BgmActionRow(
+                    title: line,
                     onTap: () =>
                         _scrollTo(context, _anchorId(chapter.title, line)),
                   ),

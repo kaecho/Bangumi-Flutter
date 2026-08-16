@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
@@ -15,7 +18,7 @@ class TinygrailFantasyScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(fantasyProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('幻想乡')),
+      appBar: BgmAppBar(title: '幻想乡'),
       body: async.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -25,10 +28,11 @@ class TinygrailFantasyScreen extends ConsumerWidget {
               ? const Empty(text: '暂无数据')
               : ListView.separated(
                   itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const BgmHairline(),
                   itemBuilder: (context, index) => CharaTile(
                     chara: list[index],
-                    onTap: () => context.push('/tinygrail/chara/${list[index].id}'),
+                    onTap: () =>
+                        context.push('/tinygrail/chara/${list[index].id}'),
                   ),
                 ),
         ),

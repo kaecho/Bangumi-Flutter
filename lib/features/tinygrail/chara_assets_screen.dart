@@ -3,21 +3,42 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
 import '../../design_system/design_system.dart';
 
-/// 角色资产 (我的持仓 + ICO + 圣殿)
-class TinygrailCharaAssetsScreen extends ConsumerWidget {
-  const TinygrailCharaAssetsScreen({super.key});
+/// 角色资产 Extra: {user}的持仓 + IconGo + tabs 总览/人物/圣殿/ICO
+class TinygrailCharaAssetsScreen extends ConsumerStatefulWidget {
+  final String userName;
+
+  const TinygrailCharaAssetsScreen({super.key, this.userName = ''});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final userAsync = ref.watch(tinygrailUserProvider);
-    return Scaffold(
-      appBar: AppBar(title: const Text('我的持仓')),
+  ConsumerState<TinygrailCharaAssetsScreen> createState() =>
+      _TinygrailCharaAssetsScreenState();
+}
 
+class _TinygrailCharaAssetsScreenState
+    extends ConsumerState<TinygrailCharaAssetsScreen> {
+  String _go = '卖出';
+
+  @override
+  Widget build(BuildContext context) {
+    final userAsync = ref.watch(tinygrailUserProvider);
+    final title = widget.userName.isEmpty ? '我的持仓' : '${widget.userName}的持仓';
+    return Scaffold(
+      appBar: BgmAppBar(
+        title: title,
+        actions: [
+          TinygrailIconGo(
+            value: _go,
+            onChanged: (v) => setState(() => _go = v),
+          ),
+        ],
+      ),
       body: userAsync.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -29,15 +50,16 @@ class TinygrailCharaAssetsScreen extends ConsumerWidget {
                 children: [
                   const Text('请先授权登录小圣杯'),
                   const SizedBox(height: 8),
-                  FilledButton(
+                  BgmButton(
+                    '去授权',
+                    expand: false,
                     onPressed: () => context.push('/tinygrail/login'),
-                    child: const Text('去授权'),
                   ),
                 ],
               ),
             );
           }
-          return _CharaAssetsBody(hash: user.hash);
+          return _CharaAssetsBody(hash: user.hash, go: _go);
         },
       ),
     );
@@ -46,8 +68,9 @@ class TinygrailCharaAssetsScreen extends ConsumerWidget {
 
 class _CharaAssetsBody extends ConsumerStatefulWidget {
   final String hash;
+  final String go;
 
-  const _CharaAssetsBody({required this.hash});
+  const _CharaAssetsBody({required this.hash, required this.go});
 
   @override
   ConsumerState<_CharaAssetsBody> createState() => _CharaAssetsBodyState();
@@ -55,7 +78,7 @@ class _CharaAssetsBody extends ConsumerStatefulWidget {
 
 class _CharaAssetsBodyState extends ConsumerState<_CharaAssetsBody>
     with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 3, vsync: this);
+  late final TabController _tab = TabController(length: 4, vsync: this);
 
   @override
   void dispose() {
@@ -67,21 +90,33 @@ class _CharaAssetsBodyState extends ConsumerState<_CharaAssetsBody>
   Widget build(BuildContext context) {
     return Column(
       children: [
-        TabBar(
+        BgmControlledTabStrip(
           controller: _tab,
+          scrollable: true,
           tabs: const [
-            Tab(text: '持仓'),
-            Tab(text: 'ICO'),
+            Tab(text: '总览'),
+            Tab(text: '人物'),
             Tab(text: '圣殿'),
+            Tab(text: 'ICO'),
           ],
         ),
         Expanded(
           child: TabBarView(
             controller: _tab,
             children: [
-              _AssetTab(provider: charaAssetsCharaProvider(widget.hash)),
-              _AssetTab(provider: charaAssetsIcoProvider(widget.hash)),
-              _TempleTab(hash: widget.hash),
+              _AssetTab(
+                provider: charaAssetsMergeProvider(widget.hash),
+                go: widget.go,
+              ),
+              _AssetTab(
+                provider: charaAssetsCharaProvider(widget.hash),
+                go: widget.go,
+              ),
+              _TempleTab(hash: widget.hash, go: widget.go),
+              _AssetTab(
+                provider: charaAssetsIcoProvider(widget.hash),
+                go: widget.go,
+              ),
             ],
           ),
         ),
@@ -92,8 +127,9 @@ class _CharaAssetsBodyState extends ConsumerState<_CharaAssetsBody>
 
 class _AssetTab extends ConsumerStatefulWidget {
   final FutureProvider<List<TinygrailChara>> provider;
+  final String go;
 
-  const _AssetTab({required this.provider});
+  const _AssetTab({required this.provider, required this.go});
 
   @override
   ConsumerState<_AssetTab> createState() => _AssetTabState();
@@ -129,13 +165,14 @@ class _AssetTabState extends ConsumerState<_AssetTab> {
                     ? const Empty(text: '暂无数据')
                     : ListView.separated(
                         itemCount: list.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        separatorBuilder: (_, _) => const BgmHairline(),
                         itemBuilder: (context, index) {
                           final c = list[index];
                           return CharaTile(
                             chara: c,
-                            onTap: () =>
-                                context.push('/tinygrail/chara/${c.id}'),
+                            onTap: () => context.push(
+                              tinygrailIconGoPath(c.id, widget.go),
+                            ),
                             trailing: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.end,
@@ -166,8 +203,9 @@ class _AssetTabState extends ConsumerState<_AssetTab> {
 
 class _TempleTab extends ConsumerWidget {
   final String hash;
+  final String go;
 
-  const _TempleTab({required this.hash});
+  const _TempleTab({required this.hash, required this.go});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -181,20 +219,16 @@ class _TempleTab extends ConsumerWidget {
             ? const Empty(text: '暂无圣殿')
             : ListView.separated(
                 itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const BgmHairline(),
                 itemBuilder: (context, index) {
                   final item = list[index];
-                  return ListTile(
-                    onTap: () => context.push('/tinygrail/chara/${item.id}'),
-                    title: Text(
-                      item.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  return BgmTextRow(
+                    onTap: () => context.push(
+                      tinygrailIconGoPath(item.id, go),
                     ),
-                    subtitle: Text(
-                      'Lv.${item.level} · 献祭 ${tgAmount(item.sacrifices)}',
-                      style: context.ds.meta,
-                    ),
+                    title: item.name,
+                    subtitle:
+                        'Lv.${item.level} · 献祭 ${tgAmount(item.sacrifices)}',
                     trailing: Text(
                       '精炼 ${item.refine}',
                       style: const TextStyle(fontWeight: FontWeight.w600),
@@ -222,4 +256,10 @@ final charaAssetsIcoProvider =
 final charaAssetsTempleProvider =
     FutureProvider.family<List<TinygrailTemple>, String>((ref, hash) async {
       return ref.read(tinygrailApiProvider).fetchMyTemple(hash);
+    });
+
+final charaAssetsMergeProvider =
+    FutureProvider.family<List<TinygrailChara>, String>((ref, hash) async {
+      final data = await ref.read(tinygrailApiProvider).fetchMyCharaAssets();
+      return [...data.chara, ...data.ico];
     });

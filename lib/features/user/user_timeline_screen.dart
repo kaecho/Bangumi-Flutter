@@ -13,7 +13,15 @@ import '../../shared/models/timeline.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'user_models.dart';
+import 'zone_screen.dart';
+
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
+
+/// 原版用户时间线标题: `{用户名}的时间线`
+String userTimelineTitle(String? name) =>
+    name == null || name.isEmpty ? '时间线' : '$name的时间线';
 
 /// 用户时光机数据 (按日期分组 + 分页)
 class UserTimelineData {
@@ -91,17 +99,18 @@ class UserTimelineScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(currentUserProvider);
+    final isMe = me != null && userPathId(me) == userId;
+    final user = isMe ? me : ref.watch(zoneUserProvider(userId)).valueOrNull;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('时光机'),
+      appBar: BgmAppBar(
+        title: userTimelineTitle(user?.displayName),
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '说明',
             icon: const Icon(Icons.info_outline),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('进度瓷砖会有延迟, 若无数据可过段时间再来')),
-              );
+              showBgmToast(context, '进度瓷砖会有延迟, 若无数据可过段时间再来');
             },
           ),
         ],
@@ -155,18 +164,8 @@ class _UserTimelineBodyState extends ConsumerState<UserTimelineBody> {
     final async = ref.watch(userTimelineProvider(widget.userId));
     return async.when(
       loading: () => const Loading(),
-      error: (_, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('加载失败'),
-            TextButton(
-              onPressed: () =>
-                  ref.invalidate(userTimelineProvider(widget.userId)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      error: (_, _) => BgmRetry(
+        onRetry: () => ref.invalidate(userTimelineProvider(widget.userId)),
       ),
       data: (data) {
         if (data.groups.isEmpty) {
@@ -252,9 +251,8 @@ class _UserTimelineRow extends ConsumerWidget {
                           style: context.ds.tiny,
                         ),
                       if (isMe && item.clearHref.isNotEmpty)
-                        IconButton(
+                        BgmHeaderAction(
                           tooltip: '删除',
-                          visualDensity: VisualDensity.compact,
                           icon: const Icon(Icons.close, size: 18),
                           onPressed: () => _delete(context, ref),
                         ),
@@ -285,22 +283,11 @@ class _UserTimelineRow extends ConsumerWidget {
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除时间线'),
-        content: const Text('确定删除这条动态?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final ok = await showBgmConfirm(
+      context,
+      title: '删除时间线',
+      message: '确定删除这条动态?',
+      confirmLabel: '删除',
     );
     if (ok != true) return;
     try {
@@ -313,15 +300,11 @@ class _UserTimelineRow extends ConsumerWidget {
       await client.post(href, host: kHost);
       ref.invalidate(userTimelineProvider(userId));
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('已删除')));
+        showBgmToast(context, '已删除');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('删除失败: $e')));
+        showBgmToast(context, '删除失败: $e');
       }
     }
   }

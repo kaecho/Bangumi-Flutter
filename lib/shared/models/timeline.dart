@@ -12,6 +12,8 @@ class TimelineItem {
   final TimelineStatus? status;
   final String content;
   final String clearHref;
+  final int likeType;
+  final int relatedId;
 
   const TimelineItem({
     this.id = 0,
@@ -23,6 +25,8 @@ class TimelineItem {
     this.status,
     this.content = '',
     this.clearHref = '',
+    this.likeType = 40,
+    this.relatedId = 0,
   });
 
   factory TimelineItem.fromJson(Map<String, dynamic> json) => TimelineItem(
@@ -42,6 +46,8 @@ class TimelineItem {
     content: json['content'] as String? ?? '',
     clearHref:
         json['clear_href'] as String? ?? json['clearHref'] as String? ?? '',
+    likeType: (json['like_type'] as num?)?.toInt() ?? 40,
+    relatedId: (json['related_id'] as num?)?.toInt() ?? 0,
   );
 }
 

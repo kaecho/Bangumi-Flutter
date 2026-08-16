@@ -1,165 +1,87 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import '../../core/api/api_endpoints.dart';
+
 import '../../core/storage/settings_store.dart';
 import '../../core/utils/display.dart';
+import '../../shared/models/subject.dart';
 
-import '../../shared/models/subject.dart' hide Tag;
 
-import '../../shared/widgets/app_bar.dart';
-
-import '../../shared/widgets/cover.dart';
-import '../../shared/widgets/loading.dart';
-import '../../shared/widgets/score.dart';
-import 'subject_models.dart';
-import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/loading.dart';
+import 'subject_providers.dart';
+import 'subject_notes.dart';
 
-/// 条目信息
+
+
+/// 详情 (原版 HeaderV2 title = params.name || 详情)
 /// 路由: /subject/:id/info
-class SubjectInfoScreen extends ConsumerWidget {
+class SubjectInfoScreen extends ConsumerStatefulWidget {
   final int id;
 
   const SubjectInfoScreen({super.key, required this.id});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final detail = ref.watch(subjectDetailProvider(id));
-    return Scaffold(
-      appBar: BgmAppBar(
-        title: '条目信息',
-        showBackButton: true,
-        actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl('$kHost/subject/$id'),
-          ),
-        ],
-      ),
-
-      body: detail.when(
-        loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(subjectDetailProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
-        data: (value) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _InfoHeader(detail: value),
-            const Divider(height: 32),
-            if (value.infobox.isNotEmpty) ...[
-              const Text(
-                '信息',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              for (final item
-                  in ref.watch(settingsStoreProvider).subjectPromoteAlias
-                      ? promoteAliasRows(value.infobox, keyOf: (e) => e.key)
-                      : value.infobox)
-                _InfoboxRow(item: item),
-              const Divider(height: 32),
-            ],
-            if (value.subject.summary.isNotEmpty) ...[
-              const Text(
-                '简介',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                value.subject.summary.replaceAll('\r\n', '\n').trim(),
-                style: const TextStyle(fontSize: 13, height: 1.6),
-              ),
-              const Divider(height: 32),
-            ],
-            if (value.tags.isNotEmpty) ...[
-              const Text(
-                '标签',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final tag in value.tags)
-                    GestureDetector(
-                      onTap: () => context.push(
-                        '/subject/$id/typerank?tag=${Uri.encodeComponent(tag.name)}',
-                      ),
-                      child: Tag(text: '${tag.name} (${tag.count})'),
-                    ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  ConsumerState<SubjectInfoScreen> createState() => _SubjectInfoScreenState();
 }
 
-class _InfoHeader extends StatelessWidget {
-  final SubjectDetail detail;
-  const _InfoHeader({required this.detail});
+class _SubjectInfoScreenState extends ConsumerState<SubjectInfoScreen> {
+  String _type = '简介';
 
   @override
   Widget build(BuildContext context) {
-    final subject = detail.subject;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Cover(url: subject.images.common, width: 90, height: 122, radius: 6),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final id = widget.id;
+    final detail = ref.watch(subjectDetailProvider(id));
+    final name = detail.valueOrNull?.subject.displayName;
+    return Scaffold(
+      appBar: BgmAppBar(
+        title: extraNamedTitle(name, '详情'),
+        showBackButton: true,
+      ),
+      body: detail.when(
+        loading: () => const Loading(text: '加载中...'),
+        error: (e, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(subjectDetailProvider(id))),
+        data: (value) {
+          final store = ref.watch(settingsStoreProvider);
+          final rows = store.subjectPromoteAlias
+              ? promoteAliasRows(value.infobox, keyOf: (Infobox e) => e.key)
+              : value.infobox;
+          final isSummary = _type == '简介';
+          return ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              Text(
-                subject.displayName,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+              Align(
+                alignment: Alignment.centerLeft,
+                child: BgmSegmented<String>(
+                  values: const [('简介', '简介'), ('详情', '详情')],
+                  selected: _type,
+                  onSelect: (v) => setState(() => _type = v),
                 ),
               ),
-              if (subject.name.isNotEmpty && subject.name != subject.nameCn)
-                Text(subject.name, style: context.ds.caption),
-              const SizedBox(height: 6),
-              Text(
-                '${detail.typeText}${!SettingsStore.instance.hideScore && subject.rank > 0 ? ' · 排名 ${subject.rank}' : ''}'
-                '${subject.airDate.isNotEmpty ? ' · ${subject.airDate}' : ''}',
-                style: context.ds.caption,
-              ),
-
-              if (subject.rating != null && subject.rating!.score > 0) ...[
-                const SizedBox(height: 6),
-                Score(
-                  score: subject.rating!.score,
-                  total: subject.rating!.total,
-                  fontSize: 13,
-                ),
-              ],
+              const SizedBox(height: 12),
+              if (isSummary)
+                if (value.subject.summary.isNotEmpty)
+                  Text(
+                    value.subject.summary.replaceAll('\r\n', '\n').trim(),
+                    style: const TextStyle(fontSize: 13, height: 1.6),
+                  )
+                else
+                  const Empty(text: '暂无简介')
+              else if (rows.isNotEmpty)
+                for (final item in rows) _InfoboxRow(item: item)
+              else
+                const Empty(text: '暂无详情'),
             ],
-          ),
-        ),
-      ],
+          );
+        },
+      ),
     );
   }
 }
+
+
 
 class _InfoboxRow extends StatelessWidget {
   final Infobox item;

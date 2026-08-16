@@ -3,10 +3,63 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/cover.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import '../../design_system/design_system.dart';
+
+
+/// Extra HeaderV2 IconGo DATA: 资产重组 / 买入 / 卖出 / K线
+const kTinygrailIconGoData = ['资产重组', '买入', '卖出', 'K线'];
+
+String tinygrailIconGoPath(int charaId, String go) {
+  return switch (go) {
+    'K线' => '/tinygrail/chara/$charaId',
+    '买入' || '卖出' => '/tinygrail/deal/$charaId',
+    '资产重组' => '/tinygrail/chara/$charaId',
+    _ => '/tinygrail/chara/$charaId',
+  };
+}
+
+class TinygrailIconGo extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const TinygrailIconGo({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: '前往',
+      padding: EdgeInsets.zero,
+      onSelected: onChanged,
+      itemBuilder: (_) => [
+        for (final item in kTinygrailIconGoData)
+          PopupMenuItem(value: item, child: Text(item)),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.read_more, size: 22),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// 角色行: 头像 + 名称/等级 + 现价 + 涨跌幅
 class CharaTile extends StatelessWidget {
@@ -25,7 +78,7 @@ class CharaTile extends StatelessWidget {
         ? context.ds.rise
         : theme.colorScheme.onSurfaceVariant;
     final icon = chara.icon.replaceFirst('//', 'https://');
-    return ListTile(
+    return BgmTextRow(
       onTap: onTap,
       leading: Cover(
         url: icon,
@@ -43,26 +96,9 @@ class CharaTile extends StatelessWidget {
           ),
         ),
       ),
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(
-              chara.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            'Lv.${chara.level}',
-            style: TextStyle(fontSize: 11, color: theme.colorScheme.primary),
-          ),
-        ],
-      ),
-      subtitle: Text(
-        '发行 ${tgAmount(chara.total)} · 市场 ${tgAmount(chara.marketValue)}',
-        style: context.ds.meta,
-      ),
+      title: chara.name,
+      subtitle:
+          'Lv.${chara.level} · 发行 ${tgAmount(chara.total)} · 市场 ${tgAmount(chara.marketValue)}',
       trailing:
           trailing ??
           Column(
@@ -89,6 +125,8 @@ class TinygrailCharaListScreen extends ConsumerStatefulWidget {
   final List<(String, String)> tabs; // (tab 名, list type)
   final Future<List<TinygrailChara>> Function(String type)? loader;
   final Widget Function(TinygrailChara)? itemBuilder;
+  final bool showIconGo;
+
 
   const TinygrailCharaListScreen({
     super.key,
@@ -96,6 +134,7 @@ class TinygrailCharaListScreen extends ConsumerStatefulWidget {
     required this.tabs,
     this.loader,
     this.itemBuilder,
+    this.showIconGo = false,
   });
 
   @override
@@ -110,6 +149,8 @@ class _TinygrailCharaListScreenState
     length: widget.tabs.length,
     vsync: this,
   );
+  String _go = '卖出';
+
 
   @override
   void dispose() {
@@ -127,13 +168,20 @@ class _TinygrailCharaListScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
+      appBar: BgmAppBar(
+        title: widget.title,
+        actions: widget.showIconGo
+            ? [
+                TinygrailIconGo(
+                  value: _go,
+                  onChanged: (v) => setState(() => _go = v),
+                ),
+              ]
+            : null,
         bottom: widget.tabs.length > 1
-            ? TabBar(
+            ? BgmControlledTabStrip(
                 controller: _tab,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
+                scrollable: true,
                 tabs: [for (final t in widget.tabs) Tab(text: t.$1)],
               )
             : null,
@@ -141,7 +189,8 @@ class _TinygrailCharaListScreenState
       body: TabBarView(
         controller: _tab,
         children: [
-          for (final t in widget.tabs) _CharaList(loader: () => _load(t.$2)),
+          for (final t in widget.tabs)
+            _CharaList(loader: () => _load(t.$2), go: widget.showIconGo ? _go : null),
         ],
       ),
     );
@@ -150,8 +199,10 @@ class _TinygrailCharaListScreenState
 
 class _CharaList extends ConsumerStatefulWidget {
   final Future<List<TinygrailChara>> Function() loader;
+  final String? go;
 
-  const _CharaList({required this.loader});
+  const _CharaList({required this.loader, this.go});
+
 
   @override
   ConsumerState<_CharaList> createState() => _CharaListState();
@@ -208,12 +259,17 @@ class _CharaListState extends ConsumerState<_CharaList> {
                 },
                 child: ListView.separated(
                   itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const BgmHairline(),
+
                   itemBuilder: (context, index) {
                     final chara = list[index];
                     return CharaTile(
                       chara: chara,
-                      onTap: () => context.push('/tinygrail/chara/${chara.id}'),
+                      onTap: () => context.push(
+                        widget.go == null
+                            ? '/tinygrail/chara/${chara.id}'
+                            : tinygrailIconGoPath(chara.id, widget.go!),
+                      ),
                     );
                   },
                 ),
@@ -248,7 +304,7 @@ class UserTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ListTile(
+    return BgmTextRow(
       onTap: onTap,
       leading: rank > 0
           ? SizedBox(
@@ -270,8 +326,8 @@ class UserTile extends StatelessWidget {
               size: 40,
               name: name,
             ),
-      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(subtitle, style: context.ds.meta),
+      title: name,
+      subtitle: subtitle,
       trailing: Text(
         value,
         style: const TextStyle(fontWeight: FontWeight.w600),
@@ -337,11 +393,7 @@ class TinygrailSortChip extends StatelessWidget {
         for (final s in kTinygrailSorts)
           PopupMenuItem(value: s.$1, child: Text(s.$2)),
       ],
-      child: Chip(
-        visualDensity: VisualDensity.compact,
-        label: Text('排序 $label'),
-        avatar: const Icon(Icons.sort, size: 16),
-      ),
+      child: BgmFilterChip(label: '排序 $label', selected: false),
     );
   }
 }

@@ -8,6 +8,7 @@ import '../../shared/models/user.dart';
 import '../api/api_client.dart';
 import '../api/api_endpoints.dart';
 import 'site_cookies.dart';
+import '../html/bgm_html_parser.dart';
 
 /// 认证状态
 class AuthState {
@@ -154,11 +155,80 @@ class AuthController extends Notifier<AuthState> {
     return true;
   }
 
+  /// 账号密码 + 验证码登录 (原项目 login/v2)
+  ///
+  /// 步骤: FollowTheRabbit → oauth authorize → access_token
+  Future<String?> loginWithPassword({
+    required String email,
+    required String password,
+    required String captcha,
+    required String formhash,
+    required String cookie,
+  }) async {
+    final client = ref.read(apiClientProvider);
+    var jar = cookie;
+
+    Future<void> absorb(Iterable<String> set) async {
+      jar = mergeSiteCookies(jar, set);
+      await SiteCookiesStore.instance.setCookieHeader(jar);
+    }
+
+    final login = await client.postSiteForm(htmlFollowTheRabbit(), {
+      'formhash': formhash,
+      'referer': '/',
+      'dreferer': '/',
+      'email': email,
+      'password': password,
+      'captcha_challenge_field': captcha,
+      'cookietime': '0',
+      'loginsubmit': '登录',
+    }, cookie: jar);
+
+    await absorb(login.setCookies);
+
+    if (login.body.contains('分钟内您将不能登录本站')) {
+      return '累计 5 次错误尝试, 15 分钟内您将不能登录本站';
+    }
+    if (htmlHasLogout(login.body) && !jar.contains('chii_auth=')) {
+      final href = logoutHref(login.body);
+      if (href != null) {
+        final abs = href.startsWith('http') ? href : '$kHost$href';
+        final out = await client.getSiteRaw(abs, cookie: jar);
+        await absorb(out.setCookies);
+      }
+    }
+    if (!jar.contains('chii_auth=')) {
+      return loginFailMessage(login.body) ?? '验证码或密码错误';
+    }
+    jar = normalizeCookieTime(jar);
+    await SiteCookiesStore.instance.setCookieHeader(jar);
+
+    final oauthPage = await client.getSiteRaw(kOauthAuthorize, cookie: jar);
+    await absorb(oauthPage.setCookies);
+    final oauthHash = parseFormhash(oauthPage.body);
+    if (oauthHash.isEmpty) return '获取授权表单失败';
+
+    final auth = await client.postSiteRaw(kOauthAuthorize, {
+      'formhash': oauthHash,
+      'redirect_uri': '',
+      'client_id': kAppId,
+      'submit': '授权',
+    }, cookie: jar);
+    await absorb(auth.setCookies);
+    final code = oauthCodeFromUrl(auth.location) ?? oauthCodeFromUrl(auth.body);
+    if (code == null || code.isEmpty) return '授权失败: 无法提取 code';
+    final ok = await loginWithCode(code);
+
+    if (!ok) return '换取 token 失败';
+    return null;
+  }
+
   /// 退出登录
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kTokenKey);
     await prefs.remove(_kUserKey);
+    await SiteCookiesStore.instance.clear();
     state = const AuthState();
   }
 }

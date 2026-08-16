@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/utils/display.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 import 'versions_screen.dart' show kAppVersion;
 
@@ -16,7 +18,7 @@ class InformationScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('关于')),
+      appBar: BgmAppBar(title: '关于'),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -49,40 +51,31 @@ class InformationScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          Card(
+          BgmCard(
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.description_outlined),
-                  title: const Text('项目简介'),
-                  subtitle: const Text(
-                    'Bangumi 第三方客户端, 与原项目 (czy0729/Bangumi) 功能 1:1 对应。'
-                    '数据来自 bgm.tv 公开 API。',
-                  ),
+                BgmSettingRow(
+                  title: '项目简介',
+                  subtitle:
+                      'Bangumi 第三方客户端, 与原项目 (czy0729/Bangumi) 功能 1:1 对应。数据来自 bgm.tv 公开 API。',
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.link),
-                  title: const Text('GitHub 仓库'),
-                  trailing: const Icon(Icons.chevron_right),
+                const BgmHairline(),
+                BgmSettingRow(
+                  title: 'GitHub 仓库',
+                  arrow: true,
                   onTap: () => _open(
                     context,
                     'https://github.com/kaecho/Bangumi-Flutter',
                   ),
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.public),
-                  title: const Text('Bangumi 番组计划'),
-                  trailing: const Icon(Icons.chevron_right),
+                const BgmHairline(),
+                BgmSettingRow(
+                  title: 'Bangumi 番组计划',
+                  arrow: true,
                   onTap: () => _open(context, 'https://bgm.tv'),
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.policy_outlined),
-                  title: const Text('开源许可'),
-                  subtitle: const Text('MIT License'),
-                ),
+                const BgmHairline(),
+                BgmSettingRow(title: '开源许可', subtitle: 'MIT License'),
               ],
             ),
           ),

@@ -10,6 +10,8 @@ import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 角色详情 (K线 + 深度 + 买卖 + 奖池 + 交易记录)
 class TinygrailCharaScreen extends ConsumerWidget {
@@ -21,26 +23,26 @@ class TinygrailCharaScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final charaAsync = ref.watch(_charaProvider(monoId));
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('角色详情'),
+      appBar: BgmAppBar(
+        title: '角色详情',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '成交记录',
             icon: const Icon(Icons.attach_money),
             onPressed: () => context.push('/tinygrail/deal/$monoId'),
           ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: '交易大厅',
             icon: const Icon(Icons.waterfall_chart),
             onPressed: () => context.push('/tinygrail/trade'),
           ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: '外部查看',
             icon: const Icon(Icons.link),
             onPressed: () =>
                 openExternalUrl('https://fuyuake.top/xsb/chara/$monoId'),
           ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: '图集',
             icon: const Icon(Icons.image_outlined),
             onPressed: () => context.push('/pic'),
@@ -50,19 +52,8 @@ class TinygrailCharaScreen extends ConsumerWidget {
 
       body: charaAsync.when(
         loading: () => const Loading(height: double.infinity),
-        error: (_, _) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('加载失败'),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => ref.invalidate(_charaProvider(monoId)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (_, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(_charaProvider(monoId))),
         data: (data) {
           final chara = data.chara;
           return RefreshIndicator(
@@ -116,69 +107,67 @@ class _Header extends StatelessWidget {
         ? context.ds.rise
         : context.ds.textPrimary;
     final icon = chara.icon.replaceFirst('//', 'https://');
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Cover(
-              url: icon,
+    return BgmCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Cover(
+            url: icon,
+            width: 56,
+            height: 56,
+            radius: 8,
+            placeholder: Container(
               width: 56,
               height: 56,
-              radius: 8,
-              placeholder: Container(
-                width: 56,
-                height: 56,
-                color: context.ds.textHint.withValues(alpha: 0.12),
-                alignment: Alignment.center,
-                child: Text(
-                  chara.name.isEmpty ? '?' : chara.name.characters.first,
-                  style: TextStyle(color: context.ds.textSecondary),
-                ),
+              color: context.ds.textHint.withValues(alpha: 0.12),
+              alignment: Alignment.center,
+              child: Text(
+                chara.name.isEmpty ? '?' : chara.name.characters.first,
+                style: TextStyle(color: context.ds.textSecondary),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    chara.name,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Lv.${chara.level} · 发行 ${tgAmount(chara.total)} · 股东 ${chara.users}',
-                    style: context.ds.caption,
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '¥${tgPrice(chara.current)}',
+                  chara.name,
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  tgFluctuation(chara.fluctuation),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  'Lv.${chara.level} · 发行 ${tgAmount(chara.total)} · 股东 ${chara.users}',
+                  style: context.ds.caption,
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '¥${tgPrice(chara.current)}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                tgFluctuation(chara.fluctuation),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -196,22 +185,29 @@ class _ActionBar extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        FilledButton(
+        BgmButton(
+          '买入',
+          expand: false,
           onPressed: () => _showTradeSheet(context, isBid: true),
-          child: const Text('买入'),
         ),
-        FilledButton.tonal(
+        BgmButton(
+          '卖出',
+          type: BgmButtonType.ghost,
+          expand: false,
           onPressed: () => _showTradeSheet(context, isBid: false),
-          child: const Text('卖出'),
         ),
-        OutlinedButton(
+        BgmButton(
+          '董事会',
+          type: BgmButtonType.plain,
+          expand: false,
           onPressed: () =>
               context.push('/tinygrail/initial?icoId=${chara.icoId}'),
-          child: const Text('董事会'),
         ),
-        OutlinedButton(
+        BgmButton(
+          '献祭',
+          type: BgmButtonType.plain,
+          expand: false,
           onPressed: () => _SacrificeSheet.show(context, monoId),
-          child: const Text('献祭'),
         ),
       ],
     );
@@ -281,22 +277,21 @@ class _TradeSheetState extends ConsumerState<_TradeSheet> {
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
               const SizedBox(width: 8),
-              IconButton(
+              BgmHeaderAction(
                 icon: const Icon(Icons.remove_circle_outline),
                 onPressed: () =>
                     setState(() => _price = (_price - 1).clamp(0, 1 << 30)),
               ),
               Expanded(
-                child: TextField(
+                child: BgmField(
                   keyboardType: TextInputType.number,
                   controller: TextEditingController(text: '$_price'),
                   textAlign: TextAlign.center,
-                  decoration: const InputDecoration(isDense: true),
                   onChanged: (v) =>
                       setState(() => _price = int.tryParse(v) ?? 0),
                 ),
               ),
-              IconButton(
+              BgmHeaderAction(
                 icon: const Icon(Icons.add_circle_outline),
                 onPressed: () => setState(() => _price = _price + 1),
               ),
@@ -315,23 +310,22 @@ class _TradeSheetState extends ConsumerState<_TradeSheet> {
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
               const SizedBox(width: 8),
-              IconButton(
+              BgmHeaderAction(
                 icon: const Icon(Icons.remove_circle_outline),
                 onPressed: () => setState(
                   () => _amount = (_amount - 100).clamp(100, 1 << 30),
                 ),
               ),
               Expanded(
-                child: TextField(
+                child: BgmField(
                   keyboardType: TextInputType.number,
                   controller: TextEditingController(text: '$_amount'),
                   textAlign: TextAlign.center,
-                  decoration: const InputDecoration(isDense: true),
                   onChanged: (v) =>
                       setState(() => _amount = int.tryParse(v) ?? 0),
                 ),
               ),
-              IconButton(
+              BgmHeaderAction(
                 icon: const Icon(Icons.add_circle_outline),
                 onPressed: () => setState(() => _amount = _amount + 100),
               ),
@@ -348,18 +342,10 @@ class _TradeSheetState extends ConsumerState<_TradeSheet> {
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             ),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _loading ? null : _submit,
-              child: _loading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(widget.isBid ? '确认买入' : '确认卖出'),
-            ),
+          BgmButton(
+            widget.isBid ? '确认买入' : '确认卖出',
+            loading: _loading,
+            onPressed: _submit,
           ),
         ],
       ),
@@ -411,96 +397,94 @@ class _PriceChart extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final klineAsync = ref.watch(_klineProvider(monoId));
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '价格走势 (K线收盘价)',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
+    return BgmCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '价格走势 (K线收盘价)',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
             ),
-            const SizedBox(height: 12),
-            klineAsync.when(
-              loading: () => const SizedBox(height: 180, child: Loading()),
-              error: (_, _) => const SizedBox(
-                height: 180,
-                child: Center(child: Text('图表加载失败')),
-              ),
-              data: (list) {
-                if (list.isEmpty) {
-                  return const SizedBox(
-                    height: 180,
-                    child: Center(child: Text('暂无行情数据')),
-                  );
-                }
-                return SizedBox(
+          ),
+          const SizedBox(height: 12),
+          klineAsync.when(
+            loading: () => const SizedBox(height: 180, child: Loading()),
+            error: (_, _) => const SizedBox(
+              height: 180,
+              child: Center(child: Text('图表加载失败')),
+            ),
+            data: (list) {
+              if (list.isEmpty) {
+                return const SizedBox(
                   height: 180,
-                  child: LineChart(
-                    LineChartData(
-                      minY: list
-                          .map((e) => e.low)
-                          .reduce((a, b) => a < b ? a : b)
-                          .toDouble(),
-                      maxY: list
-                          .map((e) => e.high)
-                          .reduce((a, b) => a > b ? a : b)
-                          .toDouble(),
-                      gridData: FlGridData(
-                        show: true,
-                        drawVerticalLine: false,
-                        getDrawingHorizontalLine: (_) => FlLine(
-                          color: theme.colorScheme.outlineVariant,
-                          strokeWidth: 0.5,
-                        ),
+                  child: Center(child: Text('暂无行情数据')),
+                );
+              }
+              return SizedBox(
+                height: 180,
+                child: LineChart(
+                  LineChartData(
+                    minY: list
+                        .map((e) => e.low)
+                        .reduce((a, b) => a < b ? a : b)
+                        .toDouble(),
+                    maxY: list
+                        .map((e) => e.high)
+                        .reduce((a, b) => a > b ? a : b)
+                        .toDouble(),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      getDrawingHorizontalLine: (_) => FlLine(
+                        color: theme.colorScheme.outlineVariant,
+                        strokeWidth: 0.5,
                       ),
-                      titlesData: const FlTitlesData(
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        topTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        rightTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
+                    ),
+                    titlesData: const FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
                       ),
-                      borderData: FlBorderData(show: false),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: [
-                            for (var i = 0; i < list.length; i++)
-                              FlSpot(
-                                i.toDouble(),
-                                (list[i].price / 100).toDouble(),
-                              ),
-                          ],
-                          isCurved: false,
-                          color: theme.colorScheme.primary,
-                          barWidth: 1.5,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.12,
+                      topTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: [
+                          for (var i = 0; i < list.length; i++)
+                            FlSpot(
+                              i.toDouble(),
+                              (list[i].price / 100).toDouble(),
                             ),
+                        ],
+                        isCurved: false,
+                        color: theme.colorScheme.primary,
+                        barWidth: 1.5,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.12,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                );
-              },
-            ),
-          ],
-        ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -522,65 +506,54 @@ class _DepthView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final depthAsync = ref.watch(_depthProvider(monoId));
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '盘口深度',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
+    return BgmCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '盘口深度',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
             ),
-            const SizedBox(height: 8),
-            depthAsync.when(
-              loading: () => const SizedBox(height: 100, child: Loading()),
-              error: (_, _) => const SizedBox(
-                height: 100,
-                child: Center(child: Text('深度加载失败')),
-              ),
-              data: (depth) {
-                final rows = <Widget>[];
-                for (final ask
-                    in depth.asks.reversed.take(5).toList().reversed) {
-                  rows.add(
-                    _DepthRow(
-                      price: ask.price,
-                      amount: ask.amount,
-                      isBid: false,
-                    ),
-                  );
-                }
+          ),
+          const SizedBox(height: 8),
+          depthAsync.when(
+            loading: () => const SizedBox(height: 100, child: Loading()),
+            error: (_, _) => const SizedBox(
+              height: 100,
+              child: Center(child: Text('深度加载失败')),
+            ),
+            data: (depth) {
+              final rows = <Widget>[];
+              for (final ask in depth.asks.reversed.take(5).toList().reversed) {
                 rows.add(
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      '当前价 ¥${tgPrice(ref.watch(_charaProvider(monoId)).valueOrNull?.chara.current ?? 0)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.primary,
-                      ),
+                  _DepthRow(price: ask.price, amount: ask.amount, isBid: false),
+                );
+              }
+              rows.add(
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    '当前价 ¥${tgPrice(ref.watch(_charaProvider(monoId)).valueOrNull?.chara.current ?? 0)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
+                ),
+              );
+              for (final bid in depth.bids.take(5)) {
+                rows.add(
+                  _DepthRow(price: bid.price, amount: bid.amount, isBid: true),
                 );
-                for (final bid in depth.bids.take(5)) {
-                  rows.add(
-                    _DepthRow(
-                      price: bid.price,
-                      amount: bid.amount,
-                      isBid: true,
-                    ),
-                  );
-                }
-                if (rows.isEmpty) rows.add(const Center(child: Text('暂无盘口')));
-                return Column(children: rows);
-              },
-            ),
-          ],
-        ),
+              }
+              if (rows.isEmpty) rows.add(const Center(child: Text('暂无盘口')));
+              return Column(children: rows);
+            },
+          ),
+        ],
       ),
     );
   }
@@ -646,21 +619,15 @@ class _PoolView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final poolAsync = ref.watch(_poolProvider(monoId));
-    return Card(
-      child: ListTile(
-        leading: Icon(Icons.pool, color: theme.colorScheme.primary),
-        title: const Text('奖池'),
-        trailing: poolAsync.when(
-          loading: () => const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          error: (_, _) => const Text('-'),
-          data: (pool) => Text(
-            '¥${tgMoney(pool)}',
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
+    return BgmActionRow(
+      leading: Icon(Icons.pool, color: theme.colorScheme.primary),
+      title: '奖池',
+      trailing: poolAsync.when(
+        loading: () => const BgmSpinner(size: 20),
+        error: (_, _) => const Text('-'),
+        data: (pool) => Text(
+          '¥${tgMoney(pool)}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -671,30 +638,25 @@ class _TempleLink extends StatelessWidget {
   final int monoId;
 
   const _TempleLink({required this.monoId});
-
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: Card(
-            child: ListTile(
-              leading: const Icon(Icons.temple_buddhist_outlined),
-              title: const Text('圣殿'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/tinygrail/chara/$monoId/temple'),
-            ),
+          child: BgmActionRow(
+            leading: const Icon(Icons.temple_buddhist_outlined),
+            title: '圣殿',
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/tinygrail/chara/$monoId/temple'),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Card(
-            child: ListTile(
-              leading: const Icon(Icons.account_balance_outlined),
-              title: const Text('英灵殿'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/tinygrail/chara/$monoId/valhalla'),
-            ),
+          child: BgmActionRow(
+            leading: const Icon(Icons.account_balance_outlined),
+            title: '英灵殿',
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/tinygrail/chara/$monoId/valhalla'),
           ),
         ),
       ],
@@ -712,50 +674,48 @@ class _LogsView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final logsAsync = ref.watch(_userLogsProvider(monoId));
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '我的交易记录',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
+    return BgmCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '我的交易记录',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
             ),
-            const SizedBox(height: 8),
-            logsAsync.when(
-              loading: () => const SizedBox(height: 80, child: Loading()),
-              error: (_, _) => const SizedBox(
-                height: 80,
-                child: Center(child: Text('请先登录后查看')),
-              ),
-              data: (logs) {
-                final rows = <Widget>[
-                  _LogRow(
-                    label: '我的买单',
-                    items: logs.bids,
-                    cancelId: (id) =>
-                        ref.read(tinygrailApiProvider).doCancelBid(id),
-                  ),
-                  _LogRow(
-                    label: '我的卖单',
-                    items: logs.asks,
-                    cancelId: (id) =>
-                        ref.read(tinygrailApiProvider).doCancelAsk(id),
-                  ),
-                  _LogRow(
-                    label: '成交记录',
-                    items: [...logs.bidHistory, ...logs.askHistory],
-                  ),
-                ];
-                return Column(children: rows);
-              },
+          ),
+          const SizedBox(height: 8),
+          logsAsync.when(
+            loading: () => const SizedBox(height: 80, child: Loading()),
+            error: (_, _) => const SizedBox(
+              height: 80,
+              child: Center(child: Text('请先登录后查看')),
             ),
-          ],
-        ),
+            data: (logs) {
+              final rows = <Widget>[
+                _LogRow(
+                  label: '我的买单',
+                  items: logs.bids,
+                  cancelId: (id) =>
+                      ref.read(tinygrailApiProvider).doCancelBid(id),
+                ),
+                _LogRow(
+                  label: '我的卖单',
+                  items: logs.asks,
+                  cancelId: (id) =>
+                      ref.read(tinygrailApiProvider).doCancelAsk(id),
+                ),
+                _LogRow(
+                  label: '成交记录',
+                  items: [...logs.bidHistory, ...logs.askHistory],
+                ),
+              ];
+              return Column(children: rows);
+            },
+          ),
+        ],
       ),
     );
   }
@@ -828,14 +788,7 @@ class _LogRow extends StatelessWidget {
                 ),
                 Text(friendlyTime(item.time), style: context.ds.meta),
                 if (cancelId != null)
-                  TextButton(
-                    onPressed: () => cancelId!(item.id),
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size(0, 28),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    child: const Text('撤单', style: TextStyle(fontSize: 11)),
-                  ),
+                  BgmTextAction('撤单', onPressed: () => cancelId!(item.id)),
               ],
             ),
           ),
@@ -874,14 +827,10 @@ class _SacrificeSheetState extends ConsumerState<_SacrificeSheet> {
           .doSacrifice(widget.monoId, _amount, _sale);
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('献祭成功')));
+      showBgmToast(context, '献祭成功');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('献祭失败: $e')));
+      showBgmToast(context, '献祭失败: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -905,23 +854,27 @@ class _SacrificeSheetState extends ConsumerState<_SacrificeSheet> {
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
-          TextField(
+          BgmField(
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: '数量'),
+            labelText: '数量',
             controller: TextEditingController(text: '$_amount'),
             onChanged: (v) => _amount = int.tryParse(v) ?? 0,
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('股权融资 (出售)'),
-            value: _sale,
-            onChanged: (v) => setState(() => _sale = v),
+          BgmSettingRow(
+            title: '股权融资 (出售)',
+            trailing: BgmSwitch(
+              value: _sale,
+              onChanged: (v) => setState(() => _sale = v),
+            ),
           ),
+
           Align(
             alignment: Alignment.centerRight,
-            child: FilledButton(
-              onPressed: _loading ? null : _submit,
-              child: Text(_loading ? '提交中' : '确认献祭'),
+            child: BgmButton(
+              '确认献祭',
+              expand: false,
+              loading: _loading,
+              onPressed: _submit,
             ),
           ),
         ],

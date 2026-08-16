@@ -9,6 +9,7 @@ import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import 'widgets/discovery_html.dart';
 import 'widgets/paged.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 class BlogList extends PagedNotifier<BlogListRow, String> {
   @override
@@ -26,6 +27,12 @@ final blogListProvider =
     AsyncNotifierProvider.family<BlogList, PagedData<BlogListRow>, String>(
       BlogList.new,
     );
+
+/// 原版 HeaderV2Popover DATA: 浏览器查看 + 网页版查看
+const kBlogListMoreItems = <(String, String)>[
+  ('browser', '浏览器查看'),
+  ('spa', '网页版查看'),
+];
 
 /// 全站日志 (原项目 TabsV2: 全部/动画/书籍/游戏/音乐/三次元)
 class BlogScreen extends ConsumerStatefulWidget {
@@ -55,39 +62,32 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
         title: '日志',
         showBackButton: true,
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '我的日志',
             icon: const Icon(Icons.person_outline),
             onPressed: () => context.push('/my-blogs'),
           ),
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () =>
-                openExternalUrl('$kHost${htmlBlogList(type: _typeKey)}'),
+          BgmHeaderMore(
+            items: kBlogListMoreItems,
+            onSelected: (value) {
+              if (value == 'browser') {
+                openExternalUrl('$kHost${htmlBlogList(type: _typeKey)}');
+              } else if (value == 'spa') {
+                openExternalUrl(htmlSpa('DiscoveryBlog'));
+              }
+            },
           ),
         ],
       ),
       body: Column(
         children: [
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                for (var i = 0; i < _types.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(_types[i].$2),
-                      selected: _type == i,
-                      onSelected: (_) => setState(() => _type = i),
-                    ),
-                  ),
-              ],
-            ),
+          BgmTabStrip(
+            scrollable: true,
+            index: _type,
+            onSelect: (i) => setState(() => _type = i),
+            tabs: [for (final t in _types) Text(t.$2)],
           ),
+
           Expanded(
             child: PagedListView<BlogListRow, String>(
               provider: blogListProvider,

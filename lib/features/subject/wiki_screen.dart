@@ -8,7 +8,10 @@ import '../../shared/widgets/loading.dart';
 
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import 'subject_notes.dart';
+
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 维基编辑历史
 /// 路由: /subject/:id/wiki
@@ -22,41 +25,28 @@ class WikiScreen extends ConsumerWidget {
     final edits = ref.watch(wikiProvider(id));
     return Scaffold(
       appBar: BgmAppBar(
-        title: '维基修订历史',
+        title: extraNamedTitle(
+          ref.watch(subjectDetailProvider(id)).valueOrNull?.subject.displayName,
+          '修订历史',
+          named: (n) => '$n的修订历史',
+        ),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlSubjectWikiEdit(id)),
-          ),
+          BgmHeaderMore.browser(() => openExternalUrl(htmlSubjectWikiEdit(id))),
         ],
       ),
 
+
       body: edits.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(wikiProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (e, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(wikiProvider(id))),
         data: (items) => items.isEmpty
             ? const Empty(text: '暂无修订记录')
             : ListView.separated(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: items.length,
-                separatorBuilder: (_, _) =>
-                    const Divider(height: 1, indent: 16, endIndent: 16),
+                separatorBuilder: (_, _) => const BgmHairline(indent: 16),
                 itemBuilder: (_, i) => _WikiRow(edit: items[i]),
               ),
       ),
@@ -71,7 +61,7 @@ class _WikiRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ListTile(
+    return BgmTextRow(
       leading: CircleAvatar(
         radius: 18,
         backgroundColor: theme.colorScheme.surfaceContainerHighest,
@@ -83,19 +73,11 @@ class _WikiRow extends StatelessWidget {
           ),
         ),
       ),
-      title: Text(
-        edit.userName.isEmpty ? '匿名用户' : edit.userName,
-        style: const TextStyle(fontSize: 13),
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Text(
-          [edit.time, if (edit.summary.isNotEmpty) edit.summary].join(' · '),
-          style: context.ds.meta,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
+      title: edit.userName.isEmpty ? '匿名用户' : edit.userName,
+      subtitle: [
+        edit.time,
+        if (edit.summary.isNotEmpty) edit.summary,
+      ].join(' · '),
       trailing: edit.rev > 0
           ? Text('#${edit.rev}', style: context.ds.meta)
           : null,

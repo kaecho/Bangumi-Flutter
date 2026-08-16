@@ -13,7 +13,10 @@ import '../../shared/widgets/loading.dart';
 
 import 'ep_menu.dart';
 import 'subject_providers.dart';
+import 'subject_notes.dart';
+
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 章节列表
 /// 路由: /subject/:id/episodes
@@ -27,52 +30,28 @@ class EpisodesScreen extends ConsumerStatefulWidget {
 }
 
 class _EpisodesScreenState extends ConsumerState<EpisodesScreen> {
-  bool _reverse = false;
-
   @override
   Widget build(BuildContext context) {
     final id = widget.id;
     final epsAsync = ref.watch(epListProvider(id));
+    final name = ref
+        .watch(subjectDetailProvider(id))
+        .valueOrNull
+        ?.subject
+        .displayName;
     return Scaffold(
       appBar: BgmAppBar(
-        title: '章节',
+        title: extraNamedTitle(name, '章节', named: (n) => '$n的章节'),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: _reverse ? '正序' : '倒序',
-            icon: Icon(
-              Icons.swap_vert,
-              color: _reverse ? Theme.of(context).colorScheme.primary : null,
-            ),
-            onPressed: () => setState(() => _reverse = !_reverse),
-          ),
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlSubjectEpisodes(id)),
-          ),
+          BgmHeaderMore.browser(() => openExternalUrl(htmlSubjectEpisodes(id))),
         ],
       ),
       body: epsAsync.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(epListProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (e, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(epListProvider(id))),
         data: (value) {
-          List<Ep> maybeReverse(List<Ep> list) =>
-              _reverse ? list.reversed.toList() : list;
           final all = [
             ...value.eps,
             ...value.type1,
@@ -89,13 +68,14 @@ class _EpisodesScreenState extends ConsumerState<EpisodesScreen> {
               ? 1
               : comments.reduce((a, b) => a > b ? a : b);
           final sections = <(String, List<Ep>)>[
-            if (value.eps.isNotEmpty) ('本篇', maybeReverse(value.eps)),
-            if (value.type1.isNotEmpty) ('特别篇', maybeReverse(value.type1)),
-            if (value.type2.isNotEmpty) ('OP', maybeReverse(value.type2)),
-            if (value.type3.isNotEmpty) ('ED', maybeReverse(value.type3)),
-            if (value.type4.isNotEmpty) ('预告', maybeReverse(value.type4)),
-            if (value.type6.isNotEmpty) ('SP', maybeReverse(value.type6)),
+            if (value.eps.isNotEmpty) ('本篇', value.eps),
+            if (value.type1.isNotEmpty) ('特别篇', value.type1),
+            if (value.type2.isNotEmpty) ('OP', value.type2),
+            if (value.type3.isNotEmpty) ('ED', value.type3),
+            if (value.type4.isNotEmpty) ('预告', value.type4),
+            if (value.type6.isNotEmpty) ('SP', value.type6),
           ];
+
           return CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: _BatchBar(subjectId: id)),
@@ -157,20 +137,17 @@ class _BatchBar extends ConsumerWidget {
             style: const TextStyle(fontSize: 13),
           ),
           const Spacer(),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              minimumSize: const Size(0, 32),
+          BgmButton(
+            '批量更新',
+            type: BgmButtonType.plain,
+            expand: false,
+            onPressed: () => _showBatchUpdate(
+              context,
+              ref,
+              subjectId,
+              watched,
+              eps.eps.length,
             ),
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => _BatchDialog(
-                subjectId: subjectId,
-                watched: watched,
-                total: eps.eps.length,
-              ),
-            ),
-            child: const Text('批量更新', style: TextStyle(fontSize: 12)),
           ),
         ],
       ),
@@ -178,82 +155,63 @@ class _BatchBar extends ConsumerWidget {
   }
 }
 
-class _BatchDialog extends ConsumerStatefulWidget {
-  final int subjectId;
-  final int watched;
-  final int total;
-
-  const _BatchDialog({
-    required this.subjectId,
-    required this.watched,
-    required this.total,
-  });
-
-  @override
-  ConsumerState<_BatchDialog> createState() => _BatchDialogState();
-}
-
-class _BatchDialogState extends ConsumerState<_BatchDialog> {
-  late double _value = widget.watched.toDouble();
-  bool _submitting = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('批量更新进度'),
-      content: Column(
+Future<void> _showBatchUpdate(
+  BuildContext context,
+  WidgetRef ref,
+  int subjectId,
+  int watched,
+  int total,
+) {
+  var value = watched.toDouble();
+  return showBgmDialog<void>(
+    context: context,
+    title: '批量更新进度',
+    content: StatefulBuilder(
+      builder: (ctx, setLocal) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('看到第 ${_value.round()} 话 / 共 ${widget.total} 话'),
-          Slider(
-            value: _value.clamp(0, widget.total.toDouble()),
-            max: widget.total.toDouble(),
-            divisions: widget.total,
-            label: '${_value.round()}',
-            onChanged: (v) => setState(() => _value = v),
+          Text('看到第 ${value.round()} 话 / 共 $total 话'),
+          BgmSlider(
+            value: value.clamp(0, total.toDouble()),
+            max: total.toDouble(),
+            divisions: total,
+            label: '${value.round()}',
+            onChanged: (v) => setLocal(() => value = v),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: _submitting
-              ? null
-              : () async {
-                  setState(() => _submitting = true);
-                  try {
-                    await updateWatchedEpsAction(
-                      ref,
-                      widget.subjectId,
-                      _value.round(),
-                    );
-                    ref.invalidate(epStatusProvider(widget.subjectId));
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('进度已更新'),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('更新失败: ${apiErrorMessage(e)}')),
-                      );
-                    }
-                  }
-                  if (mounted) setState(() => _submitting = false);
-                },
-          child: const Text('保存'),
-        ),
-      ],
-    );
-  }
+    ),
+    actions: (ctx) => [
+      BgmButton(
+        '取消',
+        type: BgmButtonType.plain,
+        expand: false,
+        onPressed: () => Navigator.pop(ctx),
+      ),
+      BgmButton(
+        '保存',
+        expand: false,
+        onPressed: () async {
+          try {
+            await updateWatchedEpsAction(ref, subjectId, value.round());
+            ref.invalidate(epStatusProvider(subjectId));
+            if (ctx.mounted) {
+              Navigator.pop(ctx);
+              showBgmToast(
+                context,
+                '进度已更新',
+                duration: const Duration(seconds: 1),
+              );
+            }
+          } catch (e) {
+            if (ctx.mounted) {
+              showBgmToast(context, '更新失败: ${apiErrorMessage(e)}');
+            }
+          }
+        },
+      ),
+    ],
+  );
 }
 
 /// 单集行
@@ -373,8 +331,7 @@ class _EpRow extends ConsumerWidget {
               ),
             ),
             if (isLogin)
-              IconButton(
-                visualDensity: VisualDensity.compact,
+              BgmHeaderAction(
                 tooltip: watched ? '取消看过' : '标记看过',
                 icon: Icon(
                   watched ? Icons.check_circle : Icons.radio_button_unchecked,
@@ -394,9 +351,7 @@ class _EpRow extends ConsumerWidget {
                     ref.invalidate(epStatusProvider(subjectId));
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('操作失败: ${apiErrorMessage(e)}')),
-                      );
+                      showBgmToast(context, '操作失败: $e');
                     }
                   }
                 },

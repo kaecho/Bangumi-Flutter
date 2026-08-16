@@ -4,8 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/api/api_endpoints.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_screen.dart';
+
+import '../../design_system/design_system.dart';
 
 /// 小圣杯授权登录页
 ///
@@ -17,7 +21,8 @@ class TinygrailLoginScreen extends ConsumerStatefulWidget {
   const TinygrailLoginScreen({super.key});
 
   @override
-  ConsumerState<TinygrailLoginScreen> createState() => _TinygrailLoginScreenState();
+  ConsumerState<TinygrailLoginScreen> createState() =>
+      _TinygrailLoginScreenState();
 }
 
 class _TinygrailLoginScreenState extends ConsumerState<TinygrailLoginScreen> {
@@ -57,7 +62,9 @@ class _TinygrailLoginScreenState extends ConsumerState<TinygrailLoginScreen> {
     try {
       // 等待 tinygrail 服务端 Set-Cookie 落地
       await Future<void>.delayed(const Duration(milliseconds: 1200));
-      final cookies = await WebViewCookieManager().getCookies(domain: Uri.parse(kTinygrailHost));
+      final cookies = await WebViewCookieManager().getCookies(
+        domain: Uri.parse(kTinygrailHost),
+      );
       if (cookies.isEmpty) {
         if (mounted) setState(() => _error = '授权失败, 未获取到会话, 请重试');
         _handled = false;
@@ -79,27 +86,33 @@ class _TinygrailLoginScreenState extends ConsumerState<TinygrailLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('小圣杯授权')),
+      appBar: BgmAppBar(title: '小圣杯授权'),
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
-          if (_loading) const Center(child: CircularProgressIndicator()),
+          if (_loading) const Loading(),
           if (_error != null)
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(_error!),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: () {
+                  GestureDetector(
+                    onTap: () {
                       setState(() {
                         _error = null;
                         _handled = false;
                       });
-                      _controller.loadRequest(Uri.parse(kTinygrailOauthAuthorize()));
+                      _controller.loadRequest(
+                        Uri.parse(kTinygrailOauthAuthorize()),
+                      );
                     },
-                    child: const Text('重试'),
+                    child: Text(
+                      '重试',
+                      style: context.ds.caption.copyWith(
+                        color: context.ds.accent,
+                      ),
+                    ),
                   ),
                 ],
               ),

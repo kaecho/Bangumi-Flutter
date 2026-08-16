@@ -6,6 +6,9 @@ import '../../core/storage/settings_store.dart';
 
 import '../../shared/models/collection.dart';
 import '../../shared/widgets/score.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/loading.dart';
+import '../../design_system/design_system.dart';
 import 'subject_providers.dart';
 
 /// 收藏管理底部弹窗
@@ -38,9 +41,8 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
     _tagsController = TextEditingController(
       text: current?.tags.join(' ') ?? '',
     );
-    _privacy = SettingsStore.instance.collectionPrivacy;
+    _privacy = current?.privacy ?? SettingsStore.instance.collectionPrivacy;
   }
-
 
   @override
   void dispose() {
@@ -75,18 +77,15 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
           children: [
             Row(
               children: [
-                const Text(
-                  '收藏管理',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+                Text('收藏管理', style: context.ds.section),
                 const Spacer(),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
+                BgmHeaderAction(
                   icon: const Icon(Icons.close, size: 20),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
+
             const SizedBox(height: 4),
             Row(
               children: [
@@ -94,18 +93,18 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: ChoiceChip(
-                        label: Text(
-                          CollectionStatus.text(status).replaceAll('看', verb),
-                          style: const TextStyle(fontSize: 12),
-                        ),
+                      child: BgmFilterChip(
+                        label: CollectionStatus.text(
+                          status,
+                        ).replaceAll('看', verb),
                         selected: _type == status,
-                        onSelected: (_) => setState(() => _type = status),
+                        onTap: () => setState(() => _type = status),
                       ),
                     ),
                   ),
               ],
             ),
+
             const SizedBox(height: 16),
             // 评分
             Row(
@@ -117,40 +116,27 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
                 const SizedBox(width: 8),
                 Stars(score: _rate, size: 14),
                 const Spacer(),
-                TextButton(
-                  onPressed: () => setState(() => _rate = 0),
-                  child: const Text('清除', style: TextStyle(fontSize: 12)),
+                GestureDetector(
+                  onTap: () => setState(() => _rate = 0),
+                  child: Text('清除', style: context.ds.caption),
                 ),
               ],
             ),
-            Slider(
+            BgmSlider(
               value: _rate,
               max: 10,
               divisions: 10,
               label: '${_rate.round()}',
               onChanged: (v) => setState(() => _rate = v),
             ),
-            // 吐槽
-            TextField(
+            BgmField(
               controller: _commentController,
               maxLines: 3,
               maxLength: 300,
-              decoration: const InputDecoration(
-                hintText: '吐槽 (可选)',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+              hintText: '吐槽 (可选)',
             ),
             const SizedBox(height: 12),
-            // 标签
-            TextField(
-              controller: _tagsController,
-              decoration: const InputDecoration(
-                hintText: '标签, 用空格分隔 (可选)',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
+            BgmField(controller: _tagsController, hintText: '标签, 用空格分隔 (可选)'),
             const SizedBox(height: 16),
             if (SettingsStore.instance.collectionCommentHistory.isNotEmpty)
               Align(
@@ -163,7 +149,11 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
                         in SettingsStore.instance.collectionCommentHistory)
                       PopupMenuItem(
                         value: h,
-                        child: Text(h, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          h,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                   child: Text(
@@ -179,37 +169,37 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
             Row(
               children: [
                 if (hasCollection) ...[
-                  TextButton(
-                    onPressed: _submitting ? null : _remove,
+                  GestureDetector(
+                    onTap: _submitting ? null : _remove,
                     child: Text(
                       '删除收藏',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.error,
+                      style: context.ds.caption.copyWith(
+                        color: context.ds.error,
                       ),
                     ),
                   ),
                   const Spacer(),
                 ] else
                   const Spacer(),
-                TextButton(
-                  onPressed: () => setState(() => _privacy = _privacy == 1 ? 0 : 1),
-                  child: Text(_privacy == 1 ? '私密' : '公开'),
+                GestureDetector(
+                  onTap: () => setState(() => _privacy = _privacy == 1 ? 0 : 1),
+                  child: Text(
+                    _privacy == 1 ? '私密' : '公开',
+                    style: context.ds.caption.copyWith(
+                      color: context.ds.accent,
+                    ),
+                  ),
                 ),
+
                 const SizedBox(width: 8),
-                FilledButton(
+                BgmButton(
+                  '保存',
+                  expand: false,
+                  loading: _submitting,
                   onPressed: _submitting ? null : _submit,
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('保存'),
                 ),
               ],
             ),
-
           ],
         ),
       ),
@@ -241,19 +231,12 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
       await _maybeAutoComplete();
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('收藏已更新'),
-            duration: Duration(seconds: 1),
-          ),
-        );
+        showBgmToast(context, '收藏已更新', duration: const Duration(seconds: 1));
       }
     } catch (e) {
       if (mounted) {
         setState(() => _submitting = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('保存失败: ${apiErrorMessage(e)}')));
+        showBgmToast(context, '保存失败: ${apiErrorMessage(e)}');
       }
     }
   }
@@ -265,19 +248,12 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
       invalidateSubjectState(ref, widget.subjectId);
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('已删除收藏'),
-            duration: Duration(seconds: 1),
-          ),
-        );
+        showBgmToast(context, '已删除收藏', duration: const Duration(seconds: 1));
       }
     } catch (e) {
       if (mounted) {
         setState(() => _submitting = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('删除失败: ${apiErrorMessage(e)}')));
+        showBgmToast(context, '删除失败: ${apiErrorMessage(e)}');
       }
     }
   }
@@ -313,10 +289,8 @@ class _CollectionSheetState extends ConsumerState<CollectionSheet> {
 
 /// 打开原版 Manage 等价的收藏弹层
 Future<void> showCollectionSheet(BuildContext context, int subjectId) {
-  return showModalBottomSheet<void>(
+  return showBgmSheet<void>(
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
     builder: (_) => CollectionSheet(subjectId: subjectId),
   );
 }

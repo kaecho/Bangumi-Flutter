@@ -7,6 +7,8 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 import '../../core/utils/display.dart';
 
 import 'user_notes.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 操作记录项 (本地快捷操作, 移植自原项目 screens/user/actions)
 class ActionItem {
@@ -111,74 +113,77 @@ final actionsControllerProvider =
 
 /// 操作记录 (本地快捷操作列表)
 class ActionsScreen extends ConsumerWidget {
-  const ActionsScreen({super.key});
+  final String? name;
+
+  const ActionsScreen({super.key, this.name});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(actionsControllerProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('自定义跳转'),
+      appBar: BgmAppBar(
+        title: actionsTitle(name),
         actions: [
-          IconButton(
-            tooltip: '说明',
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => context.push(actionsNotePath()),
+          BgmHeaderMore(
+            items: kActionsMoreItems,
+            onSelected: (_) => context.push(actionsNotePath()),
           ),
         ],
       ),
-
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _edit(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('添加操作'),
-      ),
-      body: items.isEmpty
-          ? const Center(child: Text('暂无操作, 点击右下角添加'))
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index];
-                return Card(
-                  child: SwitchListTile(
-                    title: Text(item.name),
-                    subtitle: Text(
-                      item.url,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    value: item.active,
-                    onChanged: (v) => ref
-                        .read(actionsControllerProvider.notifier)
-                        .toggle(item.uuid, v),
-                    secondary: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.open_in_new, size: 18),
-                          onPressed: () => openExternalUrl(item.url),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 18),
-                          onPressed: () => _edit(context, ref, item: item),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => ref
+      body: Column(
+        children: [
+          Expanded(
+            child: items.isEmpty
+                ? const Center(child: Text('暂无操作'))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return BgmSettingRow(
+                        title: item.name,
+                        subtitle: item.url,
+                        trailing: BgmSwitch(
+                          value: item.active,
+                          onChanged: (v) => ref
                               .read(actionsControllerProvider.notifier)
-                              .remove(item.uuid),
+                              .toggle(item.uuid, v),
                         ),
-                      ],
-                    ),
+                        below: Row(
+                          children: [
+                            BgmHeaderAction(
+                              icon: const Icon(Icons.open_in_new, size: 18),
+                              onPressed: () => openExternalUrl(item.url),
+                            ),
+                            BgmHeaderAction(
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              onPressed: () => _edit(context, ref, item: item),
+                            ),
+                            BgmHeaderAction(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () => ref
+                                  .read(actionsControllerProvider.notifier)
+                                  .remove(item.uuid),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: BgmButton(
+                '添加',
+                type: BgmButtonType.plain,
+                onPressed: () => _edit(context, ref),
+              ),
             ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -189,40 +194,35 @@ class ActionsScreen extends ConsumerWidget {
   }) async {
     final nameCtrl = TextEditingController(text: item?.name ?? '');
     final urlCtrl = TextEditingController(text: item?.url ?? '');
-    final saved = await showDialog<bool>(
+    final saved = await showBgmDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(item == null ? '添加操作' : '编辑操作'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: '名称'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: urlCtrl,
-              decoration: const InputDecoration(labelText: '网址'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isEmpty || urlCtrl.text.trim().isEmpty) {
-                return;
-              }
-              Navigator.pop(context, true);
-            },
-            child: const Text('保存'),
-          ),
+      title: item == null ? '添加操作' : '编辑操作',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          BgmField(controller: nameCtrl, labelText: '名称'),
+          const SizedBox(height: 8),
+          BgmField(controller: urlCtrl, labelText: '网址'),
         ],
       ),
+      actions: (ctx) => [
+        BgmButton(
+          '取消',
+          type: BgmButtonType.plain,
+          expand: false,
+          onPressed: () => Navigator.pop(ctx, false),
+        ),
+        BgmButton(
+          '保存',
+          expand: false,
+          onPressed: () {
+            if (nameCtrl.text.trim().isEmpty || urlCtrl.text.trim().isEmpty) {
+              return;
+            }
+            Navigator.pop(ctx, true);
+          },
+        ),
+      ],
     );
     if (saved != true) return;
     final controller = ref.read(actionsControllerProvider.notifier);

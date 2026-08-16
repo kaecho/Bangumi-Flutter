@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 
@@ -10,12 +14,14 @@ class TinygrailSearchScreen extends ConsumerStatefulWidget {
   const TinygrailSearchScreen({super.key});
 
   @override
-  ConsumerState<TinygrailSearchScreen> createState() => _TinygrailSearchScreenState();
+  ConsumerState<TinygrailSearchScreen> createState() =>
+      _TinygrailSearchScreenState();
 }
 
 class _TinygrailSearchScreenState extends ConsumerState<TinygrailSearchScreen> {
   final _controller = TextEditingController();
   List<TinygrailSearchItem> _list = const [];
+  final List<TinygrailSearchItem> _history = [];
   bool _searching = false;
 
   @override
@@ -34,7 +40,16 @@ class _TinygrailSearchScreenState extends ConsumerState<TinygrailSearchScreen> {
     try {
       final result = await ref.read(tinygrailApiProvider).search(kw);
       if (!mounted) return;
-      setState(() => _list = result);
+      setState(() {
+        _list = result;
+        for (final item in result) {
+          _history.removeWhere((e) => e.id == item.id);
+          _history.insert(0, item);
+        }
+        if (_history.length > 20) {
+          _history.removeRange(20, _history.length);
+        }
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() => _list = const []);
@@ -46,40 +61,82 @@ class _TinygrailSearchScreenState extends ConsumerState<TinygrailSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '输入角色名或 ID'),
-          onSubmitted: _search,
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _search(_controller.text),
+      appBar: const BgmAppBar(title: '人物直达'),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: BgmField(
+                    controller: _controller,
+                    autofocus: true,
+                    hintText: '输入角色名字或ID',
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: _search,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                BgmButton(
+                  '查询',
+                  expand: false,
+                  loading: _searching,
+                  onPressed: _searching
+                      ? null
+                      : () => _search(_controller.text),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _searching
+                ? const Loading()
+                : _list.isNotEmpty
+                ? ListView.separated(
+                    itemCount: _list.length,
+                    separatorBuilder: (_, _) => const BgmHairline(),
+                    itemBuilder: (context, index) {
+                      final item = _list[index];
+                      return BgmTextRow(
+                        leading: Text(
+                          item.ico ? 'ICO' : 'Lv.${item.level}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        title: item.name,
+                        onTap: () =>
+                            context.push('/tinygrail/chara/${item.id}'),
+                      );
+                    },
+                  )
+                : _history.isEmpty
+                ? const Center(child: Text('搜索角色, 支持名称或 ID'))
+                : ListView.separated(
+                    itemCount: _history.length,
+                    separatorBuilder: (_, _) => const BgmHairline(),
+                    itemBuilder: (context, index) {
+                      final item = _history[index];
+                      return BgmTextRow(
+                        title: item.name.isEmpty
+                            ? '#${item.id}'
+                            : '${item.name} #${item.id}',
+                        onTap: () =>
+                            context.push('/tinygrail/chara/${item.id}'),
+                        trailing: BgmHeaderAction(
+                          tooltip: '删除',
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () =>
+                              setState(() => _history.removeAt(index)),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
-      body: _searching
-          ? const Center(child: CircularProgressIndicator())
-          : _list.isEmpty
-              ? const Center(child: Text('搜索角色, 支持名称或 ID'))
-              : ListView.separated(
-                  itemCount: _list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final item = _list[index];
-                    return ListTile(
-                      leading: Text(
-                        item.ico ? 'ICO' : 'Lv.${item.level}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                      ),
-                      title: Text(item.name),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => context.push('/tinygrail/chara/${item.id}'),
-                    );
-                  },
-                ),
     );
   }
 }

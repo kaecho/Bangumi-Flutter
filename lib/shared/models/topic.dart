@@ -36,24 +36,29 @@ class Topic {
   });
 
   factory Topic.fromJson(Map<String, dynamic> json) => Topic(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        url: json['url'] as String? ?? '',
-        title: json['title'] as String? ?? '',
-        user: json['user'] == null ? null : User.fromJson(json['user'] as Map<String, dynamic>),
-        userId: (json['user_id'] as num?)?.toInt() ?? 0,
-        group: json['group'] == null ? null : Group.fromJson(json['group'] as Map<String, dynamic>),
-        replies: (json['replies'] as num?)?.toInt() ?? 0,
-        commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
-        createdAt: json['created_at'] as String? ?? '',
-        updatedAt: json['updated_at'] as String? ?? '',
-        content: json['content'] as String? ?? '',
-        comments: (json['comments'] as List?)
-                ?.map((e) => TopicReply.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-        mainId: (json['main_id'] as num?)?.toInt() ?? 0,
-        type: json['type'] as String? ?? 'group',
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    url: json['url'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    user: json['user'] == null
+        ? null
+        : User.fromJson(json['user'] as Map<String, dynamic>),
+    userId: (json['user_id'] as num?)?.toInt() ?? 0,
+    group: json['group'] == null
+        ? null
+        : Group.fromJson(json['group'] as Map<String, dynamic>),
+    replies: (json['replies'] as num?)?.toInt() ?? 0,
+    commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
+    createdAt: json['created_at'] as String? ?? '',
+    updatedAt: json['updated_at'] as String? ?? '',
+    content: json['content'] as String? ?? '',
+    comments:
+        (json['comments'] as List?)
+            ?.map((e) => TopicReply.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+    mainId: (json['main_id'] as num?)?.toInt() ?? 0,
+    type: json['type'] as String? ?? 'group',
+  );
 
   /// 帖子跳转地址 (用于深链)
   String get topicId => '$type/$id';
@@ -81,16 +86,19 @@ class TopicReply {
   });
 
   factory TopicReply.fromJson(Map<String, dynamic> json) => TopicReply(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        user: json['user'] == null ? null : User.fromJson(json['user'] as Map<String, dynamic>),
-        userId: (json['user_id'] as num?)?.toInt() ?? 0,
-        createdAt: json['created_at'] as String? ?? '',
-        content: json['content'] as String? ?? '',
-        subReplies: (json['sub_replies'] as List?)
-                ?.map((e) => TopicReply.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    user: json['user'] == null
+        ? null
+        : User.fromJson(json['user'] as Map<String, dynamic>),
+    userId: (json['user_id'] as num?)?.toInt() ?? 0,
+    createdAt: json['created_at'] as String? ?? '',
+    content: json['content'] as String? ?? '',
+    subReplies:
+        (json['sub_replies'] as List?)
+            ?.map((e) => TopicReply.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }
 
 /// 帖子列表 API 返回: { topics: [...] }
@@ -100,11 +108,12 @@ class TopicList {
   const TopicList({this.topics = const []});
 
   factory TopicList.fromJson(Map<String, dynamic> json) => TopicList(
-        topics: (json['topics'] as List?)
-                ?.map((e) => Topic.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    topics:
+        (json['topics'] as List?)
+            ?.map((e) => Topic.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }
 
 /// 用户日志
@@ -134,17 +143,19 @@ class Blog {
   });
 
   factory Blog.fromJson(Map<String, dynamic> json) => Blog(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        url: json['url'] as String? ?? '',
-        title: json['title'] as String? ?? '',
-        user: json['user'] == null ? null : User.fromJson(json['user'] as Map<String, dynamic>),
-        userId: (json['user_id'] as num?)?.toInt() ?? 0,
-        replies: (json['replies'] as num?)?.toInt() ?? 0,
-        createdAt: json['created_at'] as String? ?? '',
-        updatedAt: json['updated_at'] as String? ?? '',
-        summary: json['summary'] as String? ?? '',
-        content: json['content'] as String? ?? '',
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    url: json['url'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    user: json['user'] == null
+        ? null
+        : User.fromJson(json['user'] as Map<String, dynamic>),
+    userId: (json['user_id'] as num?)?.toInt() ?? 0,
+    replies: (json['replies'] as num?)?.toInt() ?? 0,
+    createdAt: json['created_at'] as String? ?? '',
+    updatedAt: json['updated_at'] as String? ?? '',
+    summary: json['summary'] as String? ?? '',
+    content: json['content'] as String? ?? '',
+  );
 }
 
 /// 日志列表: { list: [...] }
@@ -154,9 +165,10 @@ class BlogList {
   const BlogList({this.list = const []});
 
   factory BlogList.fromJson(Map<String, dynamic> json) => BlogList(
-        list: (json['list'] as List?)
-                ?.map((e) => Blog.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    list:
+        (json['list'] as List?)
+            ?.map((e) => Blog.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }

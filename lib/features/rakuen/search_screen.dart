@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design_system/design_system.dart';
+
 import '../../core/storage/cache.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/score.dart';
+
 import 'rakuen_providers.dart';
 import 'widgets/topic_row.dart';
 
@@ -80,48 +86,59 @@ class _RakuenSearchScreenState extends ConsumerState<RakuenSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: '搜索帖子',
-            border: InputBorder.none,
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.search),
-              onPressed: () => _search(_controller.text),
+      appBar: const BgmAppBar(title: '小组搜索'),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: BgmField(
+                    controller: _controller,
+                    autofocus: true,
+                    hintText: '输入关键字，多关键字空格隔开',
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: _search,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                BgmButton(
+                  '查询',
+                  expand: false,
+                  onPressed: () => _search(_controller.text),
+                ),
+              ],
             ),
           ),
-          textInputAction: TextInputAction.search,
-          onSubmitted: _search,
-        ),
+          Expanded(
+            child: _keyword.isEmpty ? _buildHistory() : _buildResults(),
+          ),
+        ],
       ),
-      body: _keyword.isEmpty ? _buildHistory() : _buildResults(),
     );
   }
 
   Widget _buildHistory() {
-    final theme = Theme.of(context);
     if (_history.isEmpty) {
       return const Center(child: Text('输入关键词搜索帖子'));
     }
     return ListView(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-          child: Text(
-            '搜索历史',
-            style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text('搜索历史', style: context.ds.caption),
         ),
         for (final keyword in _history)
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.history, size: 18),
-            title: Text(keyword, style: const TextStyle(fontSize: 14)),
-            trailing: IconButton(
-              icon: const Icon(Icons.close, size: 16),
-              onPressed: () => _deleteHistory(keyword),
+          BgmTextRow(
+            title: keyword,
+            trailing: GestureDetector(
+              onTap: () => _deleteHistory(keyword),
+              child: Icon(
+                Icons.close,
+                size: 16,
+                color: context.ds.textSecondary,
+              ),
             ),
             onTap: () {
               _controller.text = keyword;
@@ -138,19 +155,11 @@ class _RakuenSearchScreenState extends ConsumerState<RakuenSearchScreen> {
         final async = ref.watch(rakuenSearchProvider(_keyword));
         return async.when(
           loading: () => const Loading(height: double.infinity),
-          error: (e, _) => Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('搜索失败, 请稍后重试'),
-                TextButton(
-                  onPressed: () =>
-                      ref.invalidate(rakuenSearchProvider(_keyword)),
-                  child: const Text('重试'),
-                ),
-              ],
-            ),
+          error: (_, _) => BgmRetry(
+            message: '搜索失败, 请稍后重试',
+            onRetry: () => ref.invalidate(rakuenSearchProvider(_keyword)),
           ),
+
           data: (data) {
             if (data.items.isEmpty) {
               return const Center(child: Text('没有查询到结果'));
@@ -158,16 +167,13 @@ class _RakuenSearchScreenState extends ConsumerState<RakuenSearchScreen> {
             return ListView.separated(
               controller: _scrollController,
               itemCount: data.items.length + (data.hasMore ? 1 : 0),
-              separatorBuilder: (_, _) => const Divider(indent: 56),
+              separatorBuilder: (_, _) => const BgmHairline(indent: 56),
               itemBuilder: (context, index) {
                 if (index >= data.items.length) {
-                  return Center(
-                    child: TextButton(
-                      onPressed: () => ref
-                          .read(rakuenSearchProvider(_keyword).notifier)
-                          .loadMore(),
-                      child: const Text('加载更多'),
-                    ),
+                  return LoadMoreLink(
+                    onTap: () => ref
+                        .read(rakuenSearchProvider(_keyword).notifier)
+                        .loadMore(),
                   );
                 }
                 return RakuenTopicRow(topic: data.items[index]);

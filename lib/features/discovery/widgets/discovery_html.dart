@@ -49,6 +49,7 @@ List<Subject> parseSubjectList(String html) {
     final scoreEl = li.querySelector('small.fade');
     final totalEl = li.querySelector('.rateInfo .tip_j');
     final typeEl = li.querySelector('span.subject_type_\\d');
+    final collected = li.querySelector('.collectModify .thickbox') != null;
 
     final infoText = cText(info);
     final epsMatch = RegExp(r'(\d+)话').firstMatch(infoText);
@@ -85,6 +86,7 @@ List<Subject> parseSubjectList(String html) {
           score: double.tryParse(cText(scoreEl)) ?? 0,
           total: int.tryParse(totalText) ?? 0,
         ),
+        collected: collected,
       ),
     );
   }
@@ -349,24 +351,160 @@ List<CatalogRow> parseCatalogList(String html) {
   return rows;
 }
 
-/// 目录详情 HTML extras (原项目 cheerioCatalogDetail: 收藏 join/bye)
+/// 目录详情非条目项 (角色 / 人物 / 小组 / 章节 / 日志)
+class CatalogExtraItem {
+  final String href;
+  final String title;
+  final String image;
+  final String info;
+
+  const CatalogExtraItem({
+    this.href = '',
+    this.title = '',
+    this.image = '',
+    this.info = '',
+  });
+}
+
+/// 目录详情 HTML extras (原项目 cheerioCatalogDetail)
 class CatalogDetailExtra {
   final String joinUrl;
   final String byeUrl;
   final String collect;
   final String progress;
+  final int replyCount;
+  final String userId;
+  final List<Subject> subjects;
+  final List<CatalogExtraItem> characters;
+  final List<CatalogExtraItem> persons;
+  final List<CatalogExtraItem> topics;
+  final List<CatalogExtraItem> eps;
+  final List<CatalogExtraItem> blogs;
 
   const CatalogDetailExtra({
     this.joinUrl = '',
     this.byeUrl = '',
     this.collect = '',
     this.progress = '',
+    this.replyCount = 0,
+    this.userId = '',
+    this.subjects = const [],
+    this.characters = const [],
+    this.persons = const [],
+    this.topics = const [],
+    this.eps = const [],
+    this.blogs = const [],
   });
 
   bool get collected => byeUrl.isNotEmpty;
 }
 
-/// 解析 /index/{id}: .grp_box .btnPink/.btnBlue
+/// 原版 typeData: 有条目才出「动画 N」
+List<(String, int)> catalogTypeData(CatalogDetailExtra extra) => [
+  if (extra.subjects.isNotEmpty) ('动画', extra.subjects.length),
+  if (extra.characters.isNotEmpty) ('角色', extra.characters.length),
+  if (extra.persons.isNotEmpty) ('人物', extra.persons.length),
+  if (extra.topics.isNotEmpty) ('小组', extra.topics.length),
+  if (extra.eps.isNotEmpty) ('章节', extra.eps.length),
+  if (extra.blogs.isNotEmpty) ('日志', extra.blogs.length),
+];
+
+/// 原版留言: 刚好 5 条显示 5+
+String catalogReplyText(int replyCount) {
+  if (replyCount <= 0) return '';
+  return replyCount == 5 ? '5+' : '$replyCount';
+}
+
+const kCatalogSorts = <(String, String)>[
+  ('0', '默认'),
+  ('1', '时间'),
+  ('2', '评分'),
+  ('3', '评分人数'),
+];
+
+const kCatalogCollects = <(String, String)>[
+  ('all', '全部'),
+  ('collected', '只看收藏'),
+  ('uncollect', '不看收藏'),
+];
+
+String catalogSortLabel(String sort) =>
+    kCatalogSorts.where((e) => e.$1 == sort).firstOrNull?.$2 ?? '默认';
+
+String catalogCollectLabel(String collect) =>
+    kCatalogCollects.where((e) => e.$1 == collect).firstOrNull?.$2 ?? '全部';
+
+List<Subject> catalogFilterCollect(List<Subject> items, String collect) {
+  if (collect == 'collected') {
+    return [
+      for (final item in items)
+        if (item.collected) item,
+    ];
+  }
+  if (collect == 'uncollect') {
+    return [
+      for (final item in items)
+        if (!item.collected) item,
+    ];
+  }
+  return items;
+}
+
+/// 原版 sort=1 时间 / 2 评分 / 3 评分人数
+List<Subject> catalogSortSubjects(List<Subject> items, String sort) {
+  final next = [...items];
+  switch (sort) {
+    case '1':
+      next.sort((a, b) => b.airDate.compareTo(a.airDate));
+    case '2':
+      next.sort(
+        (a, b) => (b.rating?.score ?? 0).compareTo(a.rating?.score ?? 0),
+      );
+    case '3':
+      next.sort(
+        (a, b) => (b.rating?.total ?? 0).compareTo(a.rating?.total ?? 0),
+      );
+  }
+  return next;
+}
+
+/// 从创建目录跳转地址取 id (原项目 responseURL.match(/\d+/))
+int? parseCreatedCatalogId(String location) {
+  final fromPath = RegExp(r'/index/(\d+)').firstMatch(location);
+  if (fromPath != null) return int.tryParse(fromPath.group(1)!);
+  final digits = RegExp(r'\d+').firstMatch(location);
+  return int.tryParse(digits?.group(0) ?? '');
+}
+
+CatalogExtraItem _catalogExtraItem(
+  Element row, {
+  required String linkSel,
+  required String imgSel,
+  String infoSel = 'span.tip',
+}) {
+  final link = row.querySelector(linkSel);
+  final href = link?.attributes['href'] ?? '';
+  final img =
+      row.querySelector(imgSel)?.attributes['src'] ??
+      _bgImage(row.querySelector('span.avatarNeue')) ??
+      '';
+  return CatalogExtraItem(
+    href: href,
+    title: htmlDecode(cText(link)),
+    image: _abs(img),
+    info: htmlDecode(
+      cText(row.querySelector(infoSel) ?? row.querySelector('span.badge_job')),
+    ),
+  );
+}
+
+String? _bgImage(Element? el) {
+  final style = el?.attributes['style'] ?? '';
+  final m = RegExp(r'''url\(['"]?([^'")]+)''').firstMatch(style);
+  return m?.group(1);
+}
+
+/// 解析 /index/{id}: 收藏、留言、类型列表 (原版 cheerioCatalogDetail)
 CatalogDetailExtra parseCatalogDetailExtra(String html) {
   final fragment = htmlMatch(html, '<div id="header', '<div id="footer');
   final doc = parser.parse(fragment.isEmpty ? html : fragment);
@@ -383,6 +521,12 @@ CatalogDetailExtra parseCatalogDetailExtra(String html) {
     joinUrl = href;
   }
   final tips = box?.querySelectorAll('.tip_j .tip') ?? const [];
+  final userHref = box?.querySelector('.tip_j a.l')?.attributes['href'] ?? '';
+  final userId = userHref.replaceFirst(RegExp(r'.*/user/'), '');
+  final mono = [
+    for (final row in doc.querySelectorAll('.browserCrtList > div'))
+      _catalogExtraItem(row, linkSel: 'a.l', imgSel: 'img.avatar'),
+  ];
   return CatalogDetailExtra(
     joinUrl: joinUrl,
     byeUrl: byeUrl,
@@ -390,6 +534,44 @@ CatalogDetailExtra parseCatalogDetailExtra(String html) {
     progress: htmlDecode(
       doc.querySelector('.progress small')?.text.trim() ?? '',
     ),
+    replyCount: doc.querySelectorAll('.timeline_img li.clearit').length,
+    userId: userId,
+    subjects: parseSubjectList(html),
+    characters: [
+      for (final item in mono)
+        if (item.href.contains('character')) item,
+    ],
+    persons: [
+      for (final item in mono)
+        if (item.href.contains('person')) item,
+    ],
+    topics: [
+      for (final row in doc.querySelectorAll('.topic-list > .row'))
+        _catalogExtraItem(
+          row,
+          linkSel: 'a.l',
+          imgSel: 'img.avatar',
+          infoSel: 'p.info',
+        ),
+    ],
+    eps: [
+      for (final row in doc.querySelectorAll('.browserList > .item'))
+        _catalogExtraItem(
+          row,
+          linkSel: 'a.l',
+          imgSel: 'img.avatar',
+          infoSel: 'span.tip_j',
+        ),
+    ],
+    blogs: [
+      for (final row in doc.querySelectorAll('#entry_list > .item'))
+        _catalogExtraItem(
+          row,
+          linkSel: 'a.l',
+          imgSel: 'img.avatarCover',
+          infoSel: '.time',
+        ),
+    ],
   );
 }
 
@@ -848,6 +1030,13 @@ List<AwardBlock> parseAward(String html) {
 /// 将用户收藏 (v0) 转换为 Subject (照片墙/词云等复用)
 Subject subjectFromCollectionItem(Map<String, dynamic> json) {
   final subject = json['subject'] as Map<String, dynamic>? ?? const {};
+  final platform = subject['platform'] as String? ?? '';
+  final tags = [
+    ...?(subject['tags'] as List?)?.map(
+      (e) => Tag.fromJson(e as Map<String, dynamic>),
+    ),
+    if (platform.isNotEmpty) Tag(name: platform, count: 0),
+  ];
   return Subject(
     id:
         (json['subject_id'] as num?)?.toInt() ??
@@ -855,6 +1044,8 @@ Subject subjectFromCollectionItem(Map<String, dynamic> json) {
         0,
     name: subject['name'] as String? ?? '',
     nameCn: subject['name_cn'] as String? ?? '',
+    airDate: subject['date'] as String? ?? subject['air_date'] as String? ?? '',
+    eps: (subject['eps'] as num?)?.toInt() ?? 0,
     images: SubjectImages(
       large: subject['images']?['large'] as String? ?? '',
       medium: subject['images']?['medium'] as String? ?? '',
@@ -865,11 +1056,7 @@ Subject subjectFromCollectionItem(Map<String, dynamic> json) {
       score: (subject['score'] as num?)?.toDouble() ?? 0,
       total: (subject['total'] as num?)?.toInt() ?? 0,
     ),
-    tags:
-        (subject['tags'] as List?)
-            ?.map((e) => Tag.fromJson(e as Map<String, dynamic>))
-            .toList() ??
-        const [],
+    tags: tags,
   );
 }
 

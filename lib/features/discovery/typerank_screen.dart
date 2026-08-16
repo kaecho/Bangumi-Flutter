@@ -1,91 +1,145 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/api/api_endpoints.dart';
-import '../../core/utils/display.dart';
+import '../../core/api/api_client.dart';
 import '../../shared/widgets/app_bar.dart';
-import '../../shared/widgets/score.dart';
+import '../../shared/widgets/cover.dart';
+import '../../shared/widgets/loading.dart';
+import '../../design_system/design_system.dart';
+
+import '../subject/collection_sheet.dart';
+import '../subject/subject_models.dart';
 import 'discovery_notes.dart';
-import 'widgets/browser_grid.dart';
-import 'widgets/season_filter.dart';
+import 'typerank_data.dart';
+import '../../shared/widgets/bgm_button.dart';
+
+/// 分类排行类型 (原项目 SUBJECT_TYPE 标题)
+const kTypeRankTypes = <(String, String)>[
+  ('anime', '动画'),
+  ('book', '书籍'),
+  ('music', '音乐'),
+  ('game', '游戏'),
+  ('real', '三次元'),
+];
+
+String typeRankTypeCn(String type) =>
+    kTypeRankTypes.where((e) => e.$1 == type).firstOrNull?.$2 ?? '动画';
+
+/// 原版分类排行书签: 有标签进 `/tags/{type}/{tag}`, 否则回标签索引
+String typeRankBookmarkPath(String type, String tag) {
+  final t = tag.trim();
+  if (t.isEmpty) return '/tags';
+  return '/tags/${Uri.encodeComponent(type)}/${Uri.encodeComponent(t)}';
+}
+
+final typeRankPackedProvider =
+    FutureProvider.family<
+      ({List<int> ids, List<SubjectListItem> items}),
+      ({String type, String tag})
+    >((ref, arg) async {
+      final ids = await loadTypeRankIds(arg.type, arg.tag);
+      if (ids.isEmpty) return (ids: ids, items: const <SubjectListItem>[]);
+      final client = ref.read(apiClientProvider);
+      final items = await fetchTypeRankSubjects(client, ids);
+      return (ids: ids, items: items);
+    });
 
 /// 分类排行 (按标签筛选条目)
 ///
-/// 原项目使用本地 id 列表 + v0 条目 API, 这里使用 bgm.tv 主站
-/// 标签条目页等价实现: /{type}/tag/{tag}?sort=rank&page=..
-class TypeRankScreen extends StatefulWidget {
-  const TypeRankScreen({super.key});
+/// 原项目从打包 `typerank/{type}-ids.json` 取该标签 TOP100 ID。
+class TypeRankScreen extends ConsumerWidget {
+  final String initialType;
+  final String initialTag;
+
+  const TypeRankScreen({
+    super.key,
+    this.initialType = 'anime',
+    this.initialTag = 'TV',
+  });
 
   @override
-  State<TypeRankScreen> createState() => _TypeRankScreenState();
-}
-
-class _TypeRankScreenState extends State<TypeRankScreen> {
-  String _type = 'anime';
-  String _tag = 'TV';
-
-  static const _tags = [
-    'TV',
-    '剧场版',
-    'OVA',
-    'WEB',
-    '治愈',
-    '恋爱',
-    '搞笑',
-    '原创',
-    '冒险',
-    '科幻',
-  ];
-
-  String get _basePath => htmlTagSubjects(_type, _tag);
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final type = initialType;
+    final tag = initialTag;
+    final packed = ref.watch(typeRankPackedProvider((type: type, tag: tag)));
+    final total = packed.valueOrNull?.ids.length;
     return Scaffold(
       appBar: BgmAppBar(
-        title: '分类排行',
+        title: typeRankTitle(type, tag, total: total),
         showBackButton: true,
         actions: [
-          IconButton(
+          BgmHeaderAction(
+            tooltip: '标签',
+            icon: const Icon(Icons.bookmark_outline),
+            onPressed: () => context.push(typeRankBookmarkPath(type, tag)),
+          ),
+          BgmHeaderAction(
             tooltip: '说明',
             icon: const Icon(Icons.info_outline),
             onPressed: () => context.push(typeRankNotePath()),
           ),
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl('$kHost$_basePath'),
-          ),
         ],
       ),
+      body: packed.when(
+        loading: () => const Loading(text: '加载中...'),
+        error: (e, _) => BgmRetry(
+          onRetry: () =>
+              ref.invalidate(typeRankPackedProvider((type: type, tag: tag))),
+        ),
+        data: (data) => data.ids.isEmpty
+            ? const Empty(text: '此标签没有足够的列表数据')
+            : ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: data.items.length,
+                itemBuilder: (_, i) => _TypeRankSubjectRow(item: data.items[i]),
+              ),
+      ),
+    );
+  }
+}
 
-      body: Column(
-        children: [
-          TypeTabs(
-            value: _type,
-            onChanged: (v) => setState(() => _type = v),
-            options: const [('anime', '动画'), ('book', '书籍'), ('game', '游戏')],
-          ),
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                for (final tag in _tags)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Tag(
-                      text: tag,
-                      active: _tag == tag,
-                      onTap: () => setState(() => _tag = tag),
-                    ),
+class _TypeRankSubjectRow extends StatelessWidget {
+  final SubjectListItem item;
+
+  const _TypeRankSubjectRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => context.push('/subject/${item.id}'),
+      onLongPress: () => showCollectionSheet(context, item.id),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Cover(url: item.images.common, width: 56, height: 76, radius: 4),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.displayName.isEmpty ? '#${item.id}' : item.displayName,
+                    style: const TextStyle(fontSize: 14),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-              ],
+                  if (item.date.isNotEmpty)
+                    Text(item.date, style: context.ds.caption),
+                  if (item.score > 0)
+                    Text(
+                      '${item.score.toStringAsFixed(1)} 分${item.rank > 0 ? ' · 排名 ${item.rank}' : ''}',
+                      style: context.ds.caption.copyWith(
+                        color: context.ds.star,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          Expanded(child: BrowserGrid(basePath: _basePath)),
-        ],
+            Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
+          ],
+        ),
       ),
     );
   }

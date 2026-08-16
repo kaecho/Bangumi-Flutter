@@ -8,6 +8,7 @@ import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 半月刊条目 (原项目公开 CDN 静态数据)
 class BiWeeklyItem {
@@ -67,19 +68,17 @@ class _BiWeeklyScreenState extends ConsumerState<BiWeeklyScreen> {
         title: 'Bangumi 半月刊',
         showBackButton: true,
         actions: [
-          PopupMenuButton<String>(
-            tooltip: '更多',
+          BgmHeaderMore(
+            items: const [('group', '小组讨论'), ('browser', '浏览器查看')],
             onSelected: (value) {
               if (value == 'group') {
                 context.push('/rakuen/group/biweekly');
-              } else if (value == 'browser') {
+                return;
+              }
+              if (value == 'browser') {
                 openExternalUrl('$kHost/group/biweekly');
               }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'group', child: Text('小组讨论')),
-              PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
-            ],
           ),
         ],
       ),
@@ -88,31 +87,20 @@ class _BiWeeklyScreenState extends ConsumerState<BiWeeklyScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 0, label: Text('文章')),
-                ButtonSegment(value: 1, label: Text('目录')),
-              ],
-              selected: {_kind},
-              onSelectionChanged: (s) => setState(() => _kind = s.first),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: BgmSegmented<int>(
+                values: const [(0, '文章'), (1, '目录')],
+                selected: _kind,
+                onSelect: (v) => setState(() => _kind = v),
+              ),
             ),
           ),
           Expanded(
             child: items.when(
               loading: () => const Center(child: Loading()),
-              error: (error, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('加载失败'),
-                    const SizedBox(height: 12),
-                    FilledButton.tonal(
-                      onPressed: () => ref.invalidate(biWeeklyProvider),
-                      child: const Text('重试'),
-                    ),
-                  ],
-                ),
-              ),
+              error: (error, _) =>
+                  BgmRetry(onRetry: () => ref.invalidate(biWeeklyProvider)),
               data: (list) {
                 final filtered = list
                     .where((e) => _kind == 1 ? e.isCatalog : !e.isCatalog)

@@ -5,6 +5,8 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/storage/cache.dart';
 import '../../core/utils/display.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// Webhook 设置 (移植自原项目 screens/web-view/webhook)
 ///
@@ -30,16 +32,12 @@ class _WebhookScreenState extends ConsumerState<WebhookScreen> {
     final url = _controller.text.trim();
     if (url.isEmpty) return;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入以 http(s):// 开头的地址')));
+      showBgmToast(context, '请输入以 http(s):// 开头的地址');
       return;
     }
     final urls = _urls();
     if (urls.contains(url)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('该地址已存在')));
+      showBgmToast(context, '该地址已存在');
       return;
     }
     await _box.put(_kKey, [...urls, url]);
@@ -62,10 +60,10 @@ class _WebhookScreenState extends ConsumerState<WebhookScreen> {
   Widget build(BuildContext context) {
     final urls = _urls();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Webhook'),
+      appBar: BgmAppBar(
+        title: 'Webhook',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '文档',
             icon: const Icon(Icons.open_in_new),
             onPressed: () => openExternalUrl(htmlSingleDoc('kfpfze0u7old4en1')),
@@ -84,19 +82,15 @@ class _WebhookScreenState extends ConsumerState<WebhookScreen> {
           Row(
             children: [
               Expanded(
-                child: TextField(
+                child: BgmField(
                   controller: _controller,
-                  decoration: const InputDecoration(
-                    hintText: 'https://example.com/webhook',
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                  ),
+                  hintText: 'https://example.com/webhook',
                   keyboardType: TextInputType.url,
                   onSubmitted: (_) => _add(),
                 ),
               ),
               const SizedBox(width: 8),
-              FilledButton(onPressed: _add, child: const Text('添加')),
+              BgmButton('添加', expand: false, onPressed: _add),
             ],
           ),
           const SizedBox(height: 16),
@@ -107,20 +101,12 @@ class _WebhookScreenState extends ConsumerState<WebhookScreen> {
             )
           else
             ...urls.map(
-              (url) => Card(
-                child: ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.link, size: 20),
-                  title: Text(
-                    url,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: IconButton(
-                    tooltip: '删除',
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    onPressed: () => _remove(url),
-                  ),
+              (url) => BgmSettingRow(
+                title: url,
+                trailing: BgmHeaderAction(
+                  tooltip: '删除',
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  onPressed: () => _remove(url),
                 ),
               ),
             ),

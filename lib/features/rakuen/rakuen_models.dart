@@ -1,16 +1,19 @@
 import '../../shared/models/topic.dart';
 import '../../shared/models/user.dart';
+import '../../shared/models/group.dart';
 
 /// 分页列表数据 (帖子列表通用容器)
 class RakuenListData<T> {
   final List<T> items;
   final int page;
   final bool hasMore;
+  final int pageTotal;
 
   const RakuenListData({
     this.items = const [],
     this.page = 1,
     this.hasMore = true,
+    this.pageTotal = 1,
   });
 }
 
@@ -25,6 +28,36 @@ class NotifyListData {
     this.page = 1,
     this.hasMore = true,
   });
+}
+
+class MergedNotify {
+  final Notify item;
+  final int repeat;
+
+  const MergedNotify({required this.item, this.repeat = 0});
+
+  String get badge => repeat > 0 ? 'x${repeat + 1}' : '';
+}
+
+/// 原版 mergeNotify: 连续相同用户+标题+正文合并, 显示 x(N+1)
+List<MergedNotify> mergeNotifyItems(Iterable<Notify> items) {
+  final merged = <MergedNotify>[];
+  for (final item in items) {
+    if (merged.isNotEmpty && _sameNotify(merged.last.item, item)) {
+      final last = merged.removeLast();
+      merged.add(MergedNotify(item: last.item, repeat: last.repeat + 1));
+    } else {
+      merged.add(MergedNotify(item: item));
+    }
+  }
+  return merged;
+}
+
+bool _sameNotify(Notify a, Notify b) {
+  return a.title == b.title &&
+      a.content == b.content &&
+      a.avatar == b.avatar &&
+      a.url == b.url;
 }
 
 /// 条目长评 (移植自原项目 ReviewsItem)

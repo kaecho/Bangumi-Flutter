@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 
 import '../../core/utils/format.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import '../../design_system/design_system.dart';
+import 'tinygrail_widgets.dart';
+
 
 /// 资金日志 (原项目 tabs: 全部 / 刮刮乐 / ICO / 卖出 …)
 class TinygrailLogsScreen extends ConsumerStatefulWidget {
@@ -20,13 +26,13 @@ class _TinygrailLogsScreenState extends ConsumerState<TinygrailLogsScreen>
     with SingleTickerProviderStateMixin {
   static const _tabs = [
     ('全部', ''),
+    ('道具', '道具'),
     ('刮刮乐', '刮刮'),
     ('ICO', 'ICO'),
     ('卖出', '卖出'),
     ('买入', '买入'),
+    ('竞拍', '竞拍'),
     ('圣殿', '圣殿'),
-    ('拍卖', '拍卖'),
-    ('魔法', '魔法'),
     ('分红', '分红'),
   ];
 
@@ -38,10 +44,15 @@ class _TinygrailLogsScreenState extends ConsumerState<TinygrailLogsScreen>
   final List<TinygrailBalance> _list = [];
   bool _loading = false;
   bool _hasMore = true;
+  String _go = '卖出';
+
 
   @override
   void initState() {
     super.initState();
+    _tab.addListener(() {
+      if (mounted) setState(() {});
+    });
     _load();
   }
 
@@ -77,13 +88,17 @@ class _TinygrailLogsScreenState extends ConsumerState<TinygrailLogsScreen>
   Widget build(BuildContext context) {
     final filtered = _filtered();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('资金日志'),
-        bottom: TabBar(
+      appBar: BgmAppBar(
+        title: '资金日志',
+        actions: [
+          TinygrailIconGo(
+            value: _go,
+            onChanged: (v) => setState(() => _go = v),
+          ),
+        ],
+        bottom: BgmControlledTabStrip(
           controller: _tab,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          onTap: (_) => setState(() {}),
+          scrollable: true,
           tabs: [for (final t in _tabs) Tab(text: t.$1)],
         ),
       ),
@@ -108,8 +123,12 @@ class _TinygrailLogsScreenState extends ConsumerState<TinygrailLogsScreen>
                         if (index >= filtered.length - 3 && _hasMore) _load();
                         final item = filtered[index];
                         final change = item.change;
-                        return ListTile(
-                          dense: true,
+                        return BgmTextRow(
+                          onTap: item.charaId > 0
+                              ? () => context.push(
+                                  tinygrailIconGoPath(item.charaId, _go),
+                                )
+                              : null,
                           leading: Icon(
                             change > 0
                                 ? Icons.add_circle_outline
@@ -118,15 +137,8 @@ class _TinygrailLogsScreenState extends ConsumerState<TinygrailLogsScreen>
                                 ? context.ds.rise
                                 : context.ds.fall,
                           ),
-                          title: Text(
-                            item.desc,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            friendlyTime(item.time),
-                            style: context.ds.meta,
-                          ),
+                          title: item.desc,
+                          subtitle: friendlyTime(item.time),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/utils/display.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 原项目 screens/web-view/information 补充说明页
 String extraNotePath({
@@ -65,7 +66,7 @@ class ExtraNoteScreen extends StatelessWidget {
     final lines = _lines;
     final size = lines.length >= 10 ? 14.0 : 16.0;
     return Scaffold(
-      appBar: AppBar(),
+      appBar: BgmAppBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
@@ -91,17 +92,23 @@ class ExtraNoteScreen extends StatelessWidget {
           if (url.isNotEmpty)
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => openExternalUrl(url),
-                child: const Text('内容引用地址 〉'),
+              child: GestureDetector(
+                onTap: () => openExternalUrl(url),
+                child: Text(
+                  '内容引用地址 〉',
+                  style: context.ds.caption.copyWith(color: context.ds.accent),
+                ),
               ),
             ),
           if (advance)
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => context.push('/settings/qiafan'),
-                child: const Text('关于会员 〉'),
+              child: GestureDetector(
+                onTap: () => context.push('/settings/qiafan'),
+                child: Text(
+                  '关于会员 〉',
+                  style: context.ds.caption.copyWith(color: context.ds.accent),
+                ),
               ),
             ),
         ],

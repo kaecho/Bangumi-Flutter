@@ -1,48 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/app_bar.dart';
-import 'series_notes.dart';
+import '../../shared/widgets/bgm_button.dart';
+
+/// 原版 HeaderV2Popover: 说明 + 工具栏锁定
+List<(String, String)> seriesMoreItems({required bool fixed}) => [
+  ('info', '说明'),
+  ('toolbar', '工具栏〔${fixed ? '锁定' : '浮动'}〕'),
+];
 
 PreferredSizeWidget seriesAppBar({
   required BuildContext context,
   required VoidCallback onRefresh,
+  required bool fixed,
+  required ValueChanged<String> onMore,
 }) {
   return BgmAppBar(
     title: '关联系列',
     showBackButton: true,
     actions: [
-      IconButton(
+      BgmHeaderAction(
         tooltip: '刷新',
         icon: const Icon(Icons.refresh),
-        onPressed: () {
-          showDialog<void>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('刷新关联系列'),
-              content: const Text('确定刷新?'),
-
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('取消'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    onRefresh();
-                  },
-                  child: const Text('确定'),
-                ),
-              ],
-            ),
+        onPressed: () async {
+          final ok = await showBgmConfirm(
+            context,
+            title: '刷新关联系列',
+            message: '刷新涉及大量请求与计算，若非必要请勿重复刷新，确定?',
           );
+          if (ok) onRefresh();
         },
       ),
-      IconButton(
-        tooltip: '说明',
-        icon: const Icon(Icons.info_outline),
-        onPressed: () => context.push(seriesNotePath()),
+      BgmHeaderMore(
+        items: seriesMoreItems(fixed: fixed),
+        onSelected: onMore,
       ),
     ],
   );

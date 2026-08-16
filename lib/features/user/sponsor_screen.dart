@@ -1,80 +1,111 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/utils/display.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import 'user_notes.dart';
 
-/// 赞助 (静态感谢页)
-class SponsorScreen extends StatelessWidget {
+/// Extra 支持者公开鸣谢 (原版 packed advance.json 未移植)
+const kSponsorNamed = <(String, String)>[
+  ('senken', '提供 iOS 开发账号'),
+  ('magma', '提供服务器和 OSS'),
+];
+
+/// 赞助者 (原版 Header 图表/列表切换 + 说明)
+class SponsorScreen extends StatefulWidget {
   const SponsorScreen({super.key});
+
+  @override
+  State<SponsorScreen> createState() => _SponsorScreenState();
+}
+
+class _SponsorScreenState extends State<SponsorScreen> {
+  bool _list = true;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('支持者'),
+      appBar: BgmAppBar(
+        title: '支持者',
         actions: [
-          IconButton(
+          BgmHeaderAction(
+            tooltip: _list ? '图表' : '列表',
+            icon: Icon(_list ? Icons.insert_chart_outlined : Icons.sort),
+            onPressed: () => setState(() => _list = !_list),
+          ),
+          BgmHeaderAction(
             tooltip: '说明',
             icon: const Icon(Icons.info_outline),
             onPressed: () => context.push(sponsorNotePath()),
           ),
         ],
       ),
-
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const SizedBox(height: 12),
-          Icon(Icons.favorite, size: 64, color: theme.colorScheme.primary),
-          const SizedBox(height: 16),
-          const Text(
-            '感谢你的支持!',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '本应用是开源项目, 开发维护需要大量时间和精力。\n如果你觉得好用, 欢迎赞助一杯咖啡, 支持持续开发。',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.6,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const Text(
-                    '支付宝 / 微信',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+      body: _list
+          ? ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+              children: [
+                Text(
+                  '截止目前共有具名支持者 ${kSponsorNamed.length} 人，另有 50 多个支持者没有留名。',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.6,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '收款二维码图片暂未打包, 敬请期待。\n你也可以通过 GitHub Sponsor 支持原项目: github.com/czy0729/Bangumi',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.6,
-                      color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 12),
+                for (final item in kSponsorNamed)
+                  BgmSettingRow(
+                    title: '@${item.$1}',
+                    subtitle: item.$2,
+                    onTap: () => context.push('/user/${item.$1}'),
+                    onLongPress: () => context.push('/user/${item.$1}'),
+                  ),
+                const SizedBox(height: 16),
+                Text(
+                  '图表根据支持额按比例划分。完整名单依赖原版打包数据，未随本客户端分发。',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.6,
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
+            )
+          : Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.insert_chart_outlined,
+                      size: 56,
+                      color: theme.colorScheme.primary,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    const Text('图表根据支持额按比例划分。', textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    Text(
+                      '点击方格隐藏 1 格，若你为支持者长按可进入空间。完整矩形图依赖原版打包数据，未随本客户端分发。',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.6,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    BgmTextAction(
+                      '打开原项目支持页',
+                      onPressed: () =>
+                          openExternalUrl('https://github.com/czy0729/Bangumi'),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '所有赞助将用于服务器与域名开销, 感谢每一位支持者。',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
-          ),
-        ],
-      ),
     );
   }
 }

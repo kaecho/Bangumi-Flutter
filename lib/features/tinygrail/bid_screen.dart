@@ -7,10 +7,17 @@ import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/app_bar.dart';
+
+import '../../shared/widgets/bgm_button.dart';
+import 'auction_screen.dart';
+
 
 /// 我的挂单 (买单/卖单, 可撤单)
 class TinygrailBidScreen extends ConsumerStatefulWidget {
-  const TinygrailBidScreen({super.key});
+  final String initialType;
+
+  const TinygrailBidScreen({super.key, this.initialType = 'bid'});
 
   @override
   ConsumerState<TinygrailBidScreen> createState() => _TinygrailBidScreenState();
@@ -18,7 +25,16 @@ class TinygrailBidScreen extends ConsumerStatefulWidget {
 
 class _TinygrailBidScreenState extends ConsumerState<TinygrailBidScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 2, vsync: this);
+  late final TabController _tab = TabController(
+    length: 3,
+    vsync: this,
+    initialIndex: switch (widget.initialType) {
+      'asks' => 1,
+      'auction' => 2,
+      _ => 0,
+    },
+  );
+
   bool _busy = false;
 
   @override
@@ -34,16 +50,13 @@ class _TinygrailBidScreenState extends ConsumerState<TinygrailBidScreen>
       await action();
       ref.invalidate(myBidsProvider);
       ref.invalidate(myAsksProvider);
+      ref.invalidate(myAuctionProvider);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('已撤单')));
+        showBgmToast(context, '已撤单');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('撤单失败: $e')));
+        showBgmToast(context, '撤单失败: $e');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -51,32 +64,42 @@ class _TinygrailBidScreenState extends ConsumerState<TinygrailBidScreen>
   }
 
   Future<void> _batchCancel() async {
-    final isBid = _tab.index == 0;
+    final index = _tab.index;
+    if (index == 2) {
+      final list =
+          ref.read(myAuctionProvider).valueOrNull ??
+          const <TinygrailAuctionItem>[];
+      if (list.isEmpty) {
+        showBgmToast(context, '当前没有可取消的委托');
+        return;
+      }
+      final ok = await showBgmConfirm(
+        context,
+        title: '小圣杯助手',
+        message: '确定取消 (${list.length}) 个 (我的拍卖)?',
+      );
+      if (ok != true || !mounted) return;
+      await _cancel(() async {
+        final api = ref.read(tinygrailApiProvider);
+        for (final item in list) {
+          await api.doAuctionCancel(item.id);
+        }
+        return true;
+      });
+      return;
+    }
+    final isBid = index == 0;
     final list = isBid
         ? (ref.read(myBidsProvider).valueOrNull ?? const <TinygrailChara>[])
         : (ref.read(myAsksProvider).valueOrNull ?? const <TinygrailChara>[]);
     if (list.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('当前没有可取消的委托')));
+      showBgmToast(context, '当前没有可取消的委托');
       return;
     }
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('小圣杯助手'),
-        content: Text('确定取消 (${list.length}) 个 (${isBid ? '买单' : '卖单'})?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
+    final ok = await showBgmConfirm(
+      context,
+      title: '小圣杯助手',
+      message: '确定取消 (${list.length}) 个 (${isBid ? '我的买单' : '我的卖单'})?',
     );
     if (ok != true || !mounted) return;
     await _cancel(() async {
@@ -95,24 +118,20 @@ class _TinygrailBidScreenState extends ConsumerState<TinygrailBidScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('我的委托'),
+      appBar: BgmAppBar(
+        title: '我的委托',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '批量取消',
             icon: const Icon(Icons.cancel_presentation_outlined),
             onPressed: _busy ? null : _batchCancel,
           ),
         ],
-        bottom: TabBar(
+        bottom: BgmControlledTabStrip(
           controller: _tab,
-          tabs: const [
-            Tab(text: '买单'),
-            Tab(text: '卖单'),
-          ],
+          tabs: const [Text('我的买单'), Text('我的卖单'), Text('我的拍卖')],
         ),
       ),
-
       body: TabBarView(
         controller: _tab,
         children: [
@@ -126,6 +145,7 @@ class _TinygrailBidScreenState extends ConsumerState<TinygrailBidScreen>
             onCancel: (c) =>
                 _cancel(() => ref.read(tinygrailApiProvider).doCancelAsk(c.id)),
           ),
+          const _AuctionList(),
         ],
       ),
     );
@@ -172,7 +192,7 @@ class _OrderListState extends ConsumerState<_OrderList> {
                     ? const Empty(text: '暂无挂单')
                     : ListView.separated(
                         itemCount: list.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        separatorBuilder: (_, _) => const BgmHairline(),
                         itemBuilder: (context, index) {
                           final c = list[index];
                           return CharaTile(
@@ -198,12 +218,9 @@ class _OrderListState extends ConsumerState<_OrderList> {
                                     ),
                                   ],
                                 ),
-                                TextButton(
+                                BgmTextAction(
+                                  '撤单',
                                   onPressed: () => widget.onCancel(c),
-                                  child: const Text(
-                                    '撤单',
-                                    style: TextStyle(fontSize: 11),
-                                  ),
                                 ),
                               ],
                             ),
@@ -215,6 +232,51 @@ class _OrderListState extends ConsumerState<_OrderList> {
           ],
         );
       },
+    );
+  }
+}
+
+class _AuctionList extends ConsumerWidget {
+  const _AuctionList();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(myAuctionProvider);
+    return async.when(
+      loading: () => const Loading(height: double.infinity),
+      error: (_, _) => const Center(child: Text('请先登录')),
+      data: (list) => RefreshIndicator(
+        onRefresh: () async => ref.invalidate(myAuctionProvider),
+        child: list.isEmpty
+            ? const Empty(text: '暂无拍卖记录')
+            : ListView.separated(
+                itemCount: list.length,
+                separatorBuilder: (_, _) => const BgmHairline(),
+                itemBuilder: (context, index) {
+                  final item = list[index];
+                  final state = switch (item.state) {
+                    1 => '已成功',
+                    2 => '已失败',
+                    _ => '拍卖中',
+                  };
+                  return BgmTextRow(
+                    onTap: () =>
+                        context.push('/tinygrail/chara/${item.monoId}'),
+                    leading: Text(
+                      '#${index + 1}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    title: item.name,
+                    subtitle:
+                        '竞拍 ${item.auctionState}人/${item.auctionType}股 · $state',
+                    trailing: Text(
+                      '${item.amount}股 ¥${tgPrice(item.price)}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  );
+                },
+              ),
+      ),
     );
   }
 }

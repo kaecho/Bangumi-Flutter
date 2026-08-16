@@ -8,6 +8,11 @@ import '../../core/utils/display.dart';
 
 import '../../design_system/design_system.dart';
 import 'origin_utils.dart';
+import 'user_notes.dart';
+
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 源头类型
 const kOriginTypes = [
@@ -122,40 +127,35 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
   Future<void> _edit(String type, [OriginItem? item]) async {
     final nameCtrl = TextEditingController(text: item?.name ?? '');
     final urlCtrl = TextEditingController(text: item?.url ?? '');
-    final saved = await showDialog<bool>(
+    final saved = await showBgmDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(item == null ? '添加源头' : '编辑源头'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: '名称'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: urlCtrl,
-              decoration: const InputDecoration(labelText: '网址'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isEmpty || urlCtrl.text.trim().isEmpty) {
-                return;
-              }
-              Navigator.pop(context, true);
-            },
-            child: const Text('保存'),
-          ),
+      title: item == null ? '添加源头' : '编辑源头',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          BgmField(controller: nameCtrl, labelText: '名称'),
+          const SizedBox(height: 8),
+          BgmField(controller: urlCtrl, labelText: '网址'),
         ],
       ),
+      actions: (ctx) => [
+        BgmButton(
+          '取消',
+          type: BgmButtonType.plain,
+          expand: false,
+          onPressed: () => Navigator.pop(ctx, false),
+        ),
+        BgmButton(
+          '保存',
+          expand: false,
+          onPressed: () {
+            if (nameCtrl.text.trim().isEmpty || urlCtrl.text.trim().isEmpty) {
+              return;
+            }
+            Navigator.pop(ctx, true);
+          },
+        ),
+      ],
     );
     if (saved != true) return;
 
@@ -215,19 +215,18 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('自定义源头'),
+      appBar: BgmAppBar(
+        title: '自定义源头',
         actions: [
-          IconButton(
-            tooltip: '说明',
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => context.push('/tips'),
+          BgmHeaderMore(
+            items: kOriginMoreItems,
+            onSelected: (_) => context.push(originNotePath()),
           ),
         ],
       ),
 
       body: !_loaded
-          ? const Center(child: CircularProgressIndicator())
+          ? const Loading()
           : ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
@@ -236,62 +235,52 @@ class _OriginSettingScreenState extends ConsumerState<OriginSettingScreen> {
                   child: Text('自定义数据源, 供条目页跳转使用', style: context.ds.caption),
                 ),
                 for (final (type, label) in kOriginTypes)
-                  Card(
+                  BgmCard(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 4,
                     ),
                     child: Column(
                       children: [
-                        ListTile(
-                          title: Text(
-                            label,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          trailing: IconButton(
+                        BgmSettingRow(
+                          title: label,
+                          trailing: BgmHeaderAction(
                             icon: const Icon(Icons.add),
                             tooltip: '添加',
                             onPressed: () => _edit(type),
                           ),
                         ),
+
                         for (final item in _data[type] ?? const <OriginItem>[])
-                          SwitchListTile(
-                            title: Text(
-                              item.name,
-                              style: const TextStyle(fontSize: 13),
+                          BgmSettingRow(
+                            title: item.name,
+                            subtitle: item.url,
+                            trailing: BgmSwitch(
+                              value: item.active,
+                              onChanged: (v) => _toggle(type, item.uuid, v),
                             ),
-                            subtitle: Text(
-                              item.url,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            value: item.active,
-                            onChanged: (v) => _toggle(type, item.uuid, v),
-                            secondary: Row(
-                              mainAxisSize: MainAxisSize.min,
+
+                            below: Row(
                               children: [
-                                IconButton(
+                                BgmHeaderAction(
                                   icon: const Icon(Icons.open_in_new, size: 18),
                                   onPressed: () => openExternalUrl(item.url),
                                 ),
-                                IconButton(
+                                BgmHeaderAction(
                                   icon: const Icon(
                                     Icons.edit_outlined,
                                     size: 18,
                                   ),
                                   onPressed: () => _edit(type, item),
                                 ),
-                                IconButton(
+                                BgmHeaderAction(
                                   icon: const Icon(Icons.close, size: 18),
                                   onPressed: () => _remove(type, item.uuid),
                                 ),
                               ],
                             ),
                           ),
+
                         if ((_data[type] ?? const []).isEmpty)
                           Padding(
                             padding: const EdgeInsets.all(12),

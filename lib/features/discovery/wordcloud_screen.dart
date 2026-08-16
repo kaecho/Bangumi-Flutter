@@ -10,6 +10,13 @@ import '../../shared/widgets/loading.dart';
 import '../subject/subject_providers.dart';
 import 'discovery_notes.dart';
 import 'widgets/discovery_html.dart';
+import '../../shared/widgets/bgm_button.dart';
+
+/// 原版词云标题: `{name}的词云` / `词云`
+String wordCloudTitle(String? name) {
+  final n = name?.trim() ?? '';
+  return n.isEmpty ? '词云' : '$n的词云';
+}
 
 /// 词云: 基于收藏标签的词频统计
 ///
@@ -104,15 +111,23 @@ class _WordCloudScreenState extends ConsumerState<WordCloudScreen> {
   @override
   Widget build(BuildContext context) {
     final loggedIn = ref.watch(isLoggedInProvider);
+    final me = ref.watch(currentUserProvider);
+    final subjectName = _isSubject
+        ? ref
+              .watch(subjectDetailProvider(widget.subjectId!))
+              .valueOrNull
+              ?.subject
+              .displayName
+        : null;
     final words = _isSubject
         ? ref.watch(subjectWordCloudProvider(widget.subjectId!))
         : ref.watch(wordCloudProvider(_type));
     return Scaffold(
       appBar: BgmAppBar(
-        title: _isSubject ? '条目词云' : '我的词云',
+        title: wordCloudTitle(_isSubject ? subjectName : me?.displayName),
         showBackButton: true,
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '说明',
             icon: const Icon(Icons.info_outline),
             onPressed: () => context.push(wordCloudNotePath()),
@@ -127,9 +142,10 @@ class _WordCloudScreenState extends ConsumerState<WordCloudScreen> {
                 children: [
                   const Text('登录后查看收藏标签词云'),
                   const SizedBox(height: 12),
-                  FilledButton.tonal(
+                  BgmButton(
+                    '去登录',
+                    expand: false,
                     onPressed: () => context.push('/login'),
-                    child: const Text('去登录'),
                   ),
                 ],
               ),
@@ -146,10 +162,10 @@ class _WordCloudScreenState extends ConsumerState<WordCloudScreen> {
                         for (final (value, label) in _types)
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(label),
+                            child: BgmFilterChip(
+                              label: label,
                               selected: _type == value,
-                              onSelected: (_) => setState(() => _type = value),
+                              onTap: () => setState(() => _type = value),
                             ),
                           ),
                       ],
@@ -164,7 +180,7 @@ class _WordCloudScreenState extends ConsumerState<WordCloudScreen> {
                         style: const TextStyle(fontSize: 12),
                       ),
                       Expanded(
-                        child: Slider(
+                        child: BgmSlider(
                           value: _minCount.toDouble(),
                           min: 1,
                           max: 8,
@@ -180,26 +196,16 @@ class _WordCloudScreenState extends ConsumerState<WordCloudScreen> {
                 Expanded(
                   child: words.when(
                     loading: () => const Center(child: Loading()),
-                    error: (error, _) => Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('加载失败'),
-                          const SizedBox(height: 12),
-                          FilledButton.tonal(
-                            onPressed: () {
-                              if (_isSubject) {
-                                ref.invalidate(
-                                  subjectWordCloudProvider(widget.subjectId!),
-                                );
-                              } else {
-                                ref.invalidate(wordCloudProvider(_type));
-                              }
-                            },
-                            child: const Text('重试'),
-                          ),
-                        ],
-                      ),
+                    error: (error, _) => BgmRetry(
+                      onRetry: () {
+                        if (_isSubject) {
+                          ref.invalidate(
+                            subjectWordCloudProvider(widget.subjectId!),
+                          );
+                        } else {
+                          ref.invalidate(wordCloudProvider(_type));
+                        }
+                      },
                     ),
                     data: (list) {
                       final filtered = list
@@ -274,17 +280,12 @@ class _WordChip extends StatelessWidget {
     final theme = Theme.of(context);
     final fontSize = 12 + 20 * (count / max).clamp(0.1, 1.0);
     return GestureDetector(
-      onTap: () => showDialog<void>(
+      onTap: () => showBgmDialog<void>(
         context: context,
-        builder: (context) => AlertDialog(
-          content: Text('标签 "$word" 出现 $count 次'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('知道了'),
-            ),
-          ],
-        ),
+        content: Text('标签 "$word" 出现 $count 次'),
+        actions: (ctx) => [
+          BgmButton('知道了', expand: false, onPressed: () => Navigator.pop(ctx)),
+        ],
       ),
       child: Text(
         word,

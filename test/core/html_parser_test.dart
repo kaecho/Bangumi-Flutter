@@ -159,4 +159,79 @@ void main() {
       );
     });
   });
+
+  group('parseDiscoveryToday / parseDiscoveryHome', () {
+    test('cheerioToday 去掉今日番组并改逗号', () {
+      const html =
+          '<ul><li class="tip">今日上映 <strong>21</strong> 部。共 39394 人收看今日番组。</li></ul>';
+      expect(parseDiscoveryToday(html), '今日上映 21 部，共 39394 人收看');
+    });
+
+    test('解析 featuredItems 分区封面', () {
+      const html = '''
+<ul id="featuredItems" class="featuredItems">
+  <li class="anime clearit">
+    <div class="mainItem">
+      <a href="/subject/622206" title="ヤニねこ">
+        <div class="image" style="background-image:url(//lain.bgm.tv/r/400/pic/cover/l/6a/b3/622206_dpWcC.jpg);"></div>
+      </a>
+      <p class="info"><small class="grey">16037人关注</small></p>
+    </div>
+  </li>
+  <li class="game clearit"></li>
+  <li class="book clearit">
+    <div class="mainItem">
+      <a href="/subject/13" title="book">
+        <div class="image" style="background-image:url(//lain.bgm.tv/pic/cover/l/aa/bb/13_xxx.jpg);"></div>
+      </a>
+      <p class="info"><small class="grey">12人关注</small></p>
+    </div>
+  </li>
+</ul>
+''';
+      final items = parseDiscoveryHome(html);
+      expect(items, hasLength(2));
+      expect(items.first.subjectId, 622206);
+      expect(items.first.title, 'ヤニねこ');
+      expect(items.first.type, 'anime');
+      expect(items.first.info, '16037人关注');
+      expect(
+        items.first.cover,
+        'https://lain.bgm.tv/pic/cover/l/6a/b3/622206_dpWcC.jpg',
+      );
+      expect(items.last.type, 'book');
+      expect(items.last.subjectId, 13);
+    });
+
+    test('解析昵称签名 formhash 和签名标签', () {
+      const html = '''
+<div id="columnSearchB">
+<input name="formhash" value="abc123" />
+<input name="nickname" value="樱" />
+<input name="sign_input" value="hello" />
+<select name="timeoffsetnew">
+  <option value="8" selected="selected">GMT+8</option>
+</select>
+<input name="show_nsfw_subject" checked="checked" />
+<textarea id="newbio">bio [avatar]https://a.test/a.jpg[/avatar] [bg]https://a.test/b.jpg[/bg]</textarea>
+</div>
+<div id="footer"></div>
+''';
+      final form = parseUserSetting(html);
+      expect(form.formhash, 'abc123');
+      expect(form.nickname, '樱');
+      expect(form.signInput, 'hello');
+      expect(form.timeoffsetnew, '8');
+      expect(form.showNsfwSubject, isTrue);
+      expect(extractSignTag(form.sign, avatar: true), 'https://a.test/a.jpg');
+      expect(extractSignTag(form.sign, avatar: false), 'https://a.test/b.jpg');
+      final built = buildUserSettingSign(
+        form.sign,
+        'https://x/a.jpg',
+        'https://x/b.jpg',
+      );
+      expect(built.newbio, contains('[avatar]https://x/a.jpg[/avatar]'));
+      expect(built.newbio, contains('[bg]https://x/b.jpg[/bg]'));
+    });
+  });
 }

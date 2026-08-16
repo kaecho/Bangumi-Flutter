@@ -18,6 +18,21 @@ import '../../design_system/design_system.dart';
 import '../progress/progress_screen.dart';
 import '../subject/collection_sheet.dart';
 import 'calendar_notes.dart';
+import '../../shared/widgets/bgm_button.dart';
+
+/// 原版日历顶栏 DATA + toolBar
+List<(String, String)> calendarMoreItems({
+  required bool listLayout,
+  required bool collectedOnly,
+  required bool expandUnknown,
+}) => [
+  ('browser', '浏览器查看'),
+  ('spa', '网页版查看'),
+  ('info', '补充说明'),
+  ('layout', '布　局〔${listLayout ? '列表' : '网格'}〕'),
+  ('favor', '收　藏〔${collectedOnly ? '只显示' : '显示'}〕'),
+  ('unknown', '未知时间番剧〔${expandUnknown ? '显示' : '不显示'}〕'),
+];
 
 /// 每日放送
 ///
@@ -42,16 +57,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   bool _expandUnknown = false;
   final _scroll = ScrollController();
 
-  static const _adaptOptions = ['全部', '原创', '漫画改', '小说改', '游戏改'];
-
-  static const _tagOptions = ['全部', '科幻', '战斗', '恋爱', '日常', '奇幻', '校园'];
-  static const _studioOptions = [
-    '全部',
-    'MAPPA',
-    '京都动画',
-    'ufotable',
-    'CloverWorks',
-  ];
+  String _filterValue(String raw) {
+    if (raw == '全部' || raw.isEmpty) return '全部';
+    return raw.split(' (').first;
+  }
 
   bool _match(Subject s, {required bool collected}) {
     if (_collectedOnly && !collected) return false;
@@ -64,15 +73,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         )) {
       return false;
     }
-    final names = s.tags.map((t) => t.name).join(' ');
-    final blob = '${s.summary} $names ${s.name} ${s.nameCn}';
-    if (_adapt != '全部' && !blob.contains(_adapt.replaceAll('改', ''))) {
-      return names.isEmpty; // 无标签时不过滤掉
-    }
-    if (_tag != '全部' && names.isNotEmpty && !names.contains(_tag)) return false;
-    if (_studio != '全部' && names.isNotEmpty && !blob.contains(_studio)) {
-      return false;
-    }
+    final names = [for (final t in s.tags) t.name];
+    if (_adapt != '全部' && !names.contains(_adapt)) return false;
+    if (_tag != '全部' && !names.contains(_tag)) return false;
+    if (_studio != '全部' && !names.contains(_studio)) return false;
     return true;
   }
 
@@ -91,121 +95,110 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         showBackButton: true,
         actions: [
           if (SettingsStore.instance.exportICS)
-            IconButton(
+            BgmHeaderAction(
               tooltip: '导出 ICS',
               icon: const Icon(Icons.event_available_outlined),
               onPressed: () => _exportWeekIcs(context, ref),
             ),
           if (_listLayout)
-            IconButton(
+            BgmHeaderAction(
               tooltip: '跳到今天',
               icon: const Icon(Icons.radio_button_checked, size: 18),
               onPressed: () => _jumpToday(days.valueOrNull ?? const []),
             ),
-          PopupMenuButton<String>(
-            tooltip: '更多',
+          BgmHeaderMore(
+            items: calendarMoreItems(
+              listLayout: _listLayout,
+              collectedOnly: _collectedOnly,
+              expandUnknown: _expandUnknown,
+            ),
             onSelected: _onMenu,
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'layout',
-                child: Text(_listLayout ? '布局 · 列表' : '布局 · 网格'),
-              ),
-              PopupMenuItem(
-                value: 'favor',
-                child: Text(_collectedOnly ? '收藏 · 只显示收藏' : '收藏 · 显示全部'),
-              ),
-              PopupMenuItem(
-                value: 'unknown',
-                child: Text(_expandUnknown ? '未知时间番剧 · 显示' : '未知时间番剧 · 不显示'),
-              ),
-              const PopupMenuItem(value: 'info', child: Text('补充说明')),
-              const PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
-            ],
           ),
         ],
       ),
 
       body: days.when(
         loading: () => const Center(child: Loading()),
-        error: (error, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        error: (error, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(calendarProvider)),
+        data: (list) {
+          final filters = calendarFilterOptions(list);
+          return Column(
             children: [
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton.tonal(
-                onPressed: () => ref.invalidate(calendarProvider),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
-        data: (list) => Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-              child: Row(
-                children: [
-                  _CalFilter(
-                    label: _adapt == '全部' ? '改编' : _adapt,
-                    options: _adaptOptions,
-                    selected: _adapt,
-                    onSelected: (v) => setState(() => _adapt = v),
-                  ),
-                  const SizedBox(width: 8),
-                  _CalFilter(
-                    label: _tag == '全部' ? '标签' : _tag,
-                    options: _tagOptions,
-                    selected: _tag,
-                    onSelected: (v) => setState(() => _tag = v),
-                  ),
-                  const SizedBox(width: 8),
-                  _CalFilter(
-                    label: _studio == '全部' ? '制作' : _studio,
-                    options: _studioOptions,
-                    selected: _studio,
-                    onSelected: (v) => setState(() => _studio = v),
-                  ),
-                  const Spacer(),
-                  if (_adapt != '全部' || _tag != '全部' || _studio != '全部')
-                    TextButton(
-                      onPressed: () => setState(() {
-                        _adapt = '全部';
-                        _tag = '全部';
-                        _studio = '全部';
-                      }),
-                      child: const Text('清除'),
-                    ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  ref.invalidate(calendarProvider);
-                  ref.invalidate(onAirTimeProvider);
-                  await ref.read(calendarProvider.future);
-                },
-                child: ListView.builder(
-                  controller: _scroll,
-                  padding: const EdgeInsets.only(bottom: 24),
-                  itemCount: list.length,
-                  itemBuilder: (context, index) => _DaySection(
-                    day: list[index],
-                    filter: _match,
-                    highlight: [
-                      if (_adapt != '全部') _adapt,
-                      if (_tag != '全部') _tag,
-                      if (_studio != '全部') _studio,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 12),
+                child: Row(
+                  children: [
+                    if (filters.adapts.length > 1)
+                      _CalFilter(
+                        label: _adapt == '全部' ? '改编' : _adapt,
+                        options: filters.adapts,
+                        selected: _adapt,
+                        onSelected: (v) =>
+                            setState(() => _adapt = _filterValue(v)),
+                      ),
+                    if (filters.tags.length > 1) ...[
+                      const SizedBox(width: 8),
+                      _CalFilter(
+                        label: _tag == '全部' ? '标签' : _tag,
+                        options: filters.tags,
+                        selected: _tag,
+                        onSelected: (v) =>
+                            setState(() => _tag = _filterValue(v)),
+                      ),
                     ],
-                    listLayout: _listLayout,
-                    expandUnknown: _expandUnknown,
+                    if (filters.studios.length > 1) ...[
+                      const SizedBox(width: 8),
+                      _CalFilter(
+                        label: _studio == '全部' ? '制作' : _studio,
+                        options: filters.studios,
+                        selected: _studio,
+                        onSelected: (v) =>
+                            setState(() => _studio = _filterValue(v)),
+                      ),
+                    ],
+                    if (_adapt != '全部' || _tag != '全部' || _studio != '全部')
+                      BgmHeaderAction(
+                        tooltip: '清除',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => setState(() {
+                          _adapt = '全部';
+                          _tag = '全部';
+                          _studio = '全部';
+                        }),
+                      ),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(calendarProvider);
+                    ref.invalidate(onAirTimeProvider);
+                    await ref.read(calendarProvider.future);
+                  },
+                  child: ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.only(bottom: 24),
+                    itemCount: list.length,
+                    itemBuilder: (context, index) => _DaySection(
+                      day: list[index],
+                      filter: _match,
+                      highlight: [
+                        if (_adapt != '全部') _adapt,
+                        if (_tag != '全部') _tag,
+                        if (_studio != '全部') _studio,
+                      ],
+                      listLayout: _listLayout,
+                      expandUnknown: _expandUnknown,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -222,6 +215,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         if (!mounted) return;
         await context.push(calendarNotePath());
 
+      case 'spa':
+        await openExternalUrl(htmlSpa('Calendar'));
       case 'browser':
         await openExternalUrl('https://bgm.tv/calendar');
     }
@@ -255,12 +250,28 @@ class _CalFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ds = context.ds;
     return PopupMenuButton<String>(
       onSelected: onSelected,
       itemBuilder: (_) => [
         for (final o in options) PopupMenuItem(value: o, child: Text(o)),
       ],
-      child: Chip(label: Text(label), visualDensity: VisualDensity.compact),
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 64, minHeight: 30),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: ds.surfaceCard.withValues(alpha: 0.8),
+          borderRadius: BorderRadius.circular(28),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: ds.caption.copyWith(
+            color: ds.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -679,9 +690,7 @@ class _CalendarNowLine extends StatelessWidget {
 Future<void> _exportWeekIcs(BuildContext context, WidgetRef ref) async {
   final days = ref.read(calendarProvider).valueOrNull;
   if (days == null || days.isEmpty) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('暂无放送数据')));
+    showBgmToast(context, '暂无放送数据');
     return;
   }
   final times = ref.read(onAirTimeProvider).valueOrNull ?? const {};
@@ -707,9 +716,7 @@ Future<void> _exportWeekIcs(BuildContext context, WidgetRef ref) async {
   }
   if (items.isEmpty) {
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('没有可导出的条目')));
+      showBgmToast(context, '没有可导出的条目');
     }
     return;
   }
@@ -753,3 +760,61 @@ final onAirTimeProvider = FutureProvider<Map<int, String>>((ref) async {
     return const {};
   }
 });
+
+({List<String> adapts, List<String> tags, List<String> studios})
+calendarFilterOptions(List<CalendarDay> days) {
+  const adaptKeys = ['原创', '漫画改', '小说改', '游戏改', '其他改'];
+  const studioHints = [
+    '动画',
+    '制作',
+    'studio',
+    'MAPPA',
+    '京都',
+    'ufotable',
+    'Clover',
+    'Production',
+    'Bones',
+    'WIT',
+    'A-1',
+    'SHAFT',
+    'TRIGGER',
+    'P.A.',
+    'J.C.',
+    'Gainax',
+    'SUNRISE',
+    'Sunrise',
+    '东映',
+    'TMS',
+    'OLM',
+    'Toei',
+  ];
+  final adaptCount = <String, int>{};
+  final tagCount = <String, int>{};
+  final studioCount = <String, int>{};
+  for (final day in days) {
+    for (final subject in day.items) {
+      for (final tag in subject.tags) {
+        final name = tag.name.trim();
+        if (name.isEmpty) continue;
+        if (adaptKeys.contains(name)) {
+          adaptCount[name] = (adaptCount[name] ?? 0) + 1;
+        } else if (studioHints.any(name.contains)) {
+          studioCount[name] = (studioCount[name] ?? 0) + 1;
+        } else {
+          tagCount[name] = (tagCount[name] ?? 0) + 1;
+        }
+      }
+    }
+  }
+  List<String> ranked(Map<String, int> counts) {
+    final entries = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return ['全部', for (final e in entries.take(16)) '${e.key} (${e.value})'];
+  }
+
+  return (
+    adapts: ranked(adaptCount),
+    tags: ranked(tagCount),
+    studios: ranked(studioCount),
+  );
+}

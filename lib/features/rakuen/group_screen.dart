@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +15,22 @@ import 'html_parse.dart';
 import 'rakuen_providers.dart';
 import 'widgets/topic_row.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
+
+/// 原版小组 Header DATA: 浏览器查看 / 小组成员 / 加入或退出 / 时间格式
+List<(String, String)> groupMoreItems({
+  required bool joined,
+  required bool canJoin,
+  required bool canQuit,
+  required bool lastDate,
+}) => [
+  ('browser', '浏览器查看'),
+  ('members', '小组成员'),
+  if (!joined && canJoin) ('join', '加入小组'),
+  if (joined && canQuit) ('quit', '退出小组'),
+  ('time', '时间格式〔${lastDate ? '最近' : '日期'}〕'),
+];
 
 /// 小组 (小组信息 + 讨论/成员)
 /// 路由: /rakuen/group/:name
@@ -30,6 +48,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
   late final TabController _tabController;
   final _forumScroll = ScrollController();
   bool _joining = false;
+  bool _lastDate = true;
 
   @override
   void initState() {
@@ -65,15 +84,11 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
       await client.post(url, data: {'action': 'join-bye'}, host: kHost);
       ref.invalidate(groupInfoProvider(widget.name));
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(quit ? '已退出小组' : '已加入小组')));
+        showBgmToast(context, quit ? '已退出小组' : '已加入小组');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(quit ? '退出失败' : '加入失败, 请稍后重试')));
+        showBgmToast(context, quit ? '退出失败' : '加入失败, 请稍后重试');
       }
     } finally {
       if (mounted) setState(() => _joining = false);
@@ -86,47 +101,53 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
     final infoAsync = ref.watch(groupInfoProvider(widget.name));
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          infoAsync.valueOrNull?.title.isNotEmpty == true
-              ? infoAsync.valueOrNull!.title
-              : widget.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+      appBar: BgmAppBar(
+        title: infoAsync.valueOrNull?.title.isNotEmpty == true
+            ? infoAsync.valueOrNull!.title
+            : widget.name,
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '添加新讨论',
             icon: const Icon(Icons.edit_outlined),
             onPressed: () => context.push(
               '/web/${Uri.encodeComponent(htmlNewTopic(group: widget.name))}',
             ),
           ),
-          PopupMenuButton<String>(
-            tooltip: '更多',
+          BgmHeaderMore(
+            items: groupMoreItems(
+              joined: infoAsync.valueOrNull?.joined == true,
+              canJoin: infoAsync.valueOrNull?.joinUrl.isNotEmpty == true,
+              canQuit: infoAsync.valueOrNull?.byeUrl.isNotEmpty == true,
+              lastDate: _lastDate,
+            ),
             onSelected: (v) {
+              final info = infoAsync.valueOrNull;
               if (v == 'browser') {
                 openExternalUrl(htmlGroupPage(widget.name));
                 return;
               }
               if (v == 'members') {
                 openExternalUrl(htmlGroupMembers(widget.name));
+                return;
+              }
+              if (v == 'join' && info != null) {
+                if (!_joining) unawaited(_joinOrBye(info, quit: false));
+                return;
+              }
+              if (v == 'quit' && info != null) {
+                if (!_joining) unawaited(_joinOrBye(info, quit: true));
+                return;
+              }
+
+              if (v == 'time') {
+                setState(() => _lastDate = !_lastDate);
               }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
-
-              PopupMenuItem(value: 'members', child: Text('小组成员')),
-            ],
           ),
         ],
-
-        bottom: TabBar(
+        bottom: BgmControlledTabStrip(
           controller: _tabController,
-          tabs: const [
-            Tab(text: '讨论'),
-            Tab(text: '成员'),
-          ],
+          tabs: const [Text('讨论'), Text('成员')],
         ),
       ),
       body: Column(
@@ -168,33 +189,21 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
                       ],
                     ),
                   ),
-                  if (info.joinUrl.isNotEmpty || info.byeUrl.isNotEmpty)
-                    FilledButton(
-                      onPressed: _joining
-                          ? null
-                          : () => _joinOrBye(info, quit: info.joined),
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                      child: _joining
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(info.joined ? '退出' : '加入'),
-                    ),
                 ],
               ),
             ),
           ),
-          const Divider(height: 1),
+          const BgmHairline(),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _ForumTab(name: widget.name, scrollController: _forumScroll),
+                _ForumTab(
+                  name: widget.name,
+                  scrollController: _forumScroll,
+                  lastDate: _lastDate,
+                ),
+
                 _MembersTab(name: widget.name),
               ],
             ),
@@ -208,26 +217,21 @@ class _GroupScreenState extends ConsumerState<GroupScreen>
 class _ForumTab extends ConsumerWidget {
   final String name;
   final ScrollController scrollController;
+  final bool lastDate;
 
-  const _ForumTab({required this.name, required this.scrollController});
+  const _ForumTab({
+    required this.name,
+    required this.scrollController,
+    required this.lastDate,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(groupForumProvider(name));
     return async.when(
       loading: () => const Loading(height: double.infinity),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('加载失败'),
-            TextButton(
-              onPressed: () => ref.invalidate(groupForumProvider(name)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
+      error: (e, _) =>
+          BgmRetry(onRetry: () => ref.invalidate(groupForumProvider(name))),
       data: (data) {
         if (data.items.isEmpty) {
           return const Center(child: Text('暂无帖子'));
@@ -237,18 +241,22 @@ class _ForumTab extends ConsumerWidget {
           child: ListView.separated(
             controller: scrollController,
             itemCount: data.items.length + (data.hasMore ? 1 : 0),
-            separatorBuilder: (_, _) => const Divider(indent: 56),
+            separatorBuilder: (_, _) => const BgmHairline(indent: 56),
             itemBuilder: (context, index) {
               if (index >= data.items.length) {
                 return Center(
-                  child: TextButton(
+                  child: BgmTextAction(
+                    '加载更多',
                     onPressed: () =>
                         ref.read(groupForumProvider(name).notifier).loadMore(),
-                    child: const Text('加载更多'),
                   ),
                 );
               }
-              return RakuenTopicRow(topic: data.items[index], showGroup: false);
+              return RakuenTopicRow(
+                topic: data.items[index],
+                showGroup: false,
+                lastDate: lastDate,
+              );
             },
           ),
         );
@@ -268,18 +276,8 @@ class _MembersTab extends ConsumerWidget {
     final theme = Theme.of(context);
     return async.when(
       loading: () => const Loading(height: double.infinity),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('加载失败'),
-            TextButton(
-              onPressed: () => ref.invalidate(groupMembersProvider(name)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
+      error: (e, _) =>
+          BgmRetry(onRetry: () => ref.invalidate(groupMembersProvider(name))),
       data: (members) {
         if (members.isEmpty) {
           return const Center(child: Text('暂无成员'));

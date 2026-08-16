@@ -4,3 +4,4 @@ library;
 export 'app_theme_data.dart';
 export 'colors.dart';
 export 'tokens.dart';
+export 'icons.dart';

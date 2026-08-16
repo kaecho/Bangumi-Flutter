@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_endpoints.dart';
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/storage/settings_store.dart';
+
 import '../../../shared/models/collection.dart';
 import '../../../shared/models/subject.dart';
 import '../../../shared/widgets/cover.dart';
@@ -79,26 +81,75 @@ Future<List<V0CollectionItem>> fetchUserCollectionsAll(
   return all;
 }
 
-/// 推荐评分 (简化自原项目 calc: rate/rank/score/时间/标签 加权)
-double calcRecommendScore(V0CollectionItem item) {
+/// 推荐评分 (对齐原项目 like/utils calc, 受 likeRec 维度开关控制)
+double calcRecommendScore(
+  V0CollectionItem item, {
+  List<int> likeRec = const [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+}) {
+  final rec = likeRec.length == 10 ? likeRec : List<int>.filled(10, 1);
   var score = 0.0;
   final subject = item.subject;
-  if (item.type >= 1 && item.type <= 5) {
+  final canRec = item.type == 1 || item.type == 2 || item.type == 3;
+
+  if (rec[1] == 1) {
+    if (item.type == 1) {
+      score += 10;
+    } else if (item.type == 4) {
+      score -= 40;
+    } else if (item.type == 5) {
+      score -= 80;
+    }
+  } else if (item.type >= 1 && item.type <= 5) {
     score += (item.type == 2 || item.type == 3) ? 2 : 1;
   }
-  if (subject.rating != null) score += (subject.rating!.score / 10) * 3;
-  if (subject.rank > 0) {
+
+  if (rec[3] == 1 && canRec && subject.rating != null) {
+    score += subject.rating!.score;
+  } else if (subject.rating != null) {
+    score += (subject.rating!.score / 10) * 3;
+  }
+
+  if (rec[2] == 1 && canRec && subject.rank > 0) {
+    if (subject.rank <= 100) {
+      score += 20;
+    } else if (subject.rank <= 1000) {
+      score += 10;
+    } else if (subject.rank <= 2000) {
+      score += 5;
+    } else if (subject.rank >= 5000) {
+      score -= 10;
+    } else if (subject.rank >= 4000) {
+      score -= 5;
+    }
+  } else if (subject.rank > 0) {
     score += subject.rank <= 100 ? 2 : (subject.rank <= 500 ? 1 : 0.5);
   }
 
-  if (item.updatedAt.isNotEmpty) {
+  if (rec[4] == 1 && canRec && item.epStatus >= 12) score += 10;
+
+  if (rec[7] == 1 && canRec && item.updatedAt.isNotEmpty) {
     final date = DateTime.tryParse(item.updatedAt.replaceFirst(' ', 'T'));
     if (date != null) {
       final days = DateTime.now().difference(date).inDays;
-      if (days <= 7) score += 1.5;
+      if (days <= 30) {
+        score += 10;
+      } else if (days >= 365) {
+        score -= 10;
+      }
+    }
+  } else if (item.updatedAt.isNotEmpty) {
+    final date = DateTime.tryParse(item.updatedAt.replaceFirst(' ', 'T'));
+    if (date != null && DateTime.now().difference(date).inDays <= 7) {
+      score += 1.5;
     }
   }
-  if (subject.tags.isNotEmpty) score += 0.5;
+
+  if (rec[8] == 1 && canRec && subject.tags.isNotEmpty) {
+    score += subject.tags.length / 5;
+  } else if (subject.tags.isNotEmpty) {
+    score += 0.5;
+  }
+
   return score;
 }
 
@@ -113,18 +164,8 @@ class RecommendList extends ConsumerWidget {
     final items = ref.watch(recommendProvider(subjectType));
     return items.when(
       loading: () => const Center(child: Loading()),
-      error: (error, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('加载失败'),
-            const SizedBox(height: 12),
-            FilledButton.tonal(
-              onPressed: () => ref.invalidate(recommendProvider(subjectType)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      error: (error, _) => BgmRetry(
+        onRetry: () => ref.invalidate(recommendProvider(subjectType)),
       ),
       data: (list) => list.isEmpty
           ? const Center(child: Text('收藏数据不足, 无法推荐'))
@@ -219,10 +260,18 @@ final recommendProvider = FutureProvider.family<List<RecommendItem>, int>((
   ref,
   subjectType,
 ) async {
+  final settings = ref.watch(settingsStoreProvider);
   final user = ref.watch(currentUserProvider);
   if (user == null) return const [];
   final userId = user.username.isEmpty ? '${user.id}' : user.username;
-  final collections = await fetchUserCollectionsAll(ref, userId, subjectType);
+  var collections = await fetchUserCollectionsAll(ref, userId, subjectType);
+  if (!settings.likeCollected) {
+    collections = [
+      for (final item in collections)
+        if (item.type != 2 && item.type != 3) item,
+    ];
+  }
+  final rec = settings.likeRec;
   final items =
       collections
           .map(
@@ -231,7 +280,7 @@ final recommendProvider = FutureProvider.family<List<RecommendItem>, int>((
               type: item.type,
               epStatus: item.epStatus,
               updatedAt: item.updatedAt,
-              score: calcRecommendScore(item),
+              score: calcRecommendScore(item, likeRec: rec),
             ),
           )
           .toList()

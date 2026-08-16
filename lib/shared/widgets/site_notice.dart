@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../design_system/design_system.dart';
+import 'bgm_button.dart';
 
 /// 主站 502 / 授权过期轻提示 (原项目 ErrorNotice + LoginNotice)
 class SiteNoticeBanner extends ConsumerStatefulWidget {
@@ -62,7 +63,7 @@ class _NoticeBar extends StatelessWidget {
                   child: Text(text, style: context.ds.caption),
                 ),
               ),
-              IconButton(
+              BgmHeaderAction(
                 tooltip: '关闭',
                 icon: const Icon(Icons.close, size: 18),
                 onPressed: onClose,

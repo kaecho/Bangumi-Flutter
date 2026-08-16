@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import 'widgets/paged.dart';
 import '../../design_system/design_system.dart';
 
@@ -45,6 +46,9 @@ class NewsArticle {
     );
   }
 }
+
+/// 原版 NEWS 菜单: 来源 + 浏览器查看
+const kAnitamaSources = <(int, String)>[(0, '机核'), (1, '异世界'), (2, '游民星空')];
 
 /// Anitama 资讯
 ///
@@ -89,59 +93,42 @@ class _AnitamaScreenState extends ConsumerState<AnitamaScreen> {
         title: '业界资讯',
         showBackButton: true,
         actions: [
-          PopupMenuButton<int>(
-            tooltip: '更多',
-            onSelected: (value) {
-              if (value == -1) {
-                openExternalUrl('https://www.gcores.com/');
-              } else {
-                setState(() => _source = value);
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 0, child: Text('机核')),
-              PopupMenuItem(value: 1, child: Text('异世界')),
-              PopupMenuItem(value: 2, child: Text('游民星空')),
-              PopupMenuDivider(),
-              PopupMenuItem(value: -1, child: Text('浏览器查看')),
+          BgmHeaderMore(
+            items: [
+              for (final source in kAnitamaSources) ('${source.$1}', source.$2),
+              ('browser', '浏览器查看'),
             ],
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 0, label: Text('机核')),
-                ButtonSegment(value: 1, label: Text('异世界')),
-                ButtonSegment(value: 2, label: Text('游民星空')),
-              ],
-              selected: {_source},
-              onSelectionChanged: (s) => setState(() => _source = s.first),
-            ),
-          ),
-          Expanded(
-            child: switch (_source) {
-              1 => _ExternalNewsHint(
-                name: '异世界动画',
-                url: 'https://www.iyingshi.com/',
-              ),
-              2 => _ExternalNewsHint(
-                name: '游民星空动漫',
-                url: 'https://acg.gamersky.com/',
-              ),
-              _ => PagedListView<NewsArticle, int>(
-                provider: newsListProvider,
-                arg: 0,
-                emptyText: '暂无资讯',
-                itemBuilder: (context, item, index) => _NewsRow(article: item),
-              ),
+
+            onSelected: (value) {
+              if (value == 'browser') {
+                openExternalUrl(switch (_source) {
+                  1 => 'https://www.iyingshi.com/',
+                  2 => 'https://acg.gamersky.com/',
+                  _ => 'https://www.gcores.com/',
+                });
+                return;
+              }
+              setState(() => _source = int.parse(value));
             },
           ),
         ],
       ),
+      body: switch (_source) {
+        1 => const _ExternalNewsHint(
+          name: '异世界动画',
+          url: 'https://www.iyingshi.com/',
+        ),
+        2 => const _ExternalNewsHint(
+          name: '游民星空动漫',
+          url: 'https://acg.gamersky.com/',
+        ),
+        _ => PagedListView<NewsArticle, int>(
+          provider: newsListProvider,
+          arg: 0,
+          emptyText: '暂无资讯',
+          itemBuilder: (context, item, index) => _NewsRow(article: item),
+        ),
+      },
     );
   }
 }
@@ -160,9 +147,10 @@ class _ExternalNewsHint extends StatelessWidget {
         children: [
           Text('$name 无稳定公开 API, 打开网页浏览'),
           const SizedBox(height: 12),
-          FilledButton.tonal(
+          BgmButton(
+            '打开$name',
+            expand: false,
             onPressed: () => context.push('/web/${Uri.encodeComponent(url)}'),
-            child: Text('打开$name'),
           ),
         ],
       ),

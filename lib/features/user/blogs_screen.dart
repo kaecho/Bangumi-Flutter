@@ -12,6 +12,45 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 
 import 'user_models.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../rakuen/rakuen_providers.dart';
+
+/// 原版 IconBookmarks: 书签弹出 favor 标题
+class BlogsHeaderBookmarks extends ConsumerWidget {
+  const BlogsHeaderBookmarks({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = ref.watch(topicFavorProvider);
+    return PopupMenuButton<String>(
+      tooltip: '书签',
+      padding: EdgeInsets.zero,
+      icon: const Icon(Icons.bookmark_outline),
+      onSelected: (value) {
+        if (value == 'empty') return;
+        if (value.startsWith('blog/')) {
+          final blogId = int.tryParse(value.split('/').last);
+          if (blogId != null) context.push('/rakuen/blog/$blogId');
+          return;
+        }
+        context.push('/rakuen/topic/$value');
+      },
+      itemBuilder: (_) {
+        if (items.isEmpty) {
+          return const [PopupMenuItem(value: 'empty', child: Text('(空书签)'))];
+        }
+        return [
+          for (final item in items)
+            PopupMenuItem(
+              value: item.topicId,
+              child: Text(item.title.isEmpty ? item.topicId : item.title),
+            ),
+        ];
+      },
+    );
+  }
+}
 
 class UserBlogsData {
   final List<UserBlog> items;
@@ -78,13 +117,12 @@ class UserBlogsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('TA的日志'),
+      appBar: BgmAppBar(
+        title: 'TA的日志',
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(apiUserBlogsHtml(userId)),
+          const BlogsHeaderBookmarks(),
+          BgmHeaderMore.browser(
+            () => openExternalUrl(apiUserBlogsHtml(userId)),
           ),
         ],
       ),
@@ -102,18 +140,15 @@ class MyBlogsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(currentUserProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('我的日志'),
+      appBar: BgmAppBar(
+        title: '我的日志',
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () {
-              final me = ref.read(currentUserProvider);
-              if (me == null) return;
-              openExternalUrl(apiUserBlogsHtml(userPathId(me)));
-            },
-          ),
+          const BlogsHeaderBookmarks(),
+          BgmHeaderMore.browser(() {
+            final me = ref.read(currentUserProvider);
+            if (me == null) return;
+            openExternalUrl(apiUserBlogsHtml(userPathId(me)));
+          }),
         ],
       ),
 
@@ -160,17 +195,8 @@ class _UserBlogsListState extends ConsumerState<UserBlogsList> {
     final async = ref.watch(userBlogsProvider(widget.userId));
     return async.when(
       loading: () => const Loading(),
-      error: (_, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('加载失败'),
-            TextButton(
-              onPressed: () => ref.invalidate(userBlogsProvider(widget.userId)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      error: (_, _) => BgmRetry(
+        onRetry: () => ref.invalidate(userBlogsProvider(widget.userId)),
       ),
       data: (data) {
         if (data.items.isEmpty) return const Center(child: Text('暂无日志'));
@@ -182,13 +208,7 @@ class _UserBlogsListState extends ConsumerState<UserBlogsList> {
             if (index >= data.items.length) {
               return const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
+                child: Center(child: BgmSpinner(size: 20)),
               );
             }
             final blog = data.items[index];

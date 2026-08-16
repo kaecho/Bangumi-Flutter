@@ -5,12 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/utils/display.dart';
-import '../../shared/widgets/app_bar.dart';
+import '../../design_system/design_system.dart';
+
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import 'widgets/discovery_html.dart';
-import 'yearbook_screen.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 年度动画大赏
 ///
@@ -35,51 +36,19 @@ class AwardScreen extends ConsumerStatefulWidget {
 }
 
 class _AwardScreenState extends ConsumerState<AwardScreen> {
-  late int _year = widget.year;
-
   @override
   Widget build(BuildContext context) {
-    final blocks = ref.watch(awardProvider(_year));
+    final year = widget.year;
+    final blocks = ref.watch(awardProvider(year));
     return Scaffold(
-      appBar: BgmAppBar(
-        title: '$_year 年度动画大赏',
-        showBackButton: true,
-        actions: [
-          PopupMenuButton<int>(
-            tooltip: '选择年份',
-
-            onSelected: (v) => setState(() => _year = v),
-            itemBuilder: (context) => [
-              for (final y in kYearbookYears)
-                PopupMenuItem(value: y, child: Text('$y 年')),
-            ],
-            icon: const Icon(Icons.calendar_month_outlined),
-          ),
-          IconButton(
-            tooltip: '浏览器查看',
-
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl('$kHost${htmlAward(_year)}'),
-          ),
-        ],
-      ),
       body: blocks.when(
-        loading: () => const Center(child: Loading()),
-        error: (error, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton.tonal(
-                onPressed: () => ref.invalidate(awardProvider(_year)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        loading: () => _AwardLoading(year: year),
+        error: (error, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(awardProvider(year))),
+
         data: (list) => RefreshIndicator(
-          onRefresh: () => ref.refresh(awardProvider(_year).future),
+          onRefresh: () => ref.refresh(awardProvider(year).future),
+
           child: ListView(
             padding: const EdgeInsets.only(bottom: 24),
             children: [
@@ -101,6 +70,32 @@ class _AwardScreenState extends ConsumerState<AwardScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AwardLoading extends StatelessWidget {
+  final int year;
+  const _AwardLoading({required this.year});
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = context.ds;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Loading(),
+          const SizedBox(height: 12),
+          Text('网页加载中, 请稍等', style: ds.caption),
+          const SizedBox(height: 8),
+          BgmTextAction(
+            '或点这里使用浏览器打开',
+            color: ds.textSecondary,
+            onPressed: () => openExternalUrl('$kHost${htmlAward(year)}'),
+          ),
+        ],
       ),
     );
   }

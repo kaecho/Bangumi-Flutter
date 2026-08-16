@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,11 +14,23 @@ import '../../core/utils/display.dart';
 import '../../shared/widgets/bgm_html.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+import 'html_parse.dart';
+import 'rakuen_models.dart';
+
 import 'rakuen_providers.dart';
 import 'rakuen_settings.dart';
 import 'widgets/fixed_textarea.dart';
 import 'widgets/floor_view.dart';
 import '../../design_system/design_system.dart';
+
+/// 原版日志 Menu DATA
+const kBlogMoreItems = <(String, String)>[
+  ('browser', '浏览器查看'),
+  ('copy', '复制链接'),
+  ('share', '复制分享'),
+];
 
 /// 日志详情
 /// 路由: /rakuen/blog/:id
@@ -59,9 +73,7 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
       }
       if (gh.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('评论需要站点 Cookie 登录')),
-          );
+          showBgmToast(context, '评论需要站点 Cookie 登录');
         }
         return;
       }
@@ -77,36 +89,34 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
       final lastview = page?.lastview.isNotEmpty == true
           ? page!.lastview
           : '${DateTime.now().millisecondsSinceEpoch ~/ 1000}';
-      await ref.read(apiClientProvider).post(
-        htmlBlogReply(widget.id),
-        host: kHost,
-        form: true,
-        data: {
-          'content': text,
-          'formhash': gh,
-          'related_photo': 0,
-          'lastview': lastview,
-          'submit': 'submit',
-          if (parsed != null) ...{
-            'related': parsed.related,
-            'sub_reply_uid': parsed.subReplyUid,
-            'post_uid': parsed.postUid,
-          },
-        },
-      );
+      await ref
+          .read(apiClientProvider)
+          .post(
+            htmlBlogReply(widget.id),
+            host: kHost,
+            form: true,
+            data: {
+              'content': text,
+              'formhash': gh,
+              'related_photo': 0,
+              'lastview': lastview,
+              'submit': 'submit',
+              if (parsed != null) ...{
+                'related': parsed.related,
+                'sub_reply_uid': parsed.subReplyUid,
+                'post_uid': parsed.postUid,
+              },
+            },
+          );
       _replyController.clear();
       _replyTarget = null;
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('回复成功')));
+        showBgmToast(context, '回复成功');
       }
       ref.invalidate(blogDetailProvider(widget.id));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('回复失败: ${apiErrorMessage(e)}')));
+        showBgmToast(context, '回复失败: ${apiErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -120,17 +130,48 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          async.valueOrNull?.title.isNotEmpty == true
-              ? async.valueOrNull!.title
-              : '日志',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+      appBar: BgmAppBar(
+        title: async.valueOrNull?.title.isNotEmpty == true
+            ? async.valueOrNull!.title
+            : '日志',
         actions: [
-          PopupMenuButton<String>(
-            tooltip: '更多',
+          if (async.valueOrNull != null)
+            BgmHeaderAction(
+              tooltip:
+                  ref
+                      .watch(topicFavorProvider)
+                      .any((e) => e.topicId == blogFavorTopicId(widget.id))
+                  ? '取消收藏'
+                  : '收藏日志',
+              icon: Icon(
+                ref
+                        .watch(topicFavorProvider)
+                        .any((e) => e.topicId == blogFavorTopicId(widget.id))
+                    ? Icons.star
+                    : Icons.star_border,
+                size: 20,
+              ),
+              onPressed: () {
+                final data = async.valueOrNull;
+                if (data == null) return;
+                unawaited(
+                  ref
+                      .read(topicFavorProvider.notifier)
+                      .toggle(
+                        HistoryItem(
+                          topicId: blogFavorTopicId(widget.id),
+                          title: data.title,
+                          group: '日志',
+                          userName: data.userName,
+                          replies: commentFloorCount(data.floors),
+                          time: DateTime.now().millisecondsSinceEpoch,
+                        ),
+                      ),
+                );
+              },
+            ),
+          BgmHeaderMore(
+            items: kBlogMoreItems,
             onSelected: (v) {
               final url = htmlBlogPage(widget.id);
               final title = async.valueOrNull?.title ?? '日志';
@@ -140,42 +181,25 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
               }
               if (v == 'copy') {
                 Clipboard.setData(ClipboardData(text: url));
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('已复制链接')));
+                showBgmToast(context, '已复制链接');
                 return;
               }
               if (v == 'share') {
                 Clipboard.setData(
                   ClipboardData(text: '【链接】$title | Bangumi番组计划\n$url'),
                 );
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('已复制分享文案')));
+                showBgmToast(context, '已复制分享文案');
               }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
-              PopupMenuItem(value: 'copy', child: Text('复制链接')),
-              PopupMenuItem(value: 'share', child: Text('复制分享')),
-            ],
           ),
         ],
       ),
       body: async.when(
         loading: () => const Loading(height: double.infinity),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('加载失败'),
-              TextButton(
-                onPressed: () => ref.invalidate(blogDetailProvider(widget.id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => BgmRetry(
+          onRetry: () => ref.invalidate(blogDetailProvider(widget.id)),
         ),
+
         data: (data) => ListView(
           padding: const EdgeInsets.only(bottom: 8),
           children: [
@@ -225,7 +249,19 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
                 ],
               ),
             ),
-            const Divider(height: 12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+              child: Text(
+                commentSectionTitle(commentFloorCount(data.floors)),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+            const BgmHairline(),
+
             if (data.floors.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(24),

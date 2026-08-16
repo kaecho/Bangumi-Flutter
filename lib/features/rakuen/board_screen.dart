@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/display.dart';
+import 'html_parse.dart';
+
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/score.dart';
+
 import '../rakuen/rakuen_screen.dart' show kRakuenScopes;
 import 'rakuen_providers.dart';
 import 'widgets/topic_row.dart';
@@ -49,8 +56,14 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
         '板块';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
+      appBar: BgmAppBar(
+        title: title,
+        actions: [
+          BgmHeaderMore.browser(
+            () => openExternalUrl(rakuenBoardPageUrl(_scope)),
+          ),
+        ],
+
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(44),
           child: SizedBox(
@@ -62,14 +75,13 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                 for (final scope in kRakuenScopes)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(scope.$1),
+                    child: BgmFilterChip(
+                      label: scope.$1,
                       selected: scope.$2 == _scope,
-                      onSelected: (_) {
+                      onTap: () {
                         setState(() => _scope = scope.$2);
                         ref.invalidate(boardTopicsProvider(_scope));
                       },
-                      visualDensity: VisualDensity.compact,
                     ),
                   ),
               ],
@@ -77,6 +89,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
           ),
         ),
       ),
+
       body: _BoardTopicList(scope: _scope, scrollController: _scrollController),
     );
   }
@@ -93,18 +106,9 @@ class _BoardTopicList extends ConsumerWidget {
     final async = ref.watch(boardTopicsProvider(scope));
     return async.when(
       loading: () => const Loading(height: double.infinity),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('加载失败'),
-            TextButton(
-              onPressed: () => ref.invalidate(boardTopicsProvider(scope)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
+      error: (e, _) =>
+          BgmRetry(onRetry: () => ref.invalidate(boardTopicsProvider(scope))),
+
       data: (data) {
         if (data.items.isEmpty) {
           return const Center(child: Text('暂无帖子'));
@@ -114,16 +118,12 @@ class _BoardTopicList extends ConsumerWidget {
           child: ListView.separated(
             controller: scrollController,
             itemCount: data.items.length + (data.hasMore ? 1 : 0),
-            separatorBuilder: (_, _) => const Divider(indent: 56),
+            separatorBuilder: (_, _) => const BgmHairline(indent: 56),
             itemBuilder: (context, index) {
               if (index >= data.items.length) {
-                return Center(
-                  child: TextButton(
-                    onPressed: () => ref
-                        .read(boardTopicsProvider(scope).notifier)
-                        .loadMore(),
-                    child: const Text('加载更多'),
-                  ),
+                return LoadMoreLink(
+                  onTap: () =>
+                      ref.read(boardTopicsProvider(scope).notifier).loadMore(),
                 );
               }
               return RakuenTopicRow(topic: data.items[index]);

@@ -5,7 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
-import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 每周萌王 (周榜 + 历史)
 class TinygrailTopWeekScreen extends ConsumerStatefulWidget {
@@ -16,40 +17,60 @@ class TinygrailTopWeekScreen extends ConsumerStatefulWidget {
       _TinygrailTopWeekScreenState();
 }
 
-class _TinygrailTopWeekScreenState extends ConsumerState<TinygrailTopWeekScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 2, vsync: this);
-
-  @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
-  }
+class _TinygrailTopWeekScreenState
+    extends ConsumerState<TinygrailTopWeekScreen> {
+  int _prev = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('每周萌王'),
+      appBar: BgmAppBar(
+        title: '每周萌王',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '我的拍卖',
             icon: const Icon(Icons.gavel, size: 20),
-            onPressed: () => context.push('/tinygrail/bid'),
+            onPressed: () => context.push('/tinygrail/bid?type=auction'),
           ),
         ],
-        bottom: TabBar(
-          controller: _tab,
-          tabs: const [
-            Tab(text: '本周'),
-            Tab(text: '历史'),
-          ],
-        ),
       ),
-
-      body: TabBarView(
-        controller: _tab,
-        children: const [_TopWeekList(), _TopWeekHistory()],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                BgmHeaderAction(
+                  tooltip: '上一周',
+                  icon: const Icon(Icons.navigate_before, size: 20),
+                  onPressed: _prev >= 40
+                      ? null
+                      : () => setState(() => _prev += 1),
+                ),
+                Text(
+                  _prev == 0 ? '本周' : '前 $_prev 周',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                BgmHeaderAction(
+                  tooltip: '下一周',
+                  icon: const Icon(Icons.navigate_next, size: 20),
+                  onPressed: _prev == 0
+                      ? null
+                      : () => setState(() => _prev -= 1),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _prev == 0
+                ? const _TopWeekList()
+                : _TopWeekHistory(prev: _prev),
+          ),
+        ],
       ),
     );
   }
@@ -70,7 +91,7 @@ class _TopWeekList extends ConsumerWidget {
             ? const Empty(text: '暂无数据')
             : ListView.separated(
                 itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const BgmHairline(),
                 itemBuilder: (context, index) =>
                     _TopWeekTile(item: list[index]),
               ),
@@ -80,21 +101,23 @@ class _TopWeekList extends ConsumerWidget {
 }
 
 class _TopWeekHistory extends ConsumerWidget {
-  const _TopWeekHistory();
+  final int prev;
+
+  const _TopWeekHistory({required this.prev});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(topWeekHistoryProvider);
+    final async = ref.watch(topWeekHistoryProvider(prev));
     return async.when(
       loading: () => const Loading(height: double.infinity),
       error: (_, _) => const Center(child: Text('加载失败')),
       data: (list) => RefreshIndicator(
-        onRefresh: () async => ref.invalidate(topWeekHistoryProvider),
+        onRefresh: () async => ref.invalidate(topWeekHistoryProvider(prev)),
         child: list.isEmpty
             ? const Empty(text: '暂无历史记录')
             : ListView.separated(
                 itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const BgmHairline(),
                 itemBuilder: (context, index) =>
                     _TopWeekTile(item: list[index]),
               ),
@@ -110,17 +133,15 @@ class _TopWeekTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return BgmTextRow(
       onTap: () => context.push('/tinygrail/chara/${item.id}'),
       leading: Text(
         '#${item.rank}',
         style: const TextStyle(fontWeight: FontWeight.w700),
       ),
-      title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        'Lv.${item.level} · 价格 ¥${tgPrice(item.price)} · 股息 ${item.rate.toStringAsFixed(2)}',
-        style: context.ds.meta,
-      ),
+      title: item.name,
+      subtitle:
+          'Lv.${item.level} · 价格 ¥${tgPrice(item.price)} · 股息 ${item.rate.toStringAsFixed(2)}',
       trailing: Text(
         '额外 ${tgAmount(item.extra)}',
         style: const TextStyle(fontWeight: FontWeight.w600),
@@ -133,8 +154,8 @@ final topWeekProvider = FutureProvider<List<TinygrailTopWeek>>((ref) async {
   return ref.read(tinygrailApiProvider).fetchTopWeek();
 });
 
-final topWeekHistoryProvider = FutureProvider<List<TinygrailTopWeek>>((
-  ref,
-) async {
-  return ref.read(tinygrailApiProvider).fetchTopWeekHistory(1);
-});
+final topWeekHistoryProvider = FutureProvider.family<List<TinygrailTopWeek>, int>(
+  (ref, prev) async {
+    return ref.read(tinygrailApiProvider).fetchTopWeekHistory(prev);
+  },
+);

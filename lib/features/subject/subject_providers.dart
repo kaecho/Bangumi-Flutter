@@ -137,12 +137,15 @@ final subjectCharactersProvider = FutureProvider.family<List<CharacterVo>, int>(
   },
 );
 
-/// 制作人员: /v0/subjects/{id}/persons
+/// 制作人员: 主站 HTML /subject/{id}/persons (原版 cheerioPersons)
 final subjectPersonsProvider = FutureProvider.family<List<PersonVo>, int>((
   ref,
   id,
 ) async {
   final client = ref.read(apiClientProvider);
+  final body = await client.get(htmlSubjectPersons(id), host: kHost);
+  final html = parseSubjectPersons(body as String);
+  if (html.isNotEmpty) return html;
   final raw = await client.get(apiV0SubjectPersons(id));
   return (raw as List)
       .whereType<Map<String, dynamic>>()
@@ -267,6 +270,42 @@ final monoSubjectsProvider =
           .toList();
     });
 
+/// 人物饰演角色: 主站 HTML /person/{id}/works/voice
+final personVoicesProvider =
+    FutureProvider.family<MonoVoicesPage, ({int id, String position})>((
+      ref,
+      arg,
+    ) async {
+      final client = ref.read(apiClientProvider);
+      final body = await client.get(
+        htmlMonoVoices(arg.id, position: arg.position),
+        host: kHost,
+      );
+      return parseMonoVoices(body as String);
+    });
+
+/// 人物作品: 主站 HTML /{person|character}/{id}/works
+final monoWorksProvider =
+    FutureProvider.family<
+      MonoWorksPage,
+      ({String type, int id, String position, String sort})
+    >((ref, arg) async {
+      final client = ref.read(apiClientProvider);
+      final body = await client.get(
+        htmlMonoWorks(arg.type, arg.id, position: arg.position, sort: arg.sort),
+        host: kHost,
+      );
+      return parseMonoWorks(body as String);
+    });
+
+/// 人物详情「最近演出角色」预览
+final personRecentVoicesProvider =
+    FutureProvider.family<List<MonoVoiceItem>, int>((ref, id) async {
+      final client = ref.read(apiClientProvider);
+      final body = await client.get(htmlPersonPage(id), host: kHost);
+      return parsePersonRecentVoices(body as String);
+    });
+
 /// 角色吐槽箱: 主站 HTML /character/{id}
 final monoCommentsProvider = FutureProvider.family<CommentPage, int>((
   ref,
@@ -276,6 +315,22 @@ final monoCommentsProvider = FutureProvider.family<CommentPage, int>((
   final body = await client.get(htmlCharacterPage(id), host: kHost);
   return parseTopicCommentsHtml(body as String);
 });
+
+/// 人物收藏动作: 主站 HTML collectUrl / eraseCollectUrl
+final monoCollectProvider =
+    FutureProvider.family<
+      ({String collectUrl, String eraseCollectUrl}),
+      ({String type, int id})
+    >((ref, arg) async {
+      final client = ref.read(apiClientProvider);
+      final body = await client.get(
+        arg.type == 'person'
+            ? htmlPersonPage(arg.id)
+            : htmlCharacterPage(arg.id),
+        host: kHost,
+      );
+      return parseMonoCollect(body as String);
+    });
 
 /// 分类排行 (typerank): /v0/subjects?tag=&type=
 final typerankProvider =
@@ -470,15 +525,10 @@ Future<void> removeCollectionAction(WidgetRef ref, int subjectId) async {
 
 /// 单集状态: POST /ep/{id}/status/{watched|queue|drop|remove}
 /// 对齐原项目 MODEL_EP_STATUS / doUpdateEpStatus
-Future<void> setEpStatusAction(
-  WidgetRef ref,
-  int epId,
-  String status,
-) async {
+Future<void> setEpStatusAction(WidgetRef ref, int epId, String status) async {
   final client = ref.read(apiClientProvider);
   await client.post(apiEpStatus(epId, status));
 }
-
 
 /// 批量更新进度: POST /subject/{id}/update/watched_eps
 Future<void> updateWatchedEpsAction(

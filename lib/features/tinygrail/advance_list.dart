@@ -6,6 +6,8 @@ import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 进阶推荐条目 (含第一档买卖价与评分)
 class AdvanceItem {
@@ -47,11 +49,11 @@ class AdvanceListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(provider);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
+      appBar: BgmAppBar(
+        title: title,
         actions: [
           if (notePath != null)
-            IconButton(
+            BgmHeaderAction(
               tooltip: '说明',
               icon: const Icon(Icons.info_outline),
               onPressed: () => context.push(notePath!),
@@ -62,51 +64,116 @@ class AdvanceListScreen extends ConsumerWidget {
       body: async.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
-        data: (list) => RefreshIndicator(
+        data: (list) => _AdvanceListBody(
+          list: list,
+          valueLabel: valueLabel,
           onRefresh: () async => ref.invalidate(provider),
-          child: list.isEmpty
-              ? const Empty(text: '暂无推荐, 请先登录或稍后重试')
-              : ListView.separated(
-                  itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final item = list[index];
-                    final chara = item.chara;
-                    return ListTile(
-                      onTap: () => context.push('/tinygrail/chara/${chara.id}'),
-                      leading: Text(
-                        '#${index + 1}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      title: Text(
-                        chara.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        '现价 ¥${tgPrice(chara.current)} · Lv.${chara.level} · 股息 ${chara.rate.toStringAsFixed(2)}',
-                        style: context.ds.meta,
-                      ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '$valueLabel ${item.mark.toStringAsFixed(1)}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          if (item.firstPrice > 0)
-                            Text(
-                              '一档 ¥${tgPrice(item.firstPrice)} (${item.firstAmount})',
-                              style: context.ds.meta,
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
         ),
       ),
+    );
+  }
+}
+
+
+class _AdvanceListBody extends StatefulWidget {
+  final List<AdvanceItem> list;
+  final String valueLabel;
+  final Future<void> Function() onRefresh;
+
+  const _AdvanceListBody({
+    required this.list,
+    required this.valueLabel,
+    required this.onRefresh,
+  });
+
+  @override
+  State<_AdvanceListBody> createState() => _AdvanceListBodyState();
+}
+
+class _AdvanceListBodyState extends State<_AdvanceListBody> {
+  int? _level;
+
+  @override
+  Widget build(BuildContext context) {
+    final levels = widget.list.map((e) => e.chara.level).toSet().toList()
+      ..sort();
+    final filtered = _level == null
+        ? widget.list
+        : widget.list.where((e) => e.chara.level == _level).toList();
+    return Column(
+      children: [
+        if (levels.isNotEmpty)
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                  child: BgmFilterChip(
+                    label: '全部',
+                    selected: _level == null,
+                    onTap: () => setState(() => _level = null),
+                  ),
+                ),
+                for (final lv in levels)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 6,
+                    ),
+                    child: BgmFilterChip(
+                      label: 'Lv.$lv',
+                      selected: _level == lv,
+                      onTap: () => setState(() => _level = lv),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: widget.onRefresh,
+            child: filtered.isEmpty
+                ? const Empty(text: '暂无推荐, 请先登录或稍后重试')
+                : ListView.separated(
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const BgmHairline(),
+                    itemBuilder: (context, index) {
+                      final item = filtered[index];
+                      final chara = item.chara;
+                      return BgmTextRow(
+                        onTap: () =>
+                            context.push('/tinygrail/chara/${chara.id}'),
+                        leading: Text(
+                          '#${index + 1}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        title: chara.name,
+                        subtitle:
+                            '现价 ¥${tgPrice(chara.current)} · Lv.${chara.level} · 股息 ${chara.rate.toStringAsFixed(2)}',
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${widget.valueLabel} ${item.mark.toStringAsFixed(1)}',
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            if (item.firstPrice > 0)
+                              Text(
+                                '一档 ¥${tgPrice(item.firstPrice)} (${item.firstAmount})',
+                                style: context.ds.meta,
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }

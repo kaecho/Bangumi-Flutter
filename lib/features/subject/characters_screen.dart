@@ -10,7 +10,10 @@ import '../../shared/widgets/loading.dart';
 
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import 'subject_notes.dart';
+
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 角色列表
 /// 路由: /subject/:id/characters
@@ -22,35 +25,32 @@ class CharactersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chars = ref.watch(subjectCharactersProvider(id));
+    final name = ref
+        .watch(subjectDetailProvider(id))
+        .valueOrNull
+        ?.subject
+        .displayName;
     return Scaffold(
       appBar: BgmAppBar(
-        title: '角色',
+        title: extraNamedTitle(
+          name,
+          '更多角色',
+          named: (n) => '$n的角色',
+          count: chars.valueOrNull?.length,
+        ),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlSubjectCharacters(id)),
+          BgmHeaderMore.browser(
+            () => openExternalUrl(htmlSubjectCharacters(id)),
           ),
         ],
       ),
 
+
       body: chars.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(subjectCharactersProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => BgmRetry(
+          onRetry: () => ref.invalidate(subjectCharactersProvider(id)),
         ),
         data: (list) => list.isEmpty
             ? const Empty(text: '暂无角色')

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'advance_list.dart';
+import 'tinygrail_notes.dart';
+
 
 /// 拍卖推荐
 class TinygrailAdvanceAuctionScreen extends StatelessWidget {
@@ -12,6 +14,7 @@ class TinygrailAdvanceAuctionScreen extends StatelessWidget {
       title: '拍卖推荐',
       provider: advanceAuctionProvider,
       valueLabel: '回报',
+      notePath: tinygrailAdvanceAuctionNotePath(),
     );
   }
 }

@@ -8,8 +8,13 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../shared/models/subject.dart';
+
+import '../../design_system/design_system.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import 'package:go_router/go_router.dart';
 import 'user_models.dart' show basicKatakanaToRomaji;
 
 /// 本地管理文件夹
@@ -142,6 +147,9 @@ final smbControllerProvider = NotifierProvider<SmbController, List<SmbFolder>>(
   SmbController.new,
 );
 
+/// 原版 SMB Header DATA (配置同步未移植, 只留新增服务)
+const kSmbMoreItems = <(String, String)>[('add', '新增服务')];
+
 /// 本地管理 (文件夹 + 条目)
 class SmbScreen extends ConsumerWidget {
   const SmbScreen({super.key});
@@ -150,74 +158,65 @@ class SmbScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final folders = ref.watch(smbControllerProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('本地管理'),
-
+      appBar: BgmAppBar(
+        title: '本地管理',
         actions: [
-          PopupMenuButton<String>(
-            tooltip: '更多',
+          BgmHeaderMore(
+            items: kSmbMoreItems,
             onSelected: (v) {
-              if (v == 'add') {
-                unawaited(_showFolderDialog(context, ref));
-              }
+              if (v == 'add') unawaited(_showFolderDialog(context, ref));
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'add', child: Text('新增服务')),
-            ],
           ),
         ],
       ),
-
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showFolderDialog(context, ref),
-        icon: const Icon(Icons.create_new_folder_outlined),
-        label: const Text('新建文件夹'),
-      ),
       body: folders.isEmpty
-          ? const Center(child: Text('暂无文件夹, 点击右下角新建'))
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('暂无文件夹'),
+                  const SizedBox(height: 12),
+                  BgmButton(
+                    '新建文件夹',
+                    expand: false,
+                    onPressed: () => _showFolderDialog(context, ref),
+                  ),
+                ],
+              ),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: folders.length,
+              separatorBuilder: (_, _) => const BgmHairline(),
               itemBuilder: (context, index) {
                 final folder = folders[index];
-                return Card(
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.folder,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    title: Text(folder.name),
-                    subtitle: Text(
-                      [
-                        if (folder.note.isNotEmpty) folder.note,
-                        '${folder.subjects.length} 个条目',
-                      ].join(' · '),
-                    ),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (action) {
-                        if (action == 'rename') {
-                          unawaited(
-                            _showFolderDialog(context, ref, folder: folder),
-                          );
-                        } else if (action == 'delete') {
-                          unawaited(
-                            ref
-                                .read(smbControllerProvider.notifier)
-                                .removeFolder(folder.id),
-                          );
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(value: 'rename', child: Text('重命名')),
-                        PopupMenuItem(value: 'delete', child: Text('删除')),
-                      ],
-                    ),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => _SmbFolderDetail(folder: folder),
-                      ),
-                    ),
+                return BgmTextRow(
+                  leading: Icon(Icons.folder, color: context.ds.accent),
+                  title: folder.name,
+                  subtitle: [
+                    if (folder.note.isNotEmpty) folder.note,
+                    '${folder.subjects.length} 个条目',
+                  ].join(' · '),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (action) {
+                      if (action == 'rename') {
+                        unawaited(
+                          _showFolderDialog(context, ref, folder: folder),
+                        );
+                      } else if (action == 'delete') {
+                        unawaited(
+                          ref
+                              .read(smbControllerProvider.notifier)
+                              .removeFolder(folder.id),
+                        );
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'rename', child: Text('重命名')),
+                      PopupMenuItem(value: 'delete', child: Text('删除')),
+                    ],
                   ),
+                  onTap: () => context.push('/settings/smb/${folder.id}'),
                 );
               },
             ),
@@ -231,86 +230,80 @@ class SmbScreen extends ConsumerWidget {
   }) async {
     final nameCtrl = TextEditingController(text: folder?.name ?? '');
     final noteCtrl = TextEditingController(text: folder?.note ?? '');
-    await showDialog<void>(
+    await showBgmDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(folder == null ? '新建文件夹' : '重命名'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: '名称'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: noteCtrl,
-              decoration: const InputDecoration(labelText: '备注 (可选)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final name = nameCtrl.text.trim();
-              if (name.isEmpty) return;
-              final controller = ref.read(smbControllerProvider.notifier);
-              if (folder == null) {
-                controller.addFolder(name, noteCtrl.text.trim());
-              } else {
-                controller.renameFolder(folder.id, name, noteCtrl.text.trim());
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('保存'),
-          ),
+      title: folder == null ? '新建文件夹' : '重命名',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          BgmField(controller: nameCtrl, labelText: '名称'),
+          const SizedBox(height: 8),
+          BgmField(controller: noteCtrl, labelText: '备注 (可选)'),
         ],
       ),
+      actions: (ctx) => [
+        BgmButton(
+          '取消',
+          type: BgmButtonType.plain,
+          expand: false,
+          onPressed: () => Navigator.pop(ctx),
+        ),
+        BgmButton(
+          '保存',
+          expand: false,
+          onPressed: () {
+            final name = nameCtrl.text.trim();
+            if (name.isEmpty) return;
+            final controller = ref.read(smbControllerProvider.notifier);
+            if (folder == null) {
+              controller.addFolder(name, noteCtrl.text.trim());
+            } else {
+              controller.renameFolder(folder.id, name, noteCtrl.text.trim());
+            }
+            Navigator.pop(ctx);
+          },
+        ),
+      ],
     );
   }
 }
 
-class _SmbFolderDetail extends ConsumerStatefulWidget {
-  final SmbFolder folder;
+class SmbFolderDetailScreen extends ConsumerStatefulWidget {
+  final String folderId;
 
-  const _SmbFolderDetail({required this.folder});
+  const SmbFolderDetailScreen({super.key, required this.folderId});
 
   @override
-  ConsumerState<_SmbFolderDetail> createState() => _SmbFolderDetailState();
+  ConsumerState<SmbFolderDetailScreen> createState() =>
+      _SmbFolderDetailScreenState();
 }
 
-class _SmbFolderDetailState extends ConsumerState<_SmbFolderDetail> {
+class _SmbFolderDetailScreenState extends ConsumerState<SmbFolderDetailScreen> {
   bool _fetching = false;
 
   Future<void> _addSubject() async {
     final idCtrl = TextEditingController();
-    final id = await showDialog<String>(
+    final id = await showBgmDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('添加条目'),
-        content: TextField(
-          controller: idCtrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: '条目 ID',
-            hintText: '例如 326',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, idCtrl.text.trim()),
-            child: const Text('添加'),
-          ),
-        ],
+      content: BgmField(
+        controller: idCtrl,
+        keyboardType: TextInputType.number,
+        labelText: '条目 ID',
+        hintText: '例如 326',
       ),
+      actions: (ctx) => [
+        BgmButton(
+          '取消',
+          type: BgmButtonType.plain,
+          expand: false,
+          onPressed: () => Navigator.pop(ctx),
+        ),
+        BgmButton(
+          '添加',
+          expand: false,
+          onPressed: () => Navigator.pop(ctx, idCtrl.text.trim()),
+        ),
+      ],
     );
     final sid = int.tryParse(id ?? '');
     if (sid == null || sid <= 0) return;
@@ -322,21 +315,17 @@ class _SmbFolderDetailState extends ConsumerState<_SmbFolderDetail> {
       final subject = Subject.fromJson(data as Map<String, dynamic>);
       await ref
           .read(smbControllerProvider.notifier)
-          .addSubject(widget.folder.id, {
+          .addSubject(widget.folderId, {
             'id': subject.id,
             'name': subject.name,
             'nameCn': subject.nameCn,
             'cover': subject.images.common,
           });
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已添加 ${subject.displayName}')));
+      showBgmToast(context, '已添加 ${subject.displayName}');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('获取条目失败: $e')));
+      showBgmToast(context, '获取条目失败: $e');
     } finally {
       if (mounted) setState(() => _fetching = false);
     }
@@ -345,14 +334,18 @@ class _SmbFolderDetailState extends ConsumerState<_SmbFolderDetail> {
   @override
   Widget build(BuildContext context) {
     final folders = ref.watch(smbControllerProvider);
-    final folder =
-        folders.where((f) => f.id == widget.folder.id).firstOrNull ??
-        widget.folder;
+    final folder = folders.where((f) => f.id == widget.folderId).firstOrNull;
+    if (folder == null) {
+      return const Scaffold(
+        appBar: BgmAppBar(title: '本地管理'),
+        body: Center(child: Text('文件夹不存在')),
+      );
+    }
     return Scaffold(
-      appBar: AppBar(
-        title: Text(folder.name),
+      appBar: BgmAppBar(
+        title: folder.name,
         actions: [
-          IconButton(
+          BgmHeaderAction(
             icon: const Icon(Icons.add),
             tooltip: '添加条目',
             onPressed: _fetching ? null : _addSubject,
@@ -363,8 +356,9 @@ class _SmbFolderDetailState extends ConsumerState<_SmbFolderDetail> {
           ? const Loading()
           : folder.subjects.isEmpty
           ? const Center(child: Text('暂无条目, 点击右上角按 ID 添加'))
-          : ListView.builder(
+          : ListView.separated(
               itemCount: folder.subjects.length,
+              separatorBuilder: (_, _) => const BgmHairline(),
               itemBuilder: (context, index) {
                 final subject = folder.subjects[index];
                 final name = (subject['nameCn'] as String? ?? '').isNotEmpty
@@ -373,26 +367,12 @@ class _SmbFolderDetailState extends ConsumerState<_SmbFolderDetail> {
                 final cover = subject['cover'] as String? ?? '';
                 final jpName = subject['name'] as String? ?? '';
                 final romaji = basicKatakanaToRomaji(jpName);
-                return ListTile(
+                return BgmTextRow(
                   leading: Cover(url: cover, width: 42, height: 56),
-                  title: Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: romaji.isEmpty
-                      ? null
-                      : Text(
-                          romaji,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close),
+                  title: name,
+                  subtitle: romaji.isEmpty ? null : romaji,
+                  trailing: BgmHeaderAction(
+                    icon: const Icon(Icons.close, size: 18),
                     tooltip: '移除',
                     onPressed: () => unawaited(
                       ref
@@ -400,6 +380,10 @@ class _SmbFolderDetailState extends ConsumerState<_SmbFolderDetail> {
                           .removeSubject(folder.id, subject['id'] as int? ?? 0),
                     ),
                   ),
+                  onTap: () {
+                    final sid = subject['id'] as int? ?? 0;
+                    if (sid > 0) context.push('/subject/$sid');
+                  },
                 );
               },
             ),

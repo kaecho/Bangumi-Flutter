@@ -102,9 +102,16 @@ String? bgmUrlToRoute(String url) {
       return null;
     case 'person':
       if (segs.length >= 2 && RegExp(r'^\d+$').hasMatch(segs[1])) {
+        if (segs.length >= 4 && segs[2] == 'works' && segs[3] == 'voice') {
+          return '/mono/person/${segs[1]}/voices';
+        }
+        if (segs.length >= 3 && segs[2] == 'works') {
+          return '/subject/${segs[1]}/works';
+        }
         return '/mono/person/${segs[1]}';
       }
       return null;
+
     case 'blog':
       if (segs.length >= 2 && RegExp(r'^\d+$').hasMatch(segs[1])) {
         return '/rakuen/blog/${segs[1]}';

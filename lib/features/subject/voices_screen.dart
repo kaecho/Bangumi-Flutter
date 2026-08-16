@@ -11,6 +11,8 @@ import '../../shared/widgets/loading.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import 'subject_notes.dart';
 
 /// 声优 (条目内各角色的配音演员)
 /// 路由: /subject/:id/voices
@@ -22,35 +24,36 @@ class VoicesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chars = ref.watch(subjectCharactersProvider(id));
+    final name = ref
+        .watch(subjectDetailProvider(id))
+        .valueOrNull
+        ?.subject
+        .displayName;
+    final voiceCount = chars.valueOrNull?.fold<int>(
+      0,
+      (n, c) => n + c.actors.length,
+    );
     return Scaffold(
       appBar: BgmAppBar(
-        title: '声优',
+        title: extraNamedTitle(
+          name,
+          '声优',
+          named: (n) => '$n的声优',
+
+          count: voiceCount,
+        ),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlSubjectCharacters(id)),
+          BgmHeaderMore.browser(
+            () => openExternalUrl(htmlSubjectCharacters(id)),
           ),
         ],
       ),
 
       body: chars.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(subjectCharactersProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => BgmRetry(
+          onRetry: () => ref.invalidate(subjectCharactersProvider(id)),
         ),
         data: (list) {
           final voices = <(ActorVo, String)>[]; // (声优, 角色名)

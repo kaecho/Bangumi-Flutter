@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/storage/cache.dart';
 import '../../../core/utils/display.dart';
 import '../../../design_system/design_system.dart';
+import '../../../shared/widgets/bgm_button.dart';
+import '../../../shared/widgets/loading.dart';
 
 /// 回复目标 (对齐原项目 showFixedTextarea)
 class ReplyTarget {
@@ -203,10 +205,13 @@ class _FixedTextareaState extends ConsumerState<FixedTextarea> {
               Expanded(
                 child: Text(
                   '登录后回复',
-                  style: TextStyle(fontSize: 13, color: theme.colorScheme.outline),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.outline,
+                  ),
                 ),
               ),
-              TextButton(onPressed: widget.onLogin, child: const Text('去登录')),
+              BgmTextAction('去登录', onPressed: widget.onLogin),
             ],
           ),
         ),
@@ -243,8 +248,7 @@ class _FixedTextareaState extends ConsumerState<FixedTextarea> {
                       ),
                     ),
                     if (widget.onClearTarget != null)
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
+                      BgmHeaderAction(
                         tooltip: '取消引用',
                         onPressed: widget.onClearTarget,
                         icon: const Icon(Icons.close, size: 16),
@@ -255,7 +259,7 @@ class _FixedTextareaState extends ConsumerState<FixedTextarea> {
             Row(
               children: [
                 ...widget.leading,
-                IconButton(
+                BgmHeaderAction(
                   tooltip: '格式',
                   onPressed: () => setState(() {
                     _expanded = !_expanded;
@@ -270,30 +274,21 @@ class _FixedTextareaState extends ConsumerState<FixedTextarea> {
                   ),
                 ),
                 Expanded(
-                  child: TextField(
+                  child: BgmField(
                     controller: widget.controller,
                     minLines: 1,
                     maxLines: _expanded ? 8 : 4,
-                    decoration: InputDecoration(
-                      hintText: widget.hint,
-                      isDense: true,
-                      border: const OutlineInputBorder(),
-                    ),
+                    hintText: widget.hint,
                     textInputAction: TextInputAction.newline,
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(
+                BgmHeaderAction(
                   onPressed: widget.sending ? null : _handleSend,
-                  icon: widget.sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send),
                   tooltip: '发送',
-                  color: theme.colorScheme.primary,
+                  icon: widget.sending
+                      ? const BgmSpinner(size: 18)
+                      : Icon(Icons.send, color: theme.colorScheme.primary),
                 ),
               ],
             ),
@@ -303,26 +298,53 @@ class _FixedTextareaState extends ConsumerState<FixedTextarea> {
                 spacing: 4,
                 runSpacing: 4,
                 children: [
-                  _ToolChip(label: 'BGM', onTap: () => setState(() {
-                    _showBgm = !_showBgm;
-                    _showHistory = false;
-                  })),
-                  _ToolChip(label: '加粗', onTap: () => _insert(kBbcodeTemplates['b']!)),
-                  _ToolChip(label: '斜体', onTap: () => _insert(kBbcodeTemplates['i']!)),
-                  _ToolChip(label: '下划', onTap: () => _insert(kBbcodeTemplates['u']!)),
-                  _ToolChip(label: '删除', onTap: () => _insert(kBbcodeTemplates['s']!)),
-                  _ToolChip(label: '剧透', onTap: () => _insert(kBbcodeTemplates['mask']!)),
-                  _ToolChip(label: '链接', onTap: () => _insert(kBbcodeTemplates['url']!)),
-                  _ToolChip(label: '图片', onTap: () => _insert(kBbcodeTemplates['img']!)),
+                  _ToolChip(
+                    label: 'BGM',
+                    onTap: () => setState(() {
+                      _showBgm = !_showBgm;
+                      _showHistory = false;
+                    }),
+                  ),
+                  _ToolChip(
+                    label: '加粗',
+                    onTap: () => _insert(kBbcodeTemplates['b']!),
+                  ),
+                  _ToolChip(
+                    label: '斜体',
+                    onTap: () => _insert(kBbcodeTemplates['i']!),
+                  ),
+                  _ToolChip(
+                    label: '下划',
+                    onTap: () => _insert(kBbcodeTemplates['u']!),
+                  ),
+                  _ToolChip(
+                    label: '删除',
+                    onTap: () => _insert(kBbcodeTemplates['s']!),
+                  ),
+                  _ToolChip(
+                    label: '剧透',
+                    onTap: () => _insert(kBbcodeTemplates['mask']!),
+                  ),
+                  _ToolChip(
+                    label: '链接',
+                    onTap: () => _insert(kBbcodeTemplates['url']!),
+                  ),
+                  _ToolChip(
+                    label: '图片',
+                    onTap: () => _insert(kBbcodeTemplates['img']!),
+                  ),
                   _ToolChip(
                     label: '图床',
                     onTap: () => openExternalUrl(kImageUploadHost),
                   ),
-                  _ToolChip(label: '历史', onTap: () => setState(() {
-                    _showHistory = !_showHistory;
-                    _showBgm = false;
-                    _history = _readHistory();
-                  })),
+                  _ToolChip(
+                    label: '历史',
+                    onTap: () => setState(() {
+                      _showHistory = !_showHistory;
+                      _showBgm = false;
+                      _history = _readHistory();
+                    }),
+                  ),
                   for (final mark in kReplyMarks)
                     _ToolChip(label: mark, onTap: () => _insertPlain(mark)),
                 ],
@@ -335,10 +357,10 @@ class _FixedTextareaState extends ConsumerState<FixedTextarea> {
                     runSpacing: 6,
                     children: [
                       for (final token in kBgmTvTokens)
-                        ActionChip(
-                          label: Text(token, style: const TextStyle(fontSize: 12)),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => _insertPlain(token),
+                        BgmFilterChip(
+                          label: token,
+                          selected: false,
+                          onTap: () => _insertPlain(token),
                         ),
                     ],
                   ),
@@ -353,16 +375,11 @@ class _FixedTextareaState extends ConsumerState<FixedTextarea> {
                           child: ListView.separated(
                             shrinkWrap: true,
                             itemCount: _history.length,
-                            separatorBuilder: (_, _) => const Divider(height: 1),
+                            separatorBuilder: (_, _) => const BgmHairline(),
                             itemBuilder: (_, i) {
                               final item = _history[i];
-                              return ListTile(
-                                dense: true,
-                                title: Text(
-                                  item,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                              return BgmTextRow(
+                                title: item,
                                 onTap: () => _insertPlain(item),
                               );
                             },
@@ -384,11 +401,7 @@ class _ToolChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ActionChip(
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      visualDensity: VisualDensity.compact,
-      onPressed: onTap,
-    );
+    return BgmFilterChip(label: label, selected: false, onTap: onTap);
   }
 }
 
@@ -428,7 +441,8 @@ String stripQuoteHtml(String html) {
   String related,
   String subReplyUid,
   String postUid,
-})? parseReplySub(String onclick) {
+})?
+parseReplySub(String onclick) {
   final m = RegExp(
     r"subReply\(\s*'([^']*)'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)",
   ).firstMatch(onclick);

@@ -8,7 +8,11 @@ import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import 'widgets/discovery_html.dart';
-import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+
+/// 原版 STATE.top 默认入库
+const kWikiDefaultCate = 2;
+const kWikiDefaultKind = 'latest_all';
 
 /// 维基人列表
 ///
@@ -28,8 +32,8 @@ class WikiScreen extends ConsumerStatefulWidget {
 }
 
 class _WikiScreenState extends ConsumerState<WikiScreen> {
-  int _cate = 0; // 0=编辑 1=关联 2=入库
-  String _kind = 'wiki_act-all';
+  int _cate = kWikiDefaultCate;
+  String _kind = kWikiDefaultKind;
 
   static const _editKinds = <(String id, String label)>[
     ('wiki_act-all', '条目'),
@@ -66,30 +70,13 @@ class _WikiScreenState extends ConsumerState<WikiScreen> {
       appBar: BgmAppBar(
         title: '维基人',
         showBackButton: true,
-        actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl('$kHost/wiki'),
-          ),
-        ],
+        actions: [BgmHeaderMore.browser(() => openExternalUrl('$kHost/wiki'))],
       ),
 
       body: wiki.when(
         loading: () => const Center(child: Loading()),
-        error: (error, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton.tonal(
-                onPressed: () => ref.invalidate(wikiProvider),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (error, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(wikiProvider)),
         data: (data) {
           final kinds = _kinds;
           final current = kinds.any((e) => e.$1 == _kind)
@@ -99,36 +86,29 @@ class _WikiScreenState extends ConsumerState<WikiScreen> {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 0, label: Text('编辑')),
-                    ButtonSegment(value: 1, label: Text('关联')),
-                    ButtonSegment(value: 2, label: Text('入库')),
-                  ],
-                  selected: {_cate},
-                  onSelectionChanged: (s) {
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: BgmSegmented<int>(
+                  expand: true,
+                  values: const [(0, '编辑'), (1, '关联'), (2, '入库')],
+                  selected: _cate,
+                  onSelect: (s) {
                     setState(() {
-                      _cate = s.first;
+                      _cate = s;
                       _kind = _kinds.first.$1;
                     });
                   },
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SegmentedButton<String>(
-                    segments: [
-                      for (final (id, label) in kinds)
-                        ButtonSegment(value: id, label: Text(label)),
-                    ],
-                    selected: {current},
-                    onSelectionChanged: (s) => setState(() => _kind = s.first),
-                  ),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: BgmSegmented<String>(
+                  expand: true,
+                  values: kinds,
+                  selected: current,
+                  onSelect: (s) => setState(() => _kind = s),
                 ),
               ),
+
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () => ref.refresh(wikiProvider.future),
@@ -182,22 +162,12 @@ class _WikiScreenState extends ConsumerState<WikiScreen> {
   }
 
   List<Widget> _buildEntries(BuildContext context, List<WikiEntry> entries) {
-    final theme = Theme.of(context);
     return [
       for (final entry in entries)
-        ListTile(
-          dense: true,
+        BgmTextRow(
           leading: const Icon(Icons.edit_note_outlined, size: 20),
-          title: Text(
-            entry.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
-          ),
-          subtitle: Text(
-            '${entry.username} · ${entry.time}',
-            style: context.ds.meta,
-          ),
+          title: entry.name,
+          subtitle: '${entry.username} · ${entry.time}',
           onTap: entry.href.isEmpty
               ? null
               : () => context.push(

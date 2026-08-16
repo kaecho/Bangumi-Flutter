@@ -7,6 +7,7 @@ import '../../core/api/api_endpoints.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 评分月刊数据 (原项目公开 CDN 静态数据)
 class VibMonth {
@@ -69,6 +70,17 @@ class VibItem {
   );
 }
 
+/// 原版 Title: `202507 (7月1日到7月31日)` → `202507 (7月1日至7月31日)`
+String formatVibHeading(VibMonth month) {
+  final title = month.title.trim();
+  final desc = month.desc.trim().replaceAll('日到', '至');
+  if (title.isEmpty) return desc;
+  if (desc.isEmpty) return title;
+  return '$title ($desc)';
+}
+
+const kVibGroupLabel = '小组讨论';
+
 /// 评分月刊
 final vibProvider = FutureProvider<List<VibMonth>>((ref) async {
   final client = ref.read(apiClientProvider);
@@ -79,48 +91,101 @@ final vibProvider = FutureProvider<List<VibMonth>>((ref) async {
       .toList();
 });
 
-class VibScreen extends ConsumerWidget {
+class VibScreen extends ConsumerStatefulWidget {
   const VibScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VibScreen> createState() => _VibScreenState();
+}
+
+class _VibScreenState extends ConsumerState<VibScreen> {
+  int _index = 0;
+
+  void _select(int index) {
+    if (index < 0) return;
+    setState(() => _index = index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final months = ref.watch(vibProvider);
     return Scaffold(
       appBar: BgmAppBar(
         title: 'VIB 数据月刊',
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '小组讨论',
-
-            icon: const Icon(Icons.forum_outlined),
-            onPressed: () => context.push('/rakuen/group/qpz'),
+          months.maybeWhen(
+            data: (list) => BgmHeaderMore(
+              items: [
+                (kVibGroupLabel, kVibGroupLabel),
+                for (final month in list) (month.title, month.title),
+              ],
+              onSelected: (value) {
+                if (value == kVibGroupLabel) {
+                  context.push('/rakuen/group/qpz');
+                  return;
+                }
+                final index = list.indexWhere((e) => e.title == value);
+                _select(index);
+              },
+            ),
+            orElse: () => BgmHeaderMore(
+              items: const [(kVibGroupLabel, kVibGroupLabel)],
+              onSelected: (_) => context.push('/rakuen/group/qpz'),
+            ),
           ),
         ],
       ),
-
       body: months.when(
         loading: () => const Center(child: Loading()),
-        error: (error, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton.tonal(
-                onPressed: () => ref.invalidate(vibProvider),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
-        data: (list) => RefreshIndicator(
-          onRefresh: () => ref.refresh(vibProvider.future),
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 24),
-            children: [for (final month in list) _MonthSection(month: month)],
-          ),
-        ),
+        error: (error, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(vibProvider)),
+        data: (list) {
+          if (list.isEmpty) {
+            return const Center(child: Text('暂无月刊'));
+          }
+          final index = _index.clamp(0, list.length - 1);
+          final current = list[index];
+          final older = index + 1 < list.length ? list[index + 1] : null;
+          final newer = index > 0 ? list[index - 1] : null;
+          return RefreshIndicator(
+            onRefresh: () => ref.refresh(vibProvider.future),
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    formatVibHeading(current),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                _MonthSection(month: current),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Row(
+                    children: [
+                      if (older != null)
+                        BgmTextAction(
+                          older.title,
+                          onPressed: () => _select(index + 1),
+                        ),
+                      const Spacer(),
+                      if (newer != null)
+                        BgmTextAction(
+                          newer.title,
+                          onPressed: () => _select(index - 1),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -133,15 +198,8 @@ class _MonthSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExpansionTile(
-      initiallyExpanded: false,
-      title: Text(
-        '${month.title} 月刊',
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-      ),
-      subtitle: month.desc.isEmpty
-          ? null
-          : Text(month.desc, style: const TextStyle(fontSize: 11)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final block in month.blocks)
           Padding(
@@ -151,14 +209,8 @@ class _MonthSection extends StatelessWidget {
               children: [
                 SectionHeader(title: block.title),
                 for (final item in block.items)
-                  ListTile(
-                    dense: true,
-                    title: Text(
-                      item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13),
-                    ),
+                  BgmTextRow(
+                    title: item.title,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

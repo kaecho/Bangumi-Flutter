@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../shared/widgets/cover.dart';
+
 import '../../shared/widgets/loading.dart';
+
+import '../../shared/widgets/app_bar.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
-import '../../design_system/design_system.dart';
 
 /// 圣殿列表 (最近圣殿)
 class TinygrailTemplesScreen extends ConsumerWidget {
@@ -15,7 +18,7 @@ class TinygrailTemplesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(templesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('圣殿列表')),
+      appBar: const BgmAppBar(title: '最新圣殿'),
       body: async.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -23,20 +26,53 @@ class TinygrailTemplesScreen extends ConsumerWidget {
           onRefresh: () async => ref.invalidate(templesProvider),
           child: list.isEmpty
               ? const Empty(text: '暂无圣殿')
-              : ListView.separated(
+              : GridView.builder(
+                  padding: const EdgeInsets.all(8),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childAspectRatio: 0.72,
+                  ),
                   itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final item = list[index];
-                    return ListTile(
-                      onTap: () => context.push('/tinygrail/chara/${item.id}'),
-                      leading: Text('#${index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(
-                        '${item.nickname} · Lv.${item.level} · 献祭 ${tgAmount(item.sacrifices)}',
-                        style: context.ds.meta,
+                    final cover = (item.cover.isNotEmpty
+                            ? item.cover
+                            : item.avatar)
+                        .replaceFirst('//', 'https://');
+                    return GestureDetector(
+                      onTap: () =>
+                          context.push('/tinygrail/chara/${item.id}'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: Cover(
+                              url: cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              radius: 6,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            item.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            '${item.nickname} · Lv.${item.level}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
-                      trailing: Text(tgMoney(item.assets), style: const TextStyle(fontWeight: FontWeight.w600)),
                     );
                   },
                 ),

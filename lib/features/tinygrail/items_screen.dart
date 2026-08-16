@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_notes.dart';
@@ -15,17 +18,12 @@ class TinygrailItemsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(itemsProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('我的道具'),
+      appBar: BgmAppBar(
+        title: '我的道具',
         actions: [
-          PopupMenuButton<String>(
-            tooltip: '说明',
-            icon: const Icon(Icons.info_outline),
+          BgmHeaderMore(
+            items: [for (final name in kTinygrailItemNoteNames) (name, name)],
             onSelected: (name) => context.push(tinygrailItemNotePath(name)),
-            itemBuilder: (_) => [
-              for (final name in kTinygrailItemNoteNames)
-                PopupMenuItem(value: name, child: Text(name)),
-            ],
           ),
         ],
       ),
@@ -39,17 +37,13 @@ class TinygrailItemsScreen extends ConsumerWidget {
               ? const Empty(text: '暂无道具')
               : ListView.separated(
                   itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const BgmHairline(),
                   itemBuilder: (context, index) {
                     final item = list[index];
-                    return ListTile(
+                    return BgmTextRow(
                       leading: _ItemIcon(name: item.name),
-                      title: Text(item.name),
-                      subtitle: Text(
-                        item.line,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      title: item.name,
+                      subtitle: item.line,
                       trailing: Text(
                         'x${item.amount}',
                         style: const TextStyle(fontWeight: FontWeight.w700),

@@ -3,6 +3,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/utils/display.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/loading.dart';
 
 /// 内置浏览器 (移植自原项目 screens/web-view/web-browser)
 ///
@@ -58,30 +61,25 @@ class _WebBrowserScreenState extends State<WebBrowserScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.title ?? '浏览器',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+      appBar: BgmAppBar(
+        title: widget.title ?? '浏览器',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '刷新',
             icon: const Icon(Icons.refresh),
             onPressed: _refresh,
           ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: '浏览器查看',
             icon: const Icon(Icons.open_in_new),
             onPressed: () => openExternalUrl(widget.url),
           ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: '分享',
             icon: const Icon(Icons.share_outlined),
             onPressed: _share,
           ),
         ],
-
         bottom: _loading
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(2),
@@ -89,27 +87,12 @@ class _WebBrowserScreenState extends State<WebBrowserScreen> {
               )
             : null,
       ),
+
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
-          if (_loading && _progress == 0)
-            const Center(child: CircularProgressIndicator()),
-          if (_error != null)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, size: 40),
-                    const SizedBox(height: 8),
-                    Text(_error!, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    FilledButton(onPressed: _refresh, child: const Text('重试')),
-                  ],
-                ),
-              ),
-            ),
+          if (_loading && _progress == 0) const Loading(),
+          if (_error != null) BgmRetry(onRetry: _refresh, message: _error),
         ],
       ),
     );

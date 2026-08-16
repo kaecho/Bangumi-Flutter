@@ -75,7 +75,6 @@ class TopicDetailNotifier extends FamilyAsyncNotifier<TopicPageData, String> {
           close: current.close,
         ),
       );
-
     } catch (_) {}
   }
 

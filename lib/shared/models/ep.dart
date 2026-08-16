@@ -15,6 +15,9 @@ class Ep {
   final String desc;
   final int disc;
 
+  /// 旧 API 放送状态: Air / Today / NA
+  final String status;
+
   const Ep({
     this.id = 0,
     this.url = '',
@@ -27,6 +30,7 @@ class Ep {
     this.comment = 0,
     this.desc = '',
     this.disc = 0,
+    this.status = '',
   });
 
   factory Ep.fromJson(Map<String, dynamic> json) => Ep(
@@ -41,6 +45,7 @@ class Ep {
     comment: (json['comment'] as num?)?.toInt() ?? 0,
     desc: json['desc'] as String? ?? '',
     disc: (json['disc'] as num?)?.toInt() ?? 0,
+    status: json['status'] as String? ?? '',
   );
 
   String get displayName => cnjp(name, nameCn);

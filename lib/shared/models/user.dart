@@ -19,20 +19,23 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) => User(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        url: json['url'] as String? ?? '',
-        username: json['username'] as String? ?? '',
-        nickname: json['nickname'] as String? ?? '',
-        avatar: UserAvatar.fromJson(json['avatar'] as Map<String, dynamic>? ?? const {}),
-        sign: json['sign'] as String? ?? '',
-        userGroup: (json['user_group'] as num?)?.toInt() ?? 3,
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    url: json['url'] as String? ?? '',
+    username: json['username'] as String? ?? '',
+    nickname: json['nickname'] as String? ?? '',
+    avatar: UserAvatar.fromJson(
+      json['avatar'] as Map<String, dynamic>? ?? const {},
+    ),
+    sign: json['sign'] as String? ?? '',
+    userGroup: (json['user_group'] as num?)?.toInt() ?? 3,
+  );
 
   /// 展示名: 昵称优先
   String get displayName => nickname.isNotEmpty ? nickname : username;
 
   /// 头像地址, 优先大图
-  String get avatarUrl => avatar.large.isNotEmpty ? avatar.large : avatar.medium;
+  String get avatarUrl =>
+      avatar.large.isNotEmpty ? avatar.large : avatar.medium;
 }
 
 class UserAvatar {
@@ -43,10 +46,10 @@ class UserAvatar {
   const UserAvatar({this.large = '', this.medium = '', this.small = ''});
 
   factory UserAvatar.fromJson(Map<String, dynamic> json) => UserAvatar(
-        large: json['large'] as String? ?? '',
-        medium: json['medium'] as String? ?? '',
-        small: json['small'] as String? ?? '',
-      );
+    large: json['large'] as String? ?? '',
+    medium: json['medium'] as String? ?? '',
+    small: json['small'] as String? ?? '',
+  );
 }
 
 /// 用户组文案

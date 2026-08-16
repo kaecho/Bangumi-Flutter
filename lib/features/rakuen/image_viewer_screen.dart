@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_view/photo_view.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 图片全屏查看器
 /// 路由: /rakuen/image?url=...
@@ -28,7 +29,7 @@ class ImageViewerScreen extends StatelessWidget {
               alignment: Alignment.topRight,
               child: Padding(
                 padding: const EdgeInsets.all(8),
-                child: IconButton(
+                child: BgmHeaderAction(
                   icon: const Icon(Icons.close, color: Colors.white),
                   onPressed: () => context.pop(),
                 ),

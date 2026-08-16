@@ -12,10 +12,10 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/auth/site_cookies.dart';
 import '../../core/storage/settings_store.dart';
 import '../../core/utils/display.dart';
+
 import '../../features/rakuen/rakuen_providers.dart';
 import '../../features/rakuen/rakuen_settings.dart';
 import '../../features/tinygrail/tinygrail_api.dart';
-import '../subject/collection_sheet.dart';
 
 import '../../features/tinygrail/tinygrail_models.dart';
 import '../../shared/models/collection.dart';
@@ -24,12 +24,10 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 
-import 'blogs_screen.dart';
-import 'catalogs_screen.dart';
-import 'friends_screen.dart';
 import 'user_models.dart';
 import 'user_timeline_screen.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 用户信息 (旧版 API /user/{uid})
 final zoneUserProvider = FutureProvider.family<User, String>((
@@ -69,94 +67,48 @@ final zoneHomeExtraProvider = FutureProvider.family<UserHomeExtra, String>((
   }
 });
 
-/// 收藏 tab 数据 (v0 分页)
 class ZoneCollectionsData {
   final List<CollectionItem> items;
   final int offset;
   final int total;
   final bool hasMore;
+  final int pageTotal;
 
   const ZoneCollectionsData({
     this.items = const [],
     this.offset = 0,
     this.total = 0,
     this.hasMore = true,
+    this.pageTotal = 1,
   });
 }
 
-final zoneCollectionsProvider =
-    AsyncNotifierProvider.family<
-      ZoneCollectionsNotifier,
-      ZoneCollectionsData,
-      ({String userId, String type, int status})
-    >(ZoneCollectionsNotifier.new);
+typedef ZoneOverviewArg = ({String userId, String type});
 
-class ZoneCollectionsNotifier
-    extends
-        FamilyAsyncNotifier<
-          ZoneCollectionsData,
-          ({String userId, String type, int status})
-        > {
+final zoneCollectionsOverviewProvider =
+    FutureProvider.family<List<ZoneCollectionSection>, ZoneOverviewArg>((
+      ref,
+      arg,
+    ) async {
+      final data = await ref
+          .read(apiClientProvider)
+          .get(
+            apiUserCollections(arg.type, arg.userId),
+            query: {'max_results': '100', 'app_id': kAppId},
+          );
+      return parseZoneCollectionsOverview(data);
+    });
+
+class ZoneTypeController extends Notifier<String> {
   @override
-  Future<ZoneCollectionsData> build(arg) => _fetch(0);
+  String build() => 'anime';
 
-  Future<ZoneCollectionsData> _fetch(int offset) async {
-    final client = ref.read(apiClientProvider);
-    final status = arg.status == 0 ? '0' : '${arg.status}';
-    final data = await client.get(
-      apiV0UsersCollections(
-        arg.userId,
-        '${v0SubjectTypeInt(arg.type)}',
-        100,
-        offset,
-        status,
-      ),
-    );
-    final parsed = UserCollection.fromJson(data as Map<String, dynamic>);
-    return ZoneCollectionsData(
-      items: parsed.data,
-      offset: parsed.offset,
-      total: parsed.total,
-      hasMore: parsed.offset + parsed.data.length < parsed.total,
-    );
-  }
-
-  Future<void> loadMore() async {
-    final current = state.valueOrNull;
-    if (current == null || !current.hasMore) return;
-    try {
-      final next = await _fetch(current.offset + 100);
-      state = AsyncData(
-        ZoneCollectionsData(
-          items: [...current.items, ...next.items],
-          offset: next.offset,
-          total: next.total,
-          hasMore: next.hasMore,
-        ),
-      );
-    } catch (_) {}
-  }
+  void setType(String type) => state = type;
 }
 
-/// 收藏 tab 过滤状态 (类型 + 状态)
-class ZoneFilterController extends Notifier<({String type, int status})> {
-  @override
-  ({String type, int status}) build() => (type: 'anime', status: 0);
-
-  void setFilter(String type, int status) {
-    final store = ref.read(settingsStoreProvider);
-    if (store.zoneCollapse && status == 0) {
-      state = (type: type, status: CollectionStatus.doing);
-      return;
-    }
-    state = (type: type, status: status);
-  }
-}
-
-final zoneScreenControllerProvider =
-    NotifierProvider<ZoneFilterController, ({String type, int status})>(
-      ZoneFilterController.new,
-    );
+final zoneTypeProvider = NotifierProvider<ZoneTypeController, String>(
+  ZoneTypeController.new,
+);
 
 /// 用户空间 (bgm.tv 用户主页)
 class ZoneScreen extends ConsumerStatefulWidget {
@@ -170,7 +122,7 @@ class ZoneScreen extends ConsumerStatefulWidget {
 
 class _ZoneScreenState extends ConsumerState<ZoneScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 9, vsync: this);
+  late final TabController _tab = TabController(length: 6, vsync: this);
 
   @override
   void dispose() {
@@ -179,33 +131,22 @@ class _ZoneScreenState extends ConsumerState<ZoneScreen>
   }
 
   void _selectStat(String type, int status) {
-    final store = ref.read(settingsStoreProvider);
-    final next = store.zoneCollapse && status == 0
-        ? CollectionStatus.doing
-        : status;
-    ref.read(zoneScreenControllerProvider.notifier).setFilter(type, next);
+    ref.read(zoneTypeProvider.notifier).setType(type);
     _tab.animateTo(1);
   }
 
   @override
   Widget build(BuildContext context) {
     final userAsync = ref.watch(zoneUserProvider(widget.userId));
-    final filter = ref.watch(zoneScreenControllerProvider);
+    final type = ref.watch(zoneTypeProvider);
+    final typeLabel = kUserTypeTabs
+        .firstWhere((e) => e.$1 == type, orElse: () => ('anime', '动画'))
+        .$2;
     return Scaffold(
       body: userAsync.when(
         loading: () => const Loading(),
-        error: (_, _) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('加载失败'),
-              TextButton(
-                onPressed: () =>
-                    ref.invalidate(zoneUserProvider(widget.userId)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (_, _) => BgmRetry(
+          onRetry: () => ref.invalidate(zoneUserProvider(widget.userId)),
         ),
         data: (user) => Column(
           children: [
@@ -214,20 +155,28 @@ class _ZoneScreenState extends ConsumerState<ZoneScreen>
               userId: widget.userId,
               onStatTap: _selectStat,
             ),
-            TabBar(
+            BgmControlledTabStrip(
               controller: _tab,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              tabs: const [
-                Tab(text: '关于'),
-                Tab(text: '收藏'),
-                Tab(text: '统计'),
-                Tab(text: '时间线'),
-                Tab(text: '超展开'),
-                Tab(text: '日志'),
-                Tab(text: '目录'),
-                Tab(text: '好友'),
-                Tab(text: '小圣杯'),
+              scrollable: true,
+              tabs: [
+                const Text('关于'),
+                PopupMenuButton<String>(
+                  tooltip: '收藏类型',
+                  onSelected: (v) =>
+                      ref.read(zoneTypeProvider.notifier).setType(v),
+                  itemBuilder: (_) => [
+                    for (final t in kUserTypeTabs)
+                      PopupMenuItem(value: t.$1, child: Text(t.$2)),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('收藏 $typeLabel'),
+                  ),
+                ),
+                const Text('统计'),
+                const Text('时间线'),
+                const Text('超展开'),
+                const Text('小圣杯'),
               ],
             ),
             Expanded(
@@ -235,18 +184,10 @@ class _ZoneScreenState extends ConsumerState<ZoneScreen>
                 controller: _tab,
                 children: [
                   _ZoneAboutTab(user: user),
-                  _ZoneCollectionsTab(
-                    userId: widget.userId,
-                    type: filter.type,
-                    status: filter.status,
-                  ),
+                  _ZoneCollectionsTab(userId: widget.userId, type: type),
                   _ZoneStatsTab(user: user),
                   UserTimelineBody(userId: widget.userId),
                   _ZoneRakuenTab(userId: widget.userId),
-                  UserBlogsList(userId: widget.userId),
-                  UserCatalogsTabs(userId: widget.userId),
-
-                  FriendsList(userId: widget.userId),
                   _ZoneTinygrailTab(user: user),
                 ],
               ),
@@ -355,7 +296,7 @@ class _ZoneHeader extends ConsumerWidget {
                 Positioned(
                   top: 8,
                   right: 8,
-                  child: IconButton(
+                  child: BgmHeaderAction(
                     icon: const Icon(
                       Icons.settings_outlined,
                       color: Colors.white,
@@ -396,26 +337,31 @@ class _ZoneHeader extends ConsumerWidget {
             spacing: 8,
             runSpacing: 4,
             children: [
-              ActionChip(
-                label: const Text('日志'),
-                onPressed: () => context.push('/user/$userId/blogs'),
+              BgmFilterChip(
+                label: '日志',
+                selected: false,
+                onTap: () => context.push('/user/$userId/blogs'),
               ),
-              ActionChip(
-                label: const Text('目录'),
-                onPressed: () => context.push('/user/$userId/catalogs'),
+              BgmFilterChip(
+                label: '目录',
+                selected: false,
+                onTap: () => context.push('/user/$userId/catalogs'),
               ),
-              ActionChip(
-                label: const Text('好友'),
-                onPressed: () => context.push('/user/$userId/friends'),
+              BgmFilterChip(
+                label: '好友',
+                selected: false,
+                onTap: () => context.push('/user/$userId/friends'),
               ),
               if (!isMe)
-                ActionChip(
-                  label: const Text('发短信'),
-                  onPressed: () => context.push('/pm/chat/${user.id}'),
+                BgmFilterChip(
+                  label: '发短信',
+                  selected: false,
+                  onTap: () => context.push('/pm/chat/${user.id}'),
                 ),
-              ActionChip(
-                label: const Text('浏览器查看'),
-                onPressed: () => context.push(
+              BgmFilterChip(
+                label: '浏览器查看',
+                selected: false,
+                onTap: () => context.push(
                   '/web/${Uri.encodeComponent('$kHost/user/$userId')}',
                 ),
               ),
@@ -427,7 +373,7 @@ class _ZoneHeader extends ConsumerWidget {
         // 收藏统计
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-          child: Card(
+          child: BgmCard(
             child: stats.when(
               loading: () => const SizedBox(height: 90),
               error: (_, _) => const SizedBox(height: 90),
@@ -545,37 +491,31 @@ class _ZoneRemarkChip extends ConsumerWidget {
     String current,
   ) async {
     final controller = TextEditingController(text: current);
-    final saved = await showDialog<bool>(
+    final saved = await showBgmDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('备注'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('在页面中出现该用户，使用备注内容高亮覆盖'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: '输入备注',
-                isDense: true,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('保存'),
-          ),
+      title: '备注',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('在页面中出现该用户，使用备注内容高亮覆盖'),
+          const SizedBox(height: 8),
+          BgmField(controller: controller, autofocus: true, hintText: '输入备注'),
         ],
       ),
+      actions: (ctx) => [
+        BgmButton(
+          '取消',
+          type: BgmButtonType.plain,
+          expand: false,
+          onPressed: () => Navigator.pop(ctx, false),
+        ),
+        BgmButton(
+          '保存',
+          expand: false,
+          onPressed: () => Navigator.pop(ctx, true),
+        ),
+      ],
     );
     final text = controller.text;
     controller.dispose();
@@ -623,6 +563,21 @@ class _ZoneJoinRecent extends ConsumerWidget {
   }
 }
 
+/// 原版空间 MENU_DS + 加好友/绝交/报告疑虑
+List<(String, String)> zoneMoreItems({required bool blocked}) => [
+  ('browser', '浏览器查看'),
+  ('copyLink', '复制链接'),
+  ('copyShare', '复制分享'),
+  ('pm', '发短信'),
+  ('collect', 'TA的收藏'),
+  ('friends', 'TA的好友'),
+  ('revFriends', '谁加TA为好友'),
+  ('characters', 'TA的人物'),
+  ('connect', '加为好友'),
+  if (!blocked) ('block', '绝交'),
+  ('report', '报告疑虑'),
+];
+
 /// 用户空间右上角菜单 (移植自原项目 zone menu: 浏览器/复制/短信/收藏/好友/反向好友/加好友/绝交)
 class _ZoneMenu extends ConsumerWidget {
   final User user;
@@ -638,27 +593,10 @@ class _ZoneMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isBlocked = ref.watch(rakuenSettingsProvider).isUserBlocked(userId);
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Colors.white),
-      tooltip: '更多',
+    return BgmHeaderMore(
+      iconColor: Colors.white,
+      items: zoneMoreItems(blocked: isBlocked),
       onSelected: (action) => _handle(context, ref, action),
-      itemBuilder: (context) => [
-        const PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
-        const PopupMenuItem(value: 'copyLink', child: Text('复制链接')),
-        const PopupMenuItem(value: 'copyShare', child: Text('复制分享文案')),
-        const PopupMenuItem(value: 'pm', child: Text('发短信')),
-        const PopupMenuItem(value: 'collect', child: Text('TA的收藏')),
-        const PopupMenuItem(value: 'friends', child: Text('TA的好友')),
-        const PopupMenuItem(value: 'revFriends', child: Text('谁加TA为好友')),
-        const PopupMenuItem(value: 'characters', child: Text('TA的人物')),
-
-        PopupMenuItem(
-          value: 'connect',
-          child: Text(isBlocked ? '解除绝交' : '加为好友'),
-        ),
-        if (!isBlocked) const PopupMenuItem(value: 'block', child: Text('绝交')),
-        const PopupMenuItem(value: 'report', child: Text('报告疑虑')),
-      ],
     );
   }
 
@@ -689,18 +627,16 @@ class _ZoneMenu extends ConsumerWidget {
       case 'revFriends':
         await context.push('/user/$username/friends?rev=1');
       case 'characters':
-        await context.push('/user/$username/mono');
+        await context.push(
+          '/character?userName=${Uri.encodeQueryComponent(username)}',
+        );
+
       case 'connect':
         await _connectOrUnblock(context, ref, isBlocked: isBlocked);
       case 'block':
         await ref.read(rakuenSettingsProvider.notifier).addBlockUser(userId);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('已绝交'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+          showBgmToast(context, '已绝交', duration: const Duration(seconds: 1));
         }
       case 'report':
         await openExternalUrl('$kHost/report?type=6&id=${user.id}');
@@ -719,9 +655,7 @@ class _ZoneMenu extends ConsumerWidget {
     }
     if (!ref.read(canActAsLoggedInProvider)) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('加好友需要登录 (OAuth 或站点 Cookie)')),
-        );
+        showBgmToast(context, '加好友需要登录 (OAuth 或站点 Cookie)');
       }
       return;
     }
@@ -731,9 +665,7 @@ class _ZoneMenu extends ConsumerWidget {
     } catch (_) {}
     if (gh.isEmpty) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('操作失败, 请确认已配置站点 Cookie')));
+        showBgmToast(context, '操作失败, 请确认已配置站点 Cookie');
       }
       return;
     }
@@ -741,212 +673,137 @@ class _ZoneMenu extends ConsumerWidget {
       final client = ref.read(apiClientProvider);
       await client.post(apiConnect(userId, gh), host: kHost);
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('已发送好友申请')));
+        showBgmToast(context, '已发送好友申请');
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('申请失败, 请稍后重试')));
+        showBgmToast(context, '申请失败, 请稍后重试');
       }
     }
   }
 }
 
-/// 收藏 tab: 类型 + 状态 + 搜索
-class _ZoneCollectionsTab extends StatefulWidget {
+/// 空间收藏概览 (原项目 zone bangumi-list: 状态分组封面, 每组最多 20)
+class _ZoneCollectionsTab extends ConsumerStatefulWidget {
   final String userId;
   final String type;
-  final int status;
 
-  const _ZoneCollectionsTab({
-    required this.userId,
-    required this.type,
-    required this.status,
-  });
+  const _ZoneCollectionsTab({required this.userId, required this.type});
 
   @override
-  State<_ZoneCollectionsTab> createState() => _ZoneCollectionsTabState();
+  ConsumerState<_ZoneCollectionsTab> createState() =>
+      _ZoneCollectionsTabState();
 }
 
-class _ZoneCollectionsTabState extends State<_ZoneCollectionsTab> {
-  String _query = '';
-  bool _grid = false;
+class _ZoneCollectionsTabState extends ConsumerState<_ZoneCollectionsTab> {
+  final _expand = <int, bool>{
+    CollectionStatus.doing: true,
+    CollectionStatus.collect: false,
+    CollectionStatus.wish: false,
+    CollectionStatus.onHold: false,
+    CollectionStatus.dropped: false,
+  };
+
+  void _toggle(int status) {
+    setState(() {
+      if (SettingsStore.instance.zoneCollapse) {
+        for (final key in _expand.keys) {
+          _expand[key] = key == status ? !(_expand[key] ?? false) : false;
+        }
+      } else {
+        _expand[status] = !(_expand[status] ?? false);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final async = ref.watch(
-          zoneCollectionsProvider((
+    final async = ref.watch(
+      zoneCollectionsOverviewProvider((
+        userId: widget.userId,
+        type: widget.type,
+      )),
+    );
+    final store = ref.watch(settingsStoreProvider);
+    return async.when(
+      loading: () => const Loading(),
+      error: (_, _) => BgmRetry(
+        onRetry: () => ref.invalidate(
+          zoneCollectionsOverviewProvider((
             userId: widget.userId,
             type: widget.type,
-            status: widget.status,
           )),
-        );
-        return Column(
+        ),
+      ),
+      data: (sections) {
+        if (sections.isEmpty) {
+          return const Center(child: Text('暂无收藏'));
+        }
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
           children: [
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                children: [
-                  for (final (t, label) in kUserTypeTabs)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: ChoiceChip(
-                        label: Text(label),
-                        selected: widget.type == t,
-                        onSelected: (_) => ref
-                            .read(zoneScreenControllerProvider.notifier)
-                            .setFilter(t, widget.status),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                children: [
-                  for (final (s, label) in kCollectionStatusTabs)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: ChoiceChip(
-                        label: Text(label),
-                        selected: widget.status == s,
-                        onSelected: (_) => ref
-                            .read(zoneScreenControllerProvider.notifier)
-                            .setFilter(widget.type, s),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        prefixIcon: Icon(Icons.search, size: 18),
-                        hintText: '搜索收藏',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (v) => setState(() => _query = v.trim()),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: _grid ? '列表' : '网格',
-                    icon: Icon(_grid ? Icons.view_list : Icons.grid_view),
-                    onPressed: () => setState(() => _grid = !_grid),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: async.when(
-                loading: () => const Loading(),
-                error: (_, _) => const Center(child: Text('加载失败')),
-                data: (data) {
-                  final q = _query.toLowerCase();
-                  final filtered = q.isEmpty
-                      ? data.items
-                      : data.items
-                            .where(
-                              (e) =>
-                                  e.subject.displayName.toLowerCase().contains(
-                                    q,
-                                  ) ||
-                                  e.subject.name.toLowerCase().contains(q),
-                            )
-                            .toList();
-                  if (filtered.isEmpty) {
-                    return const Center(child: Text('暂无收藏'));
-                  }
-                  final store = ref.watch(settingsStoreProvider);
-                  final me = ref.watch(currentUserProvider);
-                  final isMe =
-                      me != null &&
-                      (me.username == widget.userId ||
-                          '${me.id}' == widget.userId);
-                  final showManage = !isMe || store.userShowManage;
-                  final cols = store.userGridNum;
-                  final showMore =
-                      data.hasMore && q.isEmpty && !store.userPagination;
-                  return Column(
+            for (final section in sections) ...[
+              InkWell(
+                onTap: () => _toggle(section.status),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
                     children: [
-                      Expanded(
-                        child: _grid
-                            ? GridView.builder(
-                                padding: const EdgeInsets.all(8),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: cols,
-                                      childAspectRatio: 0.62,
-                                      crossAxisSpacing: 8,
-                                      mainAxisSpacing: 8,
-                                    ),
-                                itemCount: filtered.length,
-                                itemBuilder: (context, index) {
-                                  final item = filtered[index];
-                                  return _ZoneCollectionCard(
-                                    item: item,
-                                    showManage: showManage,
-                                    onManage: () =>
-                                        _openManage(context, item.subject.id),
-                                  );
-                                },
-                              )
-                            : ListView.builder(
-                                itemCount: filtered.length,
-                                itemBuilder: (context, index) {
-                                  final item = filtered[index];
-                                  return _ZoneCollectionRow(
-                                    item: item,
-                                    showManage: showManage,
-                                    commentsFull: store.userCommentsFull,
-                                    commentsLines: store.userCommentsLines,
-                                    onManage: () =>
-                                        _openManage(context, item.subject.id),
-                                  );
-                                },
-                              ),
+                      Text(
+                        section.title,
+                        style: context.ds.bodyStrong.copyWith(fontSize: 15),
                       ),
-                      if (showMore)
-                        TextButton(
-                          onPressed: () => unawaited(
-                            ref
-                                .read(
-                                  zoneCollectionsProvider((
-                                    userId: widget.userId,
-                                    type: widget.type,
-                                    status: widget.status,
-                                  )).notifier,
-                                )
-                                .loadMore(),
-                          ),
-                          child: const Text('加载更多'),
-                        )
-                      else if (store.userPagination)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            '已加载 ${filtered.length} / ${data.total}',
-                            style: context.ds.caption,
-                          ),
-                        ),
+                      const SizedBox(width: 6),
+                      Text('${section.count}', style: context.ds.caption),
+                      const Spacer(),
+                      Icon(
+                        (_expand[section.status] ?? false)
+                            ? Icons.keyboard_arrow_down
+                            : Icons.keyboard_arrow_up,
+                        size: 20,
+                      ),
                     ],
-                  );
-                },
+                  ),
+                ),
               ),
+              if (_expand[section.status] ?? false)
+                _ZoneCoverWrap(items: section.items.take(20).toList()),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                BgmTextAction(
+                  '查看TA的所有收藏',
+                  onPressed: () => context.push('/user/${widget.userId}/list'),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: '空间收藏设置',
+                  onSelected: (value) {
+                    if (value.startsWith('collapse')) {
+                      unawaited(store.setZoneCollapse(!store.zoneCollapse));
+                    } else {
+                      unawaited(
+                        store.setZoneAlignCenter(!store.zoneAlignCenter),
+                      );
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    for (final item in zoneCollectionMoreItems(
+                      collapse: store.zoneCollapse,
+                      alignCenter: store.zoneAlignCenter,
+                    ))
+                      PopupMenuItem(
+                        value: item.startsWith('自动') ? 'collapse' : 'align',
+                        child: Text(item),
+                      ),
+                  ],
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(Icons.settings, size: 16),
+                  ),
+                ),
+              ],
             ),
           ],
         );
@@ -955,88 +812,59 @@ class _ZoneCollectionsTabState extends State<_ZoneCollectionsTab> {
   }
 }
 
-void _openManage(BuildContext context, int subjectId) {
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (_) => CollectionSheet(subjectId: subjectId),
-  );
-}
+class _ZoneCoverWrap extends StatelessWidget {
+  final List<ZoneCollectionCover> items;
 
-class _ZoneCollectionCard extends StatelessWidget {
-  final CollectionItem item;
-  final bool showManage;
-  final VoidCallback onManage;
-
-  const _ZoneCollectionCard({
-    required this.item,
-    required this.showManage,
-    required this.onManage,
-  });
+  const _ZoneCoverWrap({required this.items});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => context.push('/subject/${item.subject.id}'),
-      onLongPress: showManage ? onManage : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Cover(
-                    url: item.subject.images.common,
-                    width: double.infinity,
-                    height: double.infinity,
-                    radius: 6,
-                    type: item.subject.type,
+    final alignCenter = SettingsStore.instance.zoneAlignCenter;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = MediaQuery.sizeOf(context).width;
+        final cols = width >= 600 ? 7 : 5;
+        final itemW = (constraints.maxWidth - 8 * (cols - 1)) / cols;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 12,
+          children: [
+            for (final item in items)
+              SizedBox(
+                width: itemW,
+                child: InkWell(
+                  onTap: () => context.push('/subject/${item.id}'),
+                  child: Column(
+                    crossAxisAlignment: alignCenter
+                        ? CrossAxisAlignment.center
+                        : CrossAxisAlignment.start,
+                    children: [
+                      Cover(
+                        url: item.cover,
+                        width: itemW,
+                        height: itemW * 1.4,
+                        radius: 6,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        item.displayName,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: alignCenter
+                            ? TextAlign.center
+                            : TextAlign.start,
+                        style: context.ds.tiny.copyWith(
+                          fontSize: item.displayName.length > 14 ? 10 : 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                if (showManage)
-                  Positioned(
-                    right: 2,
-                    top: 2,
-                    child: IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: '收藏管理',
-                      icon: const Icon(
-                        Icons.star_outline,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                      onPressed: onManage,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            item.subject.displayName,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: SettingsStore.instance.zoneAlignCenter
-                ? TextAlign.center
-                : TextAlign.start,
-            style: context.ds.caption,
-          ),
-          if (SettingsStore.instance.userShowYear &&
-              item.subject.airDate.isNotEmpty)
-            Text(
-              formatSubjectAirDate(
-                item.subject.airDate,
-                showMonth: item.subject.type == 'anime',
               ),
-              textAlign: SettingsStore.instance.zoneAlignCenter
-                  ? TextAlign.center
-                  : TextAlign.start,
-              style: context.ds.tiny,
-            ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1052,111 +880,15 @@ class _ZoneAboutTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('昵称'),
-          subtitle: Text(user.displayName),
+        BgmSettingRow(title: '昵称', subtitle: user.displayName),
+        BgmSettingRow(
+          title: '用户名',
+          subtitle: user.username.isEmpty ? '${user.id}' : user.username,
         ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('用户名'),
-          subtitle: Text(user.username.isEmpty ? '${user.id}' : user.username),
-        ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('用户组'),
-          subtitle: Text(group),
-        ),
+        BgmSettingRow(title: '用户组', subtitle: group),
         if (user.sign.isNotEmpty)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('签名'),
-            subtitle: Text(user.sign),
-          ),
+          BgmSettingRow(title: '签名', subtitle: user.sign),
       ],
-    );
-  }
-}
-
-class _ZoneCollectionRow extends StatelessWidget {
-  final CollectionItem item;
-  final bool showManage;
-  final bool commentsFull;
-  final int commentsLines;
-  final VoidCallback onManage;
-
-  const _ZoneCollectionRow({
-    required this.item,
-    required this.showManage,
-    required this.commentsFull,
-    required this.commentsLines,
-    required this.onManage,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final comment = item.comment.trim();
-    final meta =
-        '${SubjectType.statusText(item.type, item.subject.type)} · 第${item.epStatus}话';
-
-    final commentText = comment.isEmpty
-        ? null
-        : Text(
-            comment,
-            maxLines: commentsLines,
-            overflow: commentsLines >= 100
-                ? TextOverflow.visible
-                : TextOverflow.ellipsis,
-            style: context.ds.caption,
-          );
-    return InkWell(
-      onTap: () => context.push('/subject/${item.subject.id}'),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Cover(
-                  url: item.subject.images.common,
-                  width: 42,
-                  height: 56,
-                  type: item.subject.type,
-                ),
-
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.subject.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(meta, style: context.ds.caption),
-                      if (!commentsFull && commentText != null) commentText,
-                    ],
-                  ),
-                ),
-                if (showManage)
-                  IconButton(
-                    tooltip: '收藏管理',
-                    icon: const Icon(Icons.star_outline, size: 20),
-                    onPressed: onManage,
-                  ),
-              ],
-            ),
-            if (commentsFull && commentText != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8, right: 8),
-                child: commentText,
-              ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1174,20 +906,17 @@ class _ZoneStatsTab extends StatelessWidget {
       children: [
         Text('原版统计图表依赖云端 KV 快照, 本地用网页版等价', style: context.ds.caption),
         const SizedBox(height: 12),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.bar_chart_outlined),
-          title: const Text('Netaba 用户统计'),
-          subtitle: Text(name),
-          trailing: const Icon(Icons.chevron_right),
+        BgmSettingRow(
+          title: 'Netaba 用户统计',
+          subtitle: name,
+          arrow: true,
           onTap: () => context.push(
             '/web/${Uri.encodeComponent('https://netaba.re/user/$name')}',
           ),
         ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.public),
-          title: const Text('主站用户页'),
+        BgmSettingRow(
+          title: '主站用户页',
+          arrow: true,
           onTap: () =>
               context.push('/web/${Uri.encodeComponent('$kHost/user/$name')}'),
         ),
@@ -1207,18 +936,9 @@ class _ZoneTinygrailTab extends ConsumerWidget {
     final async = ref.watch(zoneTinygrailAssetsProvider(name));
     return async.when(
       loading: () => const Loading(),
-      error: (_, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('未找到小圣杯资产'),
-            TextButton(
-              onPressed: () =>
-                  ref.invalidate(zoneTinygrailAssetsProvider(name)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      error: (_, _) => BgmRetry(
+        message: '未找到小圣杯资产',
+        onRetry: () => ref.invalidate(zoneTinygrailAssetsProvider(name)),
       ),
       data: (assets) {
         if (assets.hash.isEmpty && assets.total == 0 && assets.balance == 0) {
@@ -1232,10 +952,9 @@ class _ZoneTinygrailTab extends ConsumerWidget {
               style: context.ds.bodyStrong,
             ),
             const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('查看持仓'),
-              trailing: const Icon(Icons.chevron_right),
+            BgmSettingRow(
+              title: '查看持仓',
+              arrow: true,
               onTap: () => context.push(
                 '/tinygrail/tree?user=${Uri.encodeComponent(name)}',
               ),
@@ -1262,33 +981,22 @@ class _ZoneRakuenTab extends ConsumerWidget {
     final async = ref.watch(mineTopicsProvider(userId));
     return async.when(
       loading: () => const Loading(),
-      error: (_, _) => Center(
-        child: TextButton(
-          onPressed: () => ref.invalidate(mineTopicsProvider(userId)),
-          child: const Text('重试'),
-        ),
-      ),
+      error: (_, _) =>
+          BgmRetry(onRetry: () => ref.invalidate(mineTopicsProvider(userId))),
       data: (topics) {
         if (topics.isEmpty) return const Center(child: Text('暂无主题'));
         return ListView.separated(
           itemCount: topics.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const BgmHairline(),
           itemBuilder: (_, i) {
             final t = topics[i];
-            return ListTile(
-              title: Text(
-                t.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                [
-                  if (t.group?.title.isNotEmpty == true) t.group!.title,
-                  if (t.replies > 0) '${t.replies} 回复',
-                  if (t.displayTime.isNotEmpty) t.displayTime,
-                ].join(' · '),
-                style: context.ds.caption,
-              ),
+            return BgmTextRow(
+              title: t.title,
+              replies: t.replies,
+              subtitle: [
+                if (t.group?.title.isNotEmpty == true) t.group!.title,
+                if (t.displayTime.isNotEmpty) t.displayTime,
+              ].join(' · '),
               onTap: () => context.push('/rakuen/topic/${t.topicId}'),
             );
           },

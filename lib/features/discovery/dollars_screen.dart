@@ -12,6 +12,23 @@ import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'widgets/discovery_html.dart';
+import '../../design_system/design_system.dart';
+
+import '../../shared/widgets/bgm_button.dart';
+import '../../core/storage/settings_store.dart';
+
+/// 原版 Dollars HeaderV2: ONLINE：N / DOLLARS
+String dollarsTitle(String? online) {
+  final o = online?.trim() ?? '';
+  return o.isEmpty ? 'DOLLARS' : 'ONLINE：$o';
+}
+
+/// 原版: 输入收起且下滑超过两屏才出回顶
+bool dollarsShowScrollTop({
+  required bool compose,
+  required double pixels,
+  required double windowHeight,
+}) => !compose && pixels >= windowHeight * 2;
 
 class DollarsData {
   final List<DollarsChatItem> items;
@@ -89,16 +106,21 @@ class DollarsScreen extends ConsumerStatefulWidget {
 
 class _DollarsScreenState extends ConsumerState<DollarsScreen> {
   final _input = TextEditingController();
+  final _scroll = ScrollController();
   Timer? _timer;
   bool _sending = false;
-  bool _auto = true;
   bool _compose = false;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (_auto) unawaited(ref.read(dollarsChatProvider.notifier).poll());
+    _scroll.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (ref.read(settingsStoreProvider).dollarsAutoRefresh) {
+        unawaited(ref.read(dollarsChatProvider.notifier).poll());
+      }
     });
   }
 
@@ -106,6 +128,7 @@ class _DollarsScreenState extends ConsumerState<DollarsScreen> {
   void dispose() {
     _timer?.cancel();
     _input.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -118,9 +141,7 @@ class _DollarsScreenState extends ConsumerState<DollarsScreen> {
       _input.clear();
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('发送失败, 可能需要重新登录')));
+        showBgmToast(context, '发送失败, 可能需要重新登录');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -131,71 +152,77 @@ class _DollarsScreenState extends ConsumerState<DollarsScreen> {
   Widget build(BuildContext context) {
     final loggedIn = ref.watch(isLoggedInProvider);
     final async = ref.watch(dollarsChatProvider);
+    final auto = ref.watch(settingsStoreProvider).dollarsAutoRefresh;
+    final showTop = dollarsShowScrollTop(
+      compose: _compose,
+      pixels: _scroll.hasClients ? _scroll.position.pixels : 0,
+      windowHeight: MediaQuery.sizeOf(context).height,
+    );
     return Scaffold(
       appBar: BgmAppBar(
-        title: async.valueOrNull?.online.isNotEmpty == true
-            ? 'ONLINE：${async.valueOrNull!.online}'
-            : 'DOLLARS',
+        title: dollarsTitle(async.valueOrNull?.online),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '刷新',
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(dollarsChatProvider),
-          ),
-          TextButton(
-            onPressed: () => setState(() => _auto = !_auto),
-            child: Text(
-              _auto ? 'AUTO' : 'OFF',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          if (showTop)
+            BgmHeaderAction(
+              tooltip: '到顶',
+              icon: const Icon(Icons.keyboard_arrow_up, size: 28),
+              onPressed: () {
+                if (!_scroll.hasClients) return;
+                _scroll.animateTo(
+                  0,
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOut,
+                );
+              },
             ),
+          BgmHeaderAction(
+            tooltip: auto ? '自动刷新 AUTO' : '自动刷新 OFF',
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.refresh, size: 20),
+                Positioned(
+                  right: -10,
+                  bottom: -6,
+                  child: Text(
+                    auto ? 'AUTO' : 'OFF',
+                    style: context.ds.tiny.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 8,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            onPressed: () =>
+                ref.read(settingsStoreProvider).setDollarsAutoRefresh(!auto),
           ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: _compose ? '关闭输入' : '编辑',
             icon: Icon(_compose ? Icons.close : Icons.edit),
             onPressed: () => setState(() => _compose = !_compose),
           ),
         ],
       ),
+
       body: async.when(
         loading: () => const Center(child: Loading()),
-        error: (_, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('加载失败'),
-              FilledButton.tonal(
-                onPressed: () => ref.invalidate(dollarsChatProvider),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (_, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(dollarsChatProvider)),
         data: (data) => Column(
           children: [
-            if (data.online.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '在线 ${data.online}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                ),
-              ),
             Expanded(
               child: data.items.isEmpty
                   ? const Center(child: Text('暂无消息'))
                   : ListView.builder(
+                      controller: _scroll,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 8,
                       ),
                       itemCount: data.items.length,
+
                       itemBuilder: (context, index) {
                         final item = data.items[index];
                         return Padding(
@@ -243,34 +270,24 @@ class _DollarsScreenState extends ConsumerState<DollarsScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: TextField(
+                        child: BgmField(
                           controller: _input,
                           enabled: loggedIn && !_sending,
-                          decoration: InputDecoration(
-                            hintText: loggedIn ? '说点什么…' : '登录后才能发送',
-                            isDense: true,
-                            border: const OutlineInputBorder(),
-                          ),
+                          hintText: loggedIn ? '说点什么…' : '登录后才能发送',
                           onSubmitted: (_) => unawaited(_send()),
                         ),
                       ),
                       const SizedBox(width: 8),
                       if (!loggedIn)
-                        TextButton(
+                        BgmTextAction(
+                          '登录',
                           onPressed: () => context.push('/login'),
-                          child: const Text('登录'),
                         )
                       else
-                        IconButton(
+                        BgmHeaderAction(
                           onPressed: _sending ? null : () => unawaited(_send()),
                           icon: _sending
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
+                              ? const BgmSpinner(size: 18)
                               : const Icon(Icons.send),
                         ),
                     ],

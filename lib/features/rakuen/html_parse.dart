@@ -113,6 +113,14 @@ class BlogPageData {
   });
 }
 
+/// 原版日志/帖子 SectionTitle: 楼层 + 子回复
+int commentFloorCount(Iterable<core.RakuenFloor> floors) =>
+    floors.fold(0, (n, f) => n + 1 + f.subReplies.length);
+
+String blogFavorTopicId(int id) => 'blog/$id';
+
+String commentSectionTitle(int count) => count > 0 ? '吐槽 $count' : '吐槽';
+
 class GroupInfoData {
   final String title;
   final String icon;
@@ -248,9 +256,7 @@ core.RakuenFloor _parseFloor(Element row) {
         avatar: _bgImage(sub.querySelector('span.avatarNeue')) ?? '',
         userId: _userId(subAvatar, subUser),
         userName: core.htmlDecode(core.cText(subUser ?? sub)),
-        userSign: core.htmlDecode(
-          core.cText(sub.querySelector('.sign.tip_j')),
-        ),
+        userSign: core.htmlDecode(core.cText(sub.querySelector('.sign.tip_j'))),
         messageHtml: sub.querySelector('.cmt_sub_content')?.innerHtml ?? '',
         likes: _likesOf(sub),
         replySub: core.matchReplySub(sub),
@@ -294,7 +300,6 @@ int _likesOf(Element row) =>
           '',
     ) ??
     0;
-
 
 /// 解析帖子页 (主楼 + 楼层)
 /// 兼容 group/subject/ep 帖子页 (div.postTopic) 与 prsn/crt 页面 (仅楼层)
@@ -354,7 +359,8 @@ TopicPageData parseTopicPage(String html) {
       doc.querySelector('input[name=formhash]')?.attributes['value'] ?? '';
   final lastview =
       doc.querySelector('input[name=lastview]')?.attributes['value'] ?? '';
-  final likeType = int.tryParse(
+  final likeType =
+      int.tryParse(
         doc.querySelector('a.like_dropdown')?.attributes['data-like-type'] ??
             '',
       ) ??

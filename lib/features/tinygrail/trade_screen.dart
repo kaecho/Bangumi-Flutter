@@ -9,7 +9,7 @@ class TinygrailTradeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const TinygrailCharaListScreen(
-      title: '交易大厅',
+      title: 'K线',
       tabs: [
         ('最高市值', 'mvc'),
         ('最大涨幅', 'mrc'),

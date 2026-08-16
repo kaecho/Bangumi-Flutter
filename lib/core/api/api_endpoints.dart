@@ -26,12 +26,15 @@ const String kApiUserAgent =
 const String kSiteUserAgent =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
 
-
 /// 原项目语雀指南
 const String kZhinanHost = 'https://www.yuque.com/chenzhenyu-k0epm/znygb4';
 String htmlSingleDoc(String page) => '$kZhinanHost/$page?singleDoc';
 String htmlPrivacy() => htmlSingleDoc('oi3ss2');
 String htmlSignup() => '$kHost/signup';
+String htmlLogin() => '$kHost/login';
+String htmlFollowTheRabbit() => '$kHost/FollowTheRabbit';
+String htmlSignupCaptcha([int? ts]) =>
+    '$kHost/signup/captcha?${ts ?? DateTime.now().millisecondsSinceEpoch}';
 
 /// bangumi status (原项目 API_MK_STATUS_HOST)
 const String kStatusHost = 'https://bgm-status.ry.mk';
@@ -90,7 +93,6 @@ String apiSubjectUpdateWatched(int subjectId) =>
 String apiEpStatus(int epId, String status) =>
     '$kApiHost/ep/$epId/status/$status';
 
-
 /// v0 条目 (详情含 infobox/tags/eps)
 String apiV0Subject(int subjectId) =>
     '$kApiV0/subjects/$subjectId?responseGroup=large';
@@ -145,8 +147,17 @@ String htmlSubjectEpisodes(int subjectId) => '$kHost/subject/$subjectId/ep';
 String htmlSubjectRelations(int subjectId) =>
     '$kHost/subject/$subjectId/relations';
 String htmlPersonPage(int id) => '$kHost/person/$id';
-String htmlMonoWorks(String type, int id) =>
-    type == 'person' ? '$kHost/person/$id/works' : '$kHost/character/$id/works';
+String htmlMonoWorks(
+  String type,
+  int id, {
+  String position = '',
+  String sort = 'date',
+  int page = 1,
+}) =>
+    '${type == 'person' ? '$kHost/person/$id/works' : '$kHost/character/$id/works'}$position?sort=$sort&page=$page';
+
+String htmlMonoVoices(int id, {String position = ''}) =>
+    '$kHost/person/$id/works/voice$position';
 
 /// 所有人评分 (原项目 HTML_SUBJECT_RATING)
 String htmlSubjectRating(
@@ -284,7 +295,8 @@ String apiV0SubjectImage(int subjectId, String type) =>
     '$kApiV0/subjects/$subjectId/image?type=$type';
 
 /// p1
-String apiP1UsersTimeline(String userId) => '$kApiP1/users/$userId/timeline';
+String apiP1UsersTimeline(String userId, {int limit = 1}) =>
+    '$kApiP1/users/$userId/timeline?limit=$limit';
 
 /// 电波提醒 (站内信)
 String apiNotifyCount() => '$kApiHost/notify/count';
@@ -300,6 +312,8 @@ String apiPmSend() => '$kApiHost/pm/send';
 String apiConnect(String userId, String gh) => '/connect/$userId?gh=$gh&ajax=1';
 String apiDisconnect(String userId, String gh) =>
     '$kHost/disconnect/$userId?gh=$gh';
+String apiDisconnectRev(String userId, String gh) =>
+    '$kHost/disconnect/rev/$userId?gh=$gh';
 
 /// 其他站点同步
 String apiBilibiliSync() => '$kApiHost/bilibili/sync';
@@ -644,6 +658,33 @@ String apiV0UserPersons(String username) =>
 
 /// 发现页: 评分月刊 / 半月刊 (原项目公开 CDN 静态数据, 调用时传 host: [kDogeCdnHost])
 const String kDogeCdnHost = 'http://bangumi-app-assets.5t5.top';
+
+/// 原项目 URL_SPA 客户端网页版
+const String kSpaHost = 'https://bangumi-app.5t5.top';
+
+/// 原版 getSPAId: CatalogDetail → screens-catalogdetail--catalog-detail
+String spaStoryId(String routeName) {
+  final kebab = routeName
+      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]}-${m[2]}')
+      .replaceAllMapped(RegExp(r'(\d+)'), (m) => '-${m[1]}')
+      .toLowerCase();
+  return 'screens-${routeName.toLowerCase()}--$kebab';
+}
+
+/// 原版 getSPAParams + URL_SPA
+String htmlSpa(String routeName, [Map<String, Object?> params = const {}]) {
+  final query = <String, String>{
+    'id': spaStoryId(routeName),
+    'viewMode': 'story',
+    for (final e in params.entries)
+      if (e.key != 'id' && e.value != null) e.key: '${e.value}',
+  };
+  return '$kSpaHost/iframe.html?${Uri(queryParameters: query).query}';
+}
+
+String htmlSpaCatalogDetail(int catalogId) =>
+    htmlSpa('CatalogDetail', {'catalogId': catalogId});
+
 String apiVibJson() => '/vib.json';
 String apiBiWeeklyJson() => '/biweekly.json';
 
@@ -661,16 +702,63 @@ String htmlGroupList({int page = 1}) =>
     page > 1 ? '/group?page=$page' : '/group';
 String htmlRankBrowser(String type, {String sort = 'rank', int page = 1}) =>
     '/$type/browser?sort=$sort&page=$page';
-String htmlTypeTag(String type, {int page = 1}) =>
-    page > 1 ? '/$type/tag?page=$page' : '/$type/tag';
-String htmlTagSubjects(String type, String tag, {int page = 1}) =>
-    '/$type/tag/${Uri.encodeComponent(tag)}?page=$page';
+
+/// 索引 (原项目 HTML_BROSWER: /{type}/browser[/airtime/{ym}]?page=&sort=)
+String htmlBrowser(
+  String type, {
+  String airtime = '',
+  String sort = 'date',
+  int page = 1,
+}) {
+  final path = airtime.isEmpty
+      ? '/$type/browser'
+      : '/$type/browser/airtime/$airtime';
+  final q = <String>[
+    if (page > 1) 'page=$page',
+    if (sort.isNotEmpty) 'sort=$sort',
+  ];
+  return q.isEmpty ? path : '$path?${q.join('&')}';
+}
+
+String htmlTypeTag(String type, {int page = 1, String filter = ''}) {
+  if (filter.trim().isNotEmpty) {
+    return '/search/tag/$type/${Uri.encodeComponent(filter.trim())}?page=$page';
+  }
+  return page > 1 ? '/$type/tag?page=$page' : '/$type/tag';
+}
+
+String htmlTagSubjects(
+  String type,
+  String tag, {
+  int page = 1,
+  String sort = 'collects',
+  String airtime = '',
+  bool meta = false,
+}) {
+  final path =
+      '/$type/tag/${Uri.encodeComponent(tag)}${airtime.isNotEmpty ? '/airtime/$airtime' : ''}';
+  return '$path?sort=$sort&page=$page&meta=${meta ? 1 : ''}';
+}
+
 String htmlWiki() => '/wiki';
 String htmlChannel(String type) => '/$type';
 String htmlAward(int year) => '/award/$year';
 String htmlCatalogBrowser({int page = 1, String orderby = 'rank'}) =>
     '/index/browser?page=$page&orderby=$orderby';
 String htmlCatalogDetail(int id) => '$kHost/index/$id';
+
+/// 目录留言 (原项目 /index/{id}/comments)
+String htmlCatalogComments(int id) => '$kHost/index/$id/comments';
+
+String catalogCommentsWebPath(int id) =>
+    '/web/${Uri.encodeComponent(htmlCatalogComments(id))}';
+
+/// 新建目录 (原项目 HTML_ACTION_CATALOG_CREATE)
+String htmlCatalogCreate() => '$kHost/index/create';
+
+/// 目录添加条目 (原项目 HTML_ACTION_CATALOG_ADD_RELATED)
+String htmlCatalogAddRelated(int catalogId) =>
+    '$kHost/index/$catalogId/add_related';
 
 String htmlDollarsForum({int page = 1}) =>
     '/group/dollars/forum${page > 1 ? '?page=$page' : ''}';
@@ -741,6 +829,43 @@ String htmlUserWiki(String userId) =>
 /// 我收藏人物的最近作品 (原项目 HTML_USERS_MONO_RECENTS)
 String htmlUserMonoRecents({int page = 1}) => '$kHost/mono/update?page=$page';
 
+/// 用户人物页 (原项目 Character.url = /user/{id}/mono)
+String htmlUserMonoPage(String userId) => '$kHost/user/$userId/mono';
+
+/// 个人设置页 (原项目 HTML_USER_SETTING)
+String htmlUserSetting() => '$kHost/settings';
+
+/// 时光机收藏概览 (原项目 HTML_USER_COLLECTIONS)
+/// /{anime|book|music|game|real}/list/{uid}/{wish|collect|do|on_hold|dropped}
+String htmlUserCollections(
+  String userId, {
+  String scope = 'anime',
+  String type = 'collect',
+  String order = '',
+  String tag = '',
+  int page = 1,
+}) {
+  final query = <String, String>{
+    if (order.isNotEmpty) 'orderby': order,
+    if (tag.isNotEmpty) 'tag': tag,
+    'page': '$page',
+  };
+  return '$kHost/$scope/list/$userId/$type?${Uri(queryParameters: query).query}';
+}
+
+/// 收藏状态 URL slug (原项目 MODEL_COLLECTION_STATUS.value)
+String htmlCollectionStatus(int status) => switch (status) {
+  1 => 'wish',
+  2 => 'collect',
+  3 => 'do',
+  4 => 'on_hold',
+  5 => 'dropped',
+  _ => 'collect',
+};
+
+/// 免费图床 (原项目 HOST_IMAGE_UPLOAD_RYMK)
+const String kImageUploadHost = 'https://lsky.ry.mk';
+
 /// 季度新番浏览 (bgm.tv 主站: 动画标签 + 放送季, 调用时传 host: kHost)
 /// /anime/browser/airtime/{ym} 被 CDN 拦截, 等价数据在标签页提供
 String htmlSeasonBrowser({
@@ -804,9 +929,8 @@ String htmlTopicReply(String topicId) {
 }
 
 /// 回复日志 (原项目 HTML_ACTION_BLOG_REPLY)
-String htmlBlogReply(int blogId) => '$kHost/blog/entry/$blogId/new_reply?ajax=1';
-
-
+String htmlBlogReply(int blogId) =>
+    '$kHost/blog/entry/$blogId/new_reply?ajax=1';
 
 String apiUserHomeHtml(String userId) => '$kHost/user/$userId';
 
@@ -847,4 +971,3 @@ String coverUrl(String url, {String size = 'm'}) {
       .replaceAll(RegExp(r'/pic/cover/[lmcsg]/'), '/pic/cover/$size/')
       .replaceAll(RegExp(r'/pic/crt/[lmcsg]/'), '/pic/crt/$size/');
 }
-

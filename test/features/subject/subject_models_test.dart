@@ -2,6 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:bangumi/features/subject/html_parser.dart';
 import 'package:bangumi/features/subject/subject_models.dart';
+import 'package:bangumi/features/subject/subject_comments_screen.dart';
+import 'package:bangumi/features/subject/rating_screen.dart';
+import 'package:bangumi/features/subject/subject_notes.dart';
+
 import 'package:bangumi/shared/models/collection.dart';
 import 'package:bangumi/shared/models/ep.dart';
 import 'package:bangumi/shared/models/subject.dart';
@@ -84,6 +88,7 @@ void main() {
           'name': 'A',
           'duration': '24m',
           'airdate': '2008-04-06',
+          'status': 'Air',
         },
         {'id': 2, 'type': 0, 'sort': 2, 'name': 'B'},
         {'id': 3, 'type': 1, 'sort': 1, 'name': '特典'},
@@ -97,6 +102,7 @@ void main() {
       expect(list.type3.length, 1);
       expect(list.total, 5);
       expect(list.eps.first.duration, '24m');
+      expect(list.eps.first.status, 'Air');
     });
   });
 
@@ -121,6 +127,8 @@ void main() {
         'comment': '好看',
         'tags': ['神作', '机战'],
         'ep_status': 12,
+        'updated_at': '2024-05-01 12:00:00',
+        'private': 1,
         'status': {'id': 123, 'type': 2},
       });
 
@@ -129,6 +137,8 @@ void main() {
       expect(detail.type, 2);
       expect(detail.epStatus, 12);
       expect(detail.tags, ['神作', '机战']);
+      expect(detail.updatedAt, '2024-05-01 12:00:00');
+      expect(detail.privacy, 1);
       expect(detail.hasCollection, isTrue);
     });
 
@@ -223,6 +233,36 @@ void main() {
       final page = parseSubjectCommentsHtml('<html><body></body></html>');
       expect(page.items, isEmpty);
       expect(page.page, 1);
+    });
+  });
+
+  group('comments reverse paging', () {
+    test('倒序首次从总页-1 开始', () {
+      expect(commentsStartPage(reverse: false, pageTotal: 8), 1);
+      expect(commentsStartPage(reverse: true, pageTotal: 8), 7);
+      expect(commentsStartPage(reverse: true, pageTotal: 1), 1);
+    });
+
+    test('倒序向前翻页, 顺序向后翻页', () {
+      expect(commentsNextPage(reverse: false, page: 2), 3);
+      expect(commentsNextPage(reverse: true, page: 7), 6);
+      expect(commentsHasMore(reverse: false, page: 8, pageTotal: 8), isFalse);
+      expect(commentsHasMore(reverse: true, page: 1, pageTotal: 8), isFalse);
+      expect(commentsHasMore(reverse: true, page: 2, pageTotal: 8), isTrue);
+    });
+
+    test('吐槽路径带筛选 query', () {
+      expect(subjectCommentsPath(8), '/subject/8/comments');
+      expect(
+        subjectCommentsPath(
+          8,
+          interestType: 'doings',
+          score: '9-10',
+          version: true,
+          reverse: true,
+        ),
+        '/subject/8/comments?status=doings&score=9-10&version=1&reverse=1',
+      );
     });
   });
 
@@ -425,6 +465,283 @@ void main() {
       expect(page.items.first.userName, '好友甲');
       expect(page.items.first.star, 9);
       expect(page.items.first.content, contains('好看'));
+    });
+  });
+
+  group('parseMonoVoices', () {
+    test('解析人物角色和职位筛选', () {
+      const html = '''
+<div id="columnCrtB">
+  <div class="subjectFilter">
+    <ul class="grouped">
+      <li class="title">类型</li>
+      <li><a class="l" href="/person/1/works/voice/anime">动画</a></li>
+    </ul>
+  </div>
+  <ul class="browserList">
+    <li class="item">
+      <div class="innerLeftItem">
+        <img class="avatar" src="//lain.bgm.tv/pic/crt/g/1.jpg" />
+        <h3><a class="l" href="/character/8">Role</a><p class="tip">角色中文</p></h3>
+      </div>
+      <ul class="innerRightList">
+        <li>
+          <img class="cover" src="//lain.bgm.tv/pic/cover/s/2.jpg" />
+          <div class="inner">
+            <h3><a class="l" href="/subject/12">Subject</a></h3>
+            <small class="grey">条目中文</small>
+            <span class="badge_job">主演</span>
+            <span class="badge_job_tip">2008</span>
+          </div>
+        </li>
+      </ul>
+    </li>
+  </ul>
+</div>
+<div id="footer"></div>
+''';
+      final page = parseMonoVoices(html);
+      expect(page.list, hasLength(1));
+      expect(page.list.first.id, 8);
+      expect(page.list.first.nameCn, '角色中文');
+      expect(page.list.first.subjects.single.id, 12);
+      expect(page.list.first.subjects.single.staff, '主演');
+      expect(page.filters.single.title, '类型');
+      expect(page.filters.single.options.single.$1, '/anime');
+    });
+
+    test('解析人物详情最近演出角色', () {
+      const html =
+          '<h2 class="subtitle">最近演出角色</h2><ul class="browserList"><li class="item"><div class="innerLeftItem"><h3><a class="l" href="/character/3">A</a></h3></div></li></ul><a href="/person/1/works/voice">更多</a>';
+      expect(parsePersonRecentVoices(html).single.id, 3);
+    });
+  });
+  group('parseMonoWorks', () {
+    test('解析人物作品和职位筛选', () {
+      const html = '''
+<div id="columnCrtB">
+  <div class="subjectFilter">
+    <ul class="grouped">
+      <li class="title">职位</li>
+      <li><a class="l" href="/person/1/works/position/1">导演</a></li>
+    </ul>
+  </div>
+  <ul id="browserItemList">
+    <li class="item">
+      <a class="cover" href="/subject/12"><img class="cover" src="//lain.bgm.tv/pic/cover/s/2.jpg" /></a>
+      <h3><a class="l" href="/subject/12">条目中文</a></h3>
+      <small class="grey">Subject</small>
+      <p class="tip">2008年4月</p>
+      <span class="badge_job">导演</span>
+      <small class="fade">8.4</small>
+      <span class="tip_j">(12人评分)</span>
+      <span class="rank">Rank 8</span>
+      <p class="collectModify"></p>
+      <span class="ico_subject_type subject_type_2 ll"></span>
+    </li>
+  </ul>
+</div>
+<div id="footer"></div>
+''';
+      final page = parseMonoWorks(html);
+      expect(page.list, hasLength(1));
+      expect(page.list.first.id, 12);
+      expect(page.list.first.nameCn, '条目中文');
+      expect(page.list.first.positions, ['导演']);
+      expect(page.list.first.score, 8.4);
+      expect(page.list.first.rank, 8);
+      expect(page.list.first.collected, isTrue);
+      expect(page.filters.single.title, '职位');
+      expect(page.filters.single.options.single.$1, '/position/1');
+    });
+  });
+
+  group('subject Extra', () {
+    test('用户评分顶栏是所有/好友', () {
+      expect(kRatingFilterItems.map((e) => e.$1).toList(), ['所有', '好友']);
+    });
+
+    test('条目标签标题带条目名', () {
+      expect(
+        extraNamedTitle('CLANNAD', '标签', named: (n) => '$n的标签'),
+        'CLANNAD的标签',
+      );
+      expect(extraNamedTitle('', '标签', named: (n) => '$n的标签'), '标签');
+    });
+
+    test('条目吐槽标题带条目名', () {
+      expect(
+        extraNamedTitle('CLANNAD', '吐槽', named: (n) => '$n的吐槽'),
+        'CLANNAD的吐槽',
+      );
+    });
+
+    test('章节吐槽标题是 ep 序号加点名', () {
+      expect(epCommentsTitle(sort: 1, name: '始まりの世界'), 'ep1.始まりの世界');
+      expect(epCommentsTitle(sort: 2, name: ''), 'ep2');
+      expect(epCommentsTitle(), '章节吐槽');
+    });
+
+    test('概览和声优标题带条目名', () {
+      expect(
+        extraNamedTitle('CLANNAD', '概览', named: (n) => '$n的概览'),
+        'CLANNAD的概览',
+      );
+      expect(
+        extraNamedTitle('CLANNAD', '声优', named: (n) => '$n的声优', count: 12),
+        'CLANNAD的声优 (12)',
+      );
+    });
+
+    test('作品更多对齐原版浏览器和工具栏', () {
+      expect(
+        worksMoreItems(
+          fixed: false,
+          list: true,
+          collected: true,
+        ).map((e) => e.$2).toList(),
+        ['浏览器查看', '工具栏〔浮动〕', '布　局〔列表〕', '收　藏〔显示〕'],
+      );
+    });
+
+    test('人物角色标题带名字, 快照 24 条不加计数', () {
+      expect(voicesTitle('钉宫理惠', 40), '钉宫理惠的角色 (40)');
+      expect(voicesTitle('钉宫理惠', 24), '钉宫理惠的角色');
+      expect(voicesTitle('', 8), '角色 (8)');
+    });
+    test('作品排序对齐原版名称日期排名', () {
+      expect(kWorksOrders.map((e) => e.$2).toList(), ['名称', '日期', '排名']);
+    });
+
+    test('制作人员 Extra 职位筛选计数并让动画制作排前', () {
+      const list = [
+        PersonVo(id: 1, name: 'A', positions: ['导演']),
+        PersonVo(id: 2, name: 'B', positions: ['动画制作']),
+        PersonVo(id: 3, name: 'C', relation: '导演'),
+      ];
+      expect(
+        personsFilters(list).map((e) => personsFilterValue(e.title, e.value)),
+        ['全部职位 (3)', '导演 (2)', '动画制作 (1)'],
+      );
+      expect(filterPersons(list, '全部职位 (3)').map((e) => e.id), [2, 1, 3]);
+      expect(filterPersons(list, '导演 (2)').map((e) => e.id), [1, 3]);
+    });
+
+    test('制作人员 HTML 解析 badge_job', () {
+      const html = '''
+        <div id="columnInSubjectA">
+          <div class="light_odd">
+            <h2><a href="/person/8">谷口悟朗 <span class="tip">谷口悟朗</span></a></h2>
+            <img class="avatar" src="//lain.bgm.tv/pic/crt/g/x.jpg" />
+            <span class="badge_job">导演</span>
+            <div class="prsn_info">2006</div>
+          </div>
+        </div>
+        <div id="columnInSubjectB"></div>
+      ''';
+      final list = parseSubjectPersons(html);
+      expect(list, hasLength(1));
+      expect(list.single.id, 8);
+      expect(list.single.jobs, ['导演']);
+      expect(list.single.info, '2006');
+      expect(list.single.images.large, startsWith('https://'));
+    });
+    test('人物收藏动作解析 collectUrl 和 eraseCollectUrl', () {
+      const collectHtml = '''
+        <div id="headerSubject">
+          <div class="collect action">
+            <a class="icon" href="/character/8/collect?gh=abc"></a>
+          </div>
+        </div>
+        <div class="crtCommentList"></div>
+      ''';
+      expect(
+        parseMonoCollect(collectHtml).collectUrl,
+        '/character/8/collect?gh=abc',
+      );
+      expect(parseMonoCollect(collectHtml).eraseCollectUrl, '');
+      const eraseHtml = '''
+        <div id="headerSubject">
+          <div class="collect action">
+            <a class="icon" href="/character/8/erase_collect?gh=abc"></a>
+            <span class="ico_like"></span>
+          </div>
+        </div>
+        <div class="crtCommentList"></div>
+      ''';
+      expect(parseMonoCollect(eraseHtml).collectUrl, '');
+      expect(
+        parseMonoCollect(eraseHtml).eraseCollectUrl,
+        '/character/8/erase_collect?gh=abc',
+      );
+    });
+
+    test('概览 Extra 按 Disc 计数并筛选', () {
+      expect(
+        overviewDiscFilters(const [
+          0,
+          0,
+          1,
+          2,
+        ]).map((e) => overviewFilterValue(e.title, e.value)),
+        ['全部 (4)', '本篇 (2)', 'Disc 1 (1)', 'Disc 2 (1)'],
+      );
+      expect(overviewDiscFromFilter('全部 (4)'), isNull);
+      expect(overviewDiscFromFilter('本篇 (2)'), 0);
+      expect(overviewDiscFromFilter('Disc 1 (1)'), 1);
+    });
+
+    test('人物角色可按条目 ID 内外层排序', () {
+      const a = MonoVoiceItem(
+        id: 2,
+        name: 'B',
+        subjects: [
+          MonoVoiceSubject(id: 10, name: 'x'),
+          MonoVoiceSubject(id: 30, name: 'y'),
+        ],
+      );
+      const b = MonoVoiceItem(
+        id: 1,
+        name: 'A',
+        subjects: [MonoVoiceSubject(id: 20, name: 'z')],
+      );
+      expect(
+        sortMonoVoices(
+          [a, b],
+          outerOrder: 'id_asc',
+          innerOrder: 'id_desc',
+        ).map((e) => e.id),
+        [1, 2],
+      );
+      expect(
+        sortMonoVoices(
+          [a, b],
+          outerOrder: 'subject_max_desc',
+          innerOrder: '',
+        ).first.id,
+        2,
+      );
+      expect(sortMonoVoiceSubjects(a.subjects, 'id_desc').map((e) => e.id), [
+        30,
+        10,
+      ]);
+    });
+
+    test('人物角色按收藏状态过滤', () {
+      const item = MonoVoiceItem(
+        id: 1,
+        name: 'A',
+        subjects: [
+          MonoVoiceSubject(id: 8, name: 'x'),
+          MonoVoiceSubject(id: 9, name: 'y'),
+        ],
+      );
+      expect(
+        filterMonoVoices([item], '已收藏', {8}).single.subjects.map((e) => e.id),
+        [8],
+      );
+      expect(filterMonoVoices([item], '系列有收藏', {8}), hasLength(1));
+      expect(filterMonoVoices([item], '未收藏', {8, 9}), isEmpty);
     });
   });
 

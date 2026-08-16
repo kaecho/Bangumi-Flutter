@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
-import '../../design_system/design_system.dart';
 
 /// 圣殿 (我的圣殿)
 class TinygrailTempleScreen extends ConsumerWidget {
@@ -15,7 +16,7 @@ class TinygrailTempleScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(tinygrailUserProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('圣殿')),
+      appBar: BgmAppBar(title: '圣殿'),
       body: userAsync.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -41,7 +42,11 @@ class _LoginGate extends StatelessWidget {
         children: [
           const Text('请先授权登录小圣杯'),
           const SizedBox(height: 8),
-          FilledButton(onPressed: () => context.push('/tinygrail/login'), child: const Text('去授权')),
+          BgmButton(
+            '去授权',
+            expand: false,
+            onPressed: () => context.push('/tinygrail/login'),
+          ),
         ],
       ),
     );
@@ -65,18 +70,22 @@ class _MyTempleList extends ConsumerWidget {
             ? const Empty(text: '暂无圣殿, 去献祭建立圣殿吧')
             : ListView.separated(
                 itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const BgmHairline(),
                 itemBuilder: (context, index) {
                   final item = list[index];
-                  return ListTile(
+                  return BgmTextRow(
                     onTap: () => context.push('/tinygrail/chara/${item.id}'),
-                    leading: Text('#${index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(
-                      'Lv.${item.level} · 献祭 ${tgAmount(item.sacrifices)} · 星之力 ${item.userStarForces}',
-                      style: context.ds.meta,
+                    leading: Text(
+                      '#${index + 1}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    trailing: Text('精炼 ${item.refine}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    title: item.name,
+                    subtitle:
+                        'Lv.${item.level} · 献祭 ${tgAmount(item.sacrifices)} · 星之力 ${item.userStarForces}',
+                    trailing: Text(
+                      '精炼 ${item.refine}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   );
                 },
               ),
@@ -85,6 +94,9 @@ class _MyTempleList extends ConsumerWidget {
   }
 }
 
-final myTempleProvider = FutureProvider.family<List<TinygrailTemple>, String>((ref, hash) async {
+final myTempleProvider = FutureProvider.family<List<TinygrailTemple>, String>((
+  ref,
+  hash,
+) async {
   return ref.read(tinygrailApiProvider).fetchMyTemple(hash);
 });

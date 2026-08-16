@@ -5,6 +5,13 @@ import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import 'widgets/browser_grid.dart';
 import 'widgets/season_filter.dart';
+import '../../shared/widgets/bgm_button.dart';
+
+/// 原版 HeaderV2Popover DATA: 浏览器查看 + 网页版查看
+const kStaffMoreItems = <(String, String)>[
+  ('browser', '浏览器查看'),
+  ('spa', '网页版查看'),
+];
 
 /// 新番 (按季度放送列表)
 ///
@@ -22,22 +29,6 @@ class _StaffScreenState extends State<StaffScreen> {
   late int _year = DateTime.now().year;
   late int? _month = DateTime.now().month;
 
-  void _shiftSeason(int delta) {
-    setState(() {
-      var month = _month ?? 1;
-      month += delta;
-      while (month > 12) {
-        month -= 12;
-        _year += 1;
-      }
-      while (month < 1) {
-        month += 12;
-        _year -= 1;
-      }
-      _month = month;
-    });
-  }
-
   String get _basePath =>
       htmlSeasonBrowser(year: _year, month: _month, sort: 'rank');
 
@@ -48,20 +39,15 @@ class _StaffScreenState extends State<StaffScreen> {
         title: '新番',
         showBackButton: true,
         actions: [
-          IconButton(
-            onPressed: () => _shiftSeason(-1),
-            icon: const Icon(Icons.chevron_left),
-            tooltip: '上一季',
-          ),
-          IconButton(
-            onPressed: () => _shiftSeason(1),
-            icon: const Icon(Icons.chevron_right),
-            tooltip: '下一季',
-          ),
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl('$kHost/user/lilyurey/index'),
+          BgmHeaderMore(
+            items: kStaffMoreItems,
+            onSelected: (value) {
+              if (value == 'browser') {
+                openExternalUrl('$kHost/user/lilyurey/index');
+              } else if (value == 'spa') {
+                openExternalUrl(htmlSpa('Staff'));
+              }
+            },
           ),
         ],
       ),

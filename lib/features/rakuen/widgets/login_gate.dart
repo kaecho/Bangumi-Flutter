@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../../shared/widgets/bgm_button.dart';
 
 /// 登录提示页 (超展开内需要登录的操作)
 class RakuenLoginGate extends ConsumerWidget {
@@ -26,9 +27,10 @@ class RakuenLoginGate extends ConsumerWidget {
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
-          FilledButton(
+          BgmButton(
+            '登录',
+            expand: false,
             onPressed: () => context.push('/login'),
-            child: const Text('登录'),
           ),
         ],
       ),

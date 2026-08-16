@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import '../../design_system/design_system.dart';
@@ -17,7 +20,24 @@ class TinygrailDealScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final charaAsync = ref.watch(dealCharaProvider(monoId));
     return Scaffold(
-      appBar: AppBar(title: const Text('成交记录')),
+      appBar: BgmAppBar(
+        title: charaAsync.maybeWhen(
+          data: (data) => data.chara.name.isEmpty ? '成交记录' : data.chara.name,
+          orElse: () => '成交记录',
+        ),
+        actions: [
+          BgmHeaderAction(
+            tooltip: '资产重组',
+            icon: const Icon(Icons.workspaces_outline),
+            onPressed: () => context.push('/tinygrail/chara/$monoId'),
+          ),
+          BgmHeaderAction(
+            tooltip: 'K线',
+            icon: const Icon(Icons.waterfall_chart),
+            onPressed: () => context.push('/tinygrail/chara/$monoId'),
+          ),
+        ],
+      ),
       body: charaAsync.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -29,41 +49,41 @@ class TinygrailDealScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                Card(
-                  child: ListTile(
-                    onTap: () => context.push('/tinygrail/chara/$monoId'),
-                    leading: CircleAvatar(child: Text(chara.name.isEmpty ? '?' : chara.name.characters.first)),
-                    title: Text(chara.name),
-                    subtitle: Text(
+                BgmTextRow(
+                  onTap: () => context.push('/tinygrail/chara/$monoId'),
+                  title: chara.name,
+                  subtitle:
                       '现价 ¥${tgPrice(chara.current)} · Lv.${chara.level} · 持仓 ${chara.userAmount}',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                  ),
                 ),
                 const SizedBox(height: 8),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('买入记录', style: TextStyle(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
-                        if (logs.bidHistory.isEmpty)
-                          const Text('暂无', style: TextStyle(fontSize: 12))
-                        else
-                          for (final log in logs.bidHistory.take(20))
-                            _LogLine(log: log, isBid: true),
-                        const Divider(height: 20),
-                        const Text('卖出记录', style: TextStyle(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
-                        if (logs.askHistory.isEmpty)
-                          const Text('暂无', style: TextStyle(fontSize: 12))
-                        else
-                          for (final log in logs.askHistory.take(20))
-                            _LogLine(log: log, isBid: false),
-                      ],
-                    ),
+                BgmCard(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '买入记录',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      if (logs.bidHistory.isEmpty)
+                        const Text('暂无', style: TextStyle(fontSize: 12))
+                      else
+                        for (final log in logs.bidHistory.take(20))
+                          _LogLine(log: log, isBid: true),
+                      const BgmHairline(),
+
+                      const Text(
+                        '卖出记录',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      if (logs.askHistory.isEmpty)
+                        const Text('暂无', style: TextStyle(fontSize: 12))
+                      else
+                        for (final log in logs.askHistory.take(20))
+                          _LogLine(log: log, isBid: false),
+                    ],
                   ),
                 ),
               ],
@@ -96,10 +116,7 @@ class _LogLine extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Text(
-            log.time.replaceFirst('T', ' '),
-            style: context.ds.meta,
-          ),
+          Text(log.time.replaceFirst('T', ' '), style: context.ds.meta),
         ],
       ),
     );
@@ -107,18 +124,21 @@ class _LogLine extends StatelessWidget {
 }
 
 final dealCharaProvider =
-    FutureProvider.family<({TinygrailChara chara, _DealLogs logs}), int>((ref, monoId) async {
-  final api = ref.read(tinygrailApiProvider);
-  final chara = await api.fetchChara(monoId);
-  final logs = await api.fetchUserLogs(monoId);
-  return (
-    chara: chara,
-    logs: _DealLogs(
-      bidHistory: logs.bidHistory,
-      askHistory: logs.askHistory,
-    ),
-  );
-});
+    FutureProvider.family<({TinygrailChara chara, _DealLogs logs}), int>((
+      ref,
+      monoId,
+    ) async {
+      final api = ref.read(tinygrailApiProvider);
+      final chara = await api.fetchChara(monoId);
+      final logs = await api.fetchUserLogs(monoId);
+      return (
+        chara: chara,
+        logs: _DealLogs(
+          bidHistory: logs.bidHistory,
+          askHistory: logs.askHistory,
+        ),
+      );
+    });
 
 class _DealLogs {
   final List<TinygrailLog> bidHistory;

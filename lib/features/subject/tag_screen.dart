@@ -10,6 +10,9 @@ import '../../shared/widgets/loading.dart';
 
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import 'subject_notes.dart';
+import 'tag_better.dart';
 
 /// 条目标签
 /// 路由: /subject/:id/tag
@@ -23,34 +26,22 @@ class SubjectTagScreen extends ConsumerWidget {
     final detail = ref.watch(subjectDetailProvider(id));
     return Scaffold(
       appBar: BgmAppBar(
-        title: '标签',
+        title: extraNamedTitle(
+          detail.valueOrNull?.subject.displayName,
+          '标签',
+          named: (n) => '$n的标签',
+        ),
+
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl('$kHost/subject/$id'),
-          ),
+          BgmHeaderMore.browser(() => openExternalUrl('$kHost/subject/$id')),
         ],
       ),
 
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(subjectDetailProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (e, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(subjectDetailProvider(id))),
         data: (value) => value.tags.isEmpty
             ? const Empty(text: '暂无标签')
             : ListView.builder(
@@ -60,6 +51,7 @@ class SubjectTagScreen extends ConsumerWidget {
                   subjectId: id,
                   tag: value.tags[i],
                   type: value.subject.type,
+                  rank: value.subject.rank,
                 ),
               ),
       ),
@@ -71,11 +63,13 @@ class _TagRow extends StatelessWidget {
   final int subjectId;
   final Tag tag;
   final String type;
+  final int rank;
 
   const _TagRow({
     required this.subjectId,
     required this.tag,
     required this.type,
+    required this.rank,
   });
 
   @override
@@ -91,6 +85,8 @@ class _TagRow extends StatelessWidget {
             Expanded(
               child: Text(tag.name, style: const TextStyle(fontSize: 14)),
             ),
+            TypeRankBetterText(type: type, tag: tag.name, rank: rank),
+            const SizedBox(width: 8),
             Text('${tag.count}', style: context.ds.caption),
             Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
           ],

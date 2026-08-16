@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
@@ -16,7 +18,7 @@ class TinygrailAssetsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(tinygrailUserProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('我的资产')),
+      appBar: BgmAppBar(title: '我的资产'),
       body: userAsync.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -28,7 +30,11 @@ class TinygrailAssetsScreen extends ConsumerWidget {
                 children: [
                   const Text('请先授权登录小圣杯'),
                   const SizedBox(height: 8),
-                  FilledButton(onPressed: () => context.push('/tinygrail/login'), child: const Text('去授权')),
+                  BgmButton(
+                    '去授权',
+                    expand: false,
+                    onPressed: () => context.push('/tinygrail/login'),
+                  ),
                 ],
               ),
             );
@@ -59,23 +65,27 @@ class _AssetsBody extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.all(12),
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(user.nickname, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          _Stat(label: '可用资金', value: tgMoney(user.balance)),
-                          _Stat(label: '持股总值', value: tgMoney(user.amount)),
-                          _Stat(label: '资产总额', value: tgMoney(user.total)),
-                        ],
+              BgmCard(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.nickname,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _Stat(label: '可用资金', value: tgMoney(user.balance)),
+                        _Stat(label: '持股总值', value: tgMoney(user.amount)),
+                        _Stat(label: '资产总额', value: tgMoney(user.total)),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),
@@ -88,7 +98,8 @@ class _AssetsBody extends ConsumerWidget {
                     chara: c,
                     onTap: () => context.push('/tinygrail/chara/${c.id}'),
                   ),
-              const Divider(),
+              const BgmHairline(),
+
               _SectionTitle(title: '我的 ICO (${ico.length})'),
               if (ico.isEmpty)
                 const Empty(text: '暂无 ICO')
@@ -115,7 +126,10 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+      ),
     );
   }
 }
@@ -131,7 +145,10 @@ class _Stat extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 2),
           Text(label, style: context.ds.meta),
         ],
@@ -141,6 +158,8 @@ class _Stat extends StatelessWidget {
 }
 
 final myCharaAssetsProvider =
-    FutureProvider<({List<TinygrailChara> chara, List<TinygrailChara> ico})>((ref) async {
-  return ref.read(tinygrailApiProvider).fetchMyCharaAssets();
-});
+    FutureProvider<({List<TinygrailChara> chara, List<TinygrailChara> ico})>((
+      ref,
+    ) async {
+      return ref.read(tinygrailApiProvider).fetchMyCharaAssets();
+    });

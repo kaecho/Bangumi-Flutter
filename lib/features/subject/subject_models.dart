@@ -4,6 +4,7 @@ import '../../core/utils/display.dart';
 import '../../shared/models/ep.dart';
 import '../../shared/models/mono.dart';
 import '../../shared/models/subject.dart';
+import '../../core/utils/format.dart';
 
 /// 条目详情页聚合数据: 旧版条目信息 + v0 扩展 (infobox/tags/eps)
 class SubjectDetail {
@@ -59,19 +60,27 @@ class SubjectListItem {
     this.relation = '',
   });
 
-  factory SubjectListItem.fromJson(Map<String, dynamic> json) =>
-      SubjectListItem(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        name: json['name'] as String? ?? '',
-        nameCn: json['name_cn'] as String? ?? '',
-        date: json['date'] as String? ?? '',
-        score: (json['score'] as num?)?.toDouble() ?? 0,
-        rank: (json['rank'] as num?)?.toInt() ?? 0,
-        images: SubjectImages.fromJson(
-          json['images'] as Map<String, dynamic>? ?? const {},
-        ),
-        relation: json['relation'] as String? ?? '',
-      );
+  factory SubjectListItem.fromJson(Map<String, dynamic> json) {
+    final rating = json['rating'] as Map<String, dynamic>? ?? const {};
+    return SubjectListItem(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      nameCn: json['name_cn'] as String? ?? '',
+      date: json['date'] as String? ?? json['air_date'] as String? ?? '',
+      score:
+          (json['score'] as num?)?.toDouble() ??
+          (rating['score'] as num?)?.toDouble() ??
+          0,
+      rank:
+          (json['rank'] as num?)?.toInt() ??
+          (rating['rank'] as num?)?.toInt() ??
+          0,
+      images: SubjectImages.fromJson(
+        json['images'] as Map<String, dynamic>? ?? const {},
+      ),
+      relation: json['relation'] as String? ?? '',
+    );
+  }
 
   String get displayName => cnjp(name, nameCn);
 }
@@ -154,6 +163,8 @@ class PersonVo {
   final String nameCn;
   final String relation; // 职位
   final List<String> career;
+  final List<String> positions;
+  final String info;
   final MonoImages images;
   final int type;
 
@@ -163,6 +174,8 @@ class PersonVo {
     this.nameCn = '',
     this.relation = '',
     this.career = const [],
+    this.positions = const [],
+    this.info = '',
     this.images = const MonoImages(),
     this.type = 1,
   });
@@ -175,6 +188,8 @@ class PersonVo {
     career:
         (json['career'] as List?)?.map((e) => e.toString()).toList() ??
         const [],
+    positions: _personPositionsFromJson(json),
+    info: json['info'] as String? ?? '',
     images: MonoImages.fromJson(
       json['images'] as Map<String, dynamic>? ?? const {},
     ),
@@ -182,6 +197,264 @@ class PersonVo {
   );
 
   String get displayName => cnjp(name, nameCn);
+
+  /// Extra Filter 职位: HTML badge_job, 否则 v0 relation
+  List<String> get jobs {
+    if (positions.isNotEmpty) return positions;
+    final job = relation.trim();
+    return job.isEmpty ? const [] : [job];
+  }
+}
+
+List<String> _personPositionsFromJson(Map<String, dynamic> json) {
+  final raw = json['positions'] ?? json['jobs'];
+  if (raw is List) {
+    return [
+      for (final item in raw)
+        if (item.toString().trim().isNotEmpty) item.toString().trim(),
+    ];
+  }
+  final relation = (json['relation'] as String? ?? '').trim();
+  return relation.isEmpty ? const [] : [relation];
+}
+
+/// 人物饰演角色下的条目 (原项目 MonoVoicesSubjectItem)
+class MonoVoiceSubject {
+  final int id;
+  final String name;
+  final String nameCn;
+  final String cover;
+  final String staff;
+  final String tip;
+
+  const MonoVoiceSubject({
+    this.id = 0,
+    this.name = '',
+    this.nameCn = '',
+    this.cover = '',
+    this.staff = '',
+    this.tip = '',
+  });
+
+  String get displayName => cnjp(name, nameCn);
+}
+
+/// 人物饰演的角色 (原项目 MonoVoicesItem)
+class MonoVoiceItem {
+  final int id;
+  final String name;
+  final String nameCn;
+  final String cover;
+  final List<MonoVoiceSubject> subjects;
+
+  const MonoVoiceItem({
+    this.id = 0,
+    this.name = '',
+    this.nameCn = '',
+    this.cover = '',
+    this.subjects = const [],
+  });
+
+  String get displayName => cnjp(name, nameCn);
+}
+
+class MonoVoiceFilter {
+  final String title;
+  final List<(String, String)> options;
+
+  const MonoVoiceFilter({this.title = '', this.options = const []});
+}
+
+class MonoVoicesPage {
+  final List<MonoVoiceItem> list;
+  final List<MonoVoiceFilter> filters;
+
+  const MonoVoicesPage({this.list = const [], this.filters = const []});
+}
+
+/// 原版 Voices SNAPSHOT_LIMIT: 快照 24 条不显示计数
+const kVoicesSnapshotLimit = 24;
+
+/// 原版 MONO_WORKS_ORDERBY
+const kWorksOrders = <(String, String)>[
+  ('title', '名称'),
+  ('date', '日期'),
+  ('rank', '排名'),
+];
+
+class MonoWorkItem {
+  final int id;
+  final String name;
+  final String nameCn;
+  final String cover;
+  final String tip;
+  final List<String> positions;
+  final double score;
+  final String total;
+  final int rank;
+  final bool collected;
+  final String type;
+
+  const MonoWorkItem({
+    this.id = 0,
+    this.name = '',
+    this.nameCn = '',
+    this.cover = '',
+    this.tip = '',
+    this.positions = const [],
+    this.score = 0,
+    this.total = '',
+    this.rank = 0,
+    this.collected = false,
+    this.type = '',
+  });
+
+  String get displayName => cnjp(name, nameCn);
+}
+
+class MonoWorksPage {
+  final List<MonoWorkItem> list;
+  final List<MonoVoiceFilter> filters;
+
+  const MonoWorksPage({this.list = const [], this.filters = const []});
+}
+
+/// 原版 DATA_STATUS
+const kVoicesStatus = ['全部', '已收藏', '系列有收藏', '未收藏'];
+
+/// 原版 MONO_VOICES_OUTER_ORDERBY
+const kVoicesOuterOrders = <(String, String)>[
+  ('', '默认'),
+  ('id_desc', '角色ID↓'),
+  ('id_asc', '角色ID↑'),
+  ('subject_max_desc', '条目ID最大↓'),
+  ('subject_min_asc', '条目ID最小↑'),
+];
+
+/// 原版 MONO_VOICES_INNER_ORDERBY
+const kVoicesInnerOrders = <(String, String)>[
+  ('', '默认'),
+  ('id_desc', '条目ID↓'),
+  ('id_asc', '条目ID↑'),
+];
+
+List<MonoVoiceItem> sortMonoVoices(
+  List<MonoVoiceItem> list, {
+  required String outerOrder,
+  required String innerOrder,
+}) {
+  final sorted = [
+    for (final item in list)
+      MonoVoiceItem(
+        id: item.id,
+        name: item.name,
+        nameCn: item.nameCn,
+        cover: item.cover,
+        subjects: sortMonoVoiceSubjects(item.subjects, innerOrder),
+      ),
+  ];
+  sorted.sort((a, b) {
+    switch (outerOrder) {
+      case 'id_desc':
+        return b.id.compareTo(a.id);
+      case 'id_asc':
+        return a.id.compareTo(b.id);
+      case 'subject_max_desc':
+        return _maxSubjectId(b).compareTo(_maxSubjectId(a));
+      case 'subject_min_asc':
+        return _minSubjectId(a).compareTo(_minSubjectId(b));
+      default:
+        return 0;
+    }
+  });
+  return sorted;
+}
+
+List<MonoVoiceSubject> sortMonoVoiceSubjects(
+  List<MonoVoiceSubject> subjects,
+  String order,
+) {
+  if (order.isEmpty || subjects.isEmpty) return subjects;
+  final next = [...subjects];
+  next.sort((a, b) {
+    switch (order) {
+      case 'id_desc':
+        return b.id.compareTo(a.id);
+      case 'id_asc':
+        return a.id.compareTo(b.id);
+      default:
+        return 0;
+    }
+  });
+  return next;
+}
+
+int _maxSubjectId(MonoVoiceItem item) {
+  var max = 0;
+  for (final s in item.subjects) {
+    if (s.id > max) max = s.id;
+  }
+  return max;
+}
+
+int _minSubjectId(MonoVoiceItem item) {
+  if (item.subjects.isEmpty) return 0x7fffffff;
+  var min = 0x7fffffff;
+  for (final s in item.subjects) {
+    if (s.id < min) min = s.id;
+  }
+  return min;
+}
+
+List<MonoVoiceItem> filterMonoVoices(
+  List<MonoVoiceItem> list,
+  String status,
+  Set<int> collectedIds,
+) {
+  if (status.isEmpty || status == '全部') return list;
+  final out = <MonoVoiceItem>[];
+  for (final item in list) {
+    final hasCollected = item.subjects.any((s) => collectedIds.contains(s.id));
+    if ((status == '已收藏' || status == '系列有收藏') && !hasCollected) {
+      continue;
+    }
+    if (status == '已收藏') {
+      final subjects = [
+        for (final s in item.subjects)
+          if (collectedIds.contains(s.id)) s,
+      ];
+      if (subjects.isEmpty) continue;
+      out.add(
+        MonoVoiceItem(
+          id: item.id,
+          name: item.name,
+          nameCn: item.nameCn,
+          cover: item.cover,
+          subjects: subjects,
+        ),
+      );
+      continue;
+    }
+    if (status == '未收藏') {
+      final subjects = [
+        for (final s in item.subjects)
+          if (!collectedIds.contains(s.id)) s,
+      ];
+      if (subjects.isEmpty) continue;
+      out.add(
+        MonoVoiceItem(
+          id: item.id,
+          name: item.name,
+          nameCn: item.nameCn,
+          cover: item.cover,
+          subjects: subjects,
+        ),
+      );
+      continue;
+    }
+    out.add(item);
+  }
+  return out;
 }
 
 /// 角色 / 人物详情 (v0)
@@ -323,6 +596,10 @@ class CollectionDetail {
   final List<String> tags;
   final int epStatus;
   final int volStatus;
+  final String updatedAt;
+
+  /// 0=公开 1=私密 (原项目 FlipBtn privacy)
+  final int privacy;
 
   const CollectionDetail({
     this.subjectId = 0,
@@ -332,6 +609,8 @@ class CollectionDetail {
     this.tags = const [],
     this.epStatus = 0,
     this.volStatus = 0,
+    this.updatedAt = '',
+    this.privacy = 0,
   });
 
   factory CollectionDetail.fromJson(Map<String, dynamic> json) {
@@ -349,6 +628,12 @@ class CollectionDetail {
           const [],
       epStatus: (json['ep_status'] as num?)?.toInt() ?? 0,
       volStatus: (json['vol_status'] as num?)?.toInt() ?? 0,
+      updatedAt:
+          json['updated_at'] as String? ?? json['updatedAt'] as String? ?? '',
+      privacy:
+          (json['private'] as num?)?.toInt() ??
+          (json['privacy'] as num?)?.toInt() ??
+          0,
     );
   }
 
@@ -541,4 +826,34 @@ class SubjectRecentUser {
     this.star = 0,
     this.status = '',
   });
+}
+
+/// Extra 动态「好友」: 在看 + 看过, 按时间取前 16
+List<SubjectRecentUser> extraFriendsRecent({
+  required List<SubjectCommentItem> doings,
+  required List<SubjectCommentItem> collections,
+  required String action,
+}) {
+  final merged = <(SubjectCommentItem, bool)>[
+    for (final item in doings) (item, false),
+    for (final item in collections) (item, true),
+  ];
+  merged.sort((a, b) {
+    final at = DateTime.tryParse(a.$1.time.replaceFirst(' ', 'T'));
+    final bt = DateTime.tryParse(b.$1.time.replaceFirst(' ', 'T'));
+    if (at == null && bt == null) return 0;
+    if (at == null) return 1;
+    if (bt == null) return -1;
+    return bt.compareTo(at);
+  });
+  return [
+    for (final (item, done) in merged.take(16))
+      SubjectRecentUser(
+        userId: item.userId,
+        name: item.userName,
+        avatar: item.avatar,
+        star: item.star,
+        status: '${friendlyTime(item.time)}在$action${done ? '过' : ''}',
+      ),
+  ];
 }

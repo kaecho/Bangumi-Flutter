@@ -102,7 +102,15 @@ class RakuenSettingsState {
   bool get loadImages => autoLoadImage != '0';
 
   /// 是否折叠该用户的楼层 (屏蔽用户)
-  bool isUserBlocked(String userId) => blockUsers.contains(userId);
+  bool isUserBlocked(String userId, [String userName = '']) {
+    if (userId.isEmpty && userName.isEmpty) return false;
+    for (final item in blockUsers) {
+      if (item == userId || item == userName) return true;
+      if (userId.isNotEmpty && item.endsWith('@$userId')) return true;
+      if (userName.isNotEmpty && item.startsWith('$userName@')) return true;
+    }
+    return false;
+  }
 
   /// 是否屏蔽该小组的帖子
   bool isGroupBlocked(String group) {

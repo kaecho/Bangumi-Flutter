@@ -5,16 +5,17 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/site_cookies.dart';
+import '../../core/auth/auth_controller.dart';
 import '../../core/utils/display.dart';
-import '../../core/utils/format.dart';
+import '../../design_system/design_system.dart';
 
 import '../../shared/models/timeline.dart';
 import '../../shared/models/user.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
-/// 吐槽类型: 点赞参数 (原项目 LIKE_TYPE_SAY)
-const int kLikeTypeSay = 50;
 
 /// 吐槽评论
 class SayComment {
@@ -52,6 +53,14 @@ class SayDetail {
   final List<SayComment> comments;
 
   const SayDetail({required this.say, this.comments = const []});
+}
+
+int _sayThreadLength(SayDetail detail) => 1 + detail.comments.length;
+
+String _sayHeaderTitle(SayDetail? detail) {
+  if (detail == null) return '吐槽';
+  final date = detail.say.createdAt.split(' ').first;
+  return '吐槽 (${_sayThreadLength(detail)})${date.isEmpty ? '' : ' · $date'}';
 }
 
 /// 吐槽详情 (移植自原项目 screens/timeline/say)
@@ -98,11 +107,13 @@ class SayScreen extends ConsumerStatefulWidget {
 
 class _SayScreenState extends ConsumerState<SayScreen> {
   final _reply = TextEditingController();
+  final _scroll = ScrollController();
   bool _sending = false;
 
   @override
   void dispose() {
     _reply.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -119,321 +130,271 @@ class _SayScreenState extends ConsumerState<SayScreen> {
       }
       if (gh.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('回复吐槽需要站点 Cookie 登录')),
-          );
+          showBgmToast(context, '回复吐槽需要站点 Cookie 登录');
         }
         return;
       }
-      await ref.read(apiClientProvider).post(
-        htmlTimelineReply(widget.id),
-        host: kHost,
-        data: {'content': text, 'formhash': gh, 'submit': 'submit'},
-      );
+      await ref
+          .read(apiClientProvider)
+          .post(
+            htmlTimelineReply(widget.id),
+            host: kHost,
+            data: {'content': text, 'formhash': gh, 'submit': 'submit'},
+          );
       if (!mounted) return;
       _reply.clear();
       ref.invalidate(sayDetailProvider(widget.id));
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已回复')));
+      showBgmToast(context, '已回复');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('回复失败: ${apiErrorMessage(e)}')),
-        );
+        showBgmToast(context, '回复失败: ${apiErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
+  void _scrollToTop() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(
+      _scroll.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _scrollToBottom() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(
+      0,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final id = widget.id;
     final detail = ref.watch(sayDetailProvider(id));
+    final loaded = detail.valueOrNull;
+    final threadLen = loaded == null ? 0 : _sayThreadLength(loaded);
+    final ds = context.ds;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          detail.maybeWhen(
-            data: (value) {
-              final count = value.comments.length;
-              final date = value.say.createdAt.split(' ').first;
-              return '吐槽 ($count)${date.isEmpty ? '' : ' · $date'}';
-            },
-            orElse: () => '吐槽详情',
+      appBar: BgmAppBar(
+        titleWidget: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _sayHeaderTitle(loaded),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: ds.section,
           ),
         ),
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () {
-              final say = detail.valueOrNull?.say;
-              final userId = say?.user?.username.isNotEmpty == true
-                  ? say!.user!.username
-                  : '${say?.userId ?? ''}';
-              if (userId.isEmpty) return;
-              openExternalUrl(htmlSay(userId, id));
-            },
-          ),
+          if (threadLen >= 10) ...[
+            BgmHeaderAction(
+              tooltip: '到顶',
+              icon: const Icon(Icons.keyboard_arrow_up, size: 24),
+              onPressed: _scrollToTop,
+            ),
+            BgmHeaderAction(
+              tooltip: '到底',
+              icon: const Icon(Icons.keyboard_arrow_down, size: 24),
+              onPressed: _scrollToBottom,
+            ),
+          ],
+          BgmHeaderMore.browser(() {
+            final say = loaded?.say;
+            final userId = say?.user?.username.isNotEmpty == true
+                ? say!.user!.username
+                : '${say?.userId ?? ''}';
+            if (userId.isEmpty) return;
+            openExternalUrl(htmlSay(userId, id));
+          }),
         ],
       ),
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 8),
-              Text(apiErrorMessage(e), style: const TextStyle(fontSize: 12)),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(sayDetailProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => BgmRetry(
+          onRetry: () => ref.invalidate(sayDetailProvider(id)),
+          message: apiErrorMessage(e),
         ),
-        data: (value) => Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _SayHeader(say: value.say, id: id),
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      '评论 (${value.comments.length})',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  if (value.comments.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text('暂无评论', style: TextStyle(fontSize: 13)),
-                      ),
-                    )
-                  else
-                    ...value.comments.map((c) => _CommentTile(comment: c)),
-                ],
-              ),
+        data: (value) {
+          final me = ref.watch(currentUserProvider);
+          final myId = me?.id ?? 0;
+          final thread = <({int userId, User? user, String content, String createdAt})>[
+            (
+              userId: value.say.userId,
+              user: value.say.user,
+              content: value.say.content,
+              createdAt: value.say.createdAt,
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _reply,
-                        minLines: 1,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          hintText: '回复吐槽, 长按头像@某人',
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: _sending ? null : _sendReply,
-                      child: const Text('回复'),
-                    ),
-                  ],
+            for (final c in value.comments)
+              (
+                userId: c.userId,
+                user: c.user,
+                content: c.content,
+                createdAt: c.createdAt,
+              ),
+          ];
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  controller: _scroll,
+                  reverse: true,
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  itemCount: thread.length,
+                  itemBuilder: (context, index) {
+                    final item = thread[thread.length - 1 - index];
+                    final prev = index + 1 < thread.length
+                        ? thread[thread.length - 2 - index]
+                        : null;
+                    final showName =
+                        prev == null || prev.userId != item.userId;
+                    final isLast = index == 0;
+                    return _SayBubble(
+                      user: item.user,
+                      userId: item.userId,
+                      content: item.content,
+                      isSelf: myId != 0 && item.userId == myId,
+                      showName: showName,
+                      date: isLast ? item.createdAt : '',
+                      onAt: (name) {
+                        final next = '@$name ${_reply.text}';
+                        _reply.value = TextEditingValue(
+                          text: next,
+                          selection: TextSelection.collapsed(offset: next.length),
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
-            ),
-          ],
-        ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: BgmField(
+                          controller: _reply,
+                          minLines: 1,
+                          maxLines: 4,
+                          hintText: '回复吐槽, 长按头像@某人',
+                          onSubmitted: (_) => _sendReply(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      BgmButton(
+                        '回复',
+                        expand: false,
+                        loading: _sending,
+                        onPressed: _sendReply,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
+class _SayBubble extends StatelessWidget {
+  final User? user;
+  final int userId;
+  final String content;
+  final bool isSelf;
+  final bool showName;
+  final String date;
+  final ValueChanged<String>? onAt;
 
-/// 吐槽本体 + 点赞按钮
-class _SayHeader extends ConsumerStatefulWidget {
-  final Say say;
-  final int id;
-
-  const _SayHeader({required this.say, required this.id});
-
-  @override
-  ConsumerState<_SayHeader> createState() => _SayHeaderState();
-}
-
-class _SayHeaderState extends ConsumerState<_SayHeader> {
-  bool _liked = false;
-  bool _liking = false;
-
-  Future<void> _like() async {
-    if (_liking) return;
-    setState(() => _liking = true);
-    try {
-      final client = ref.read(apiClientProvider);
-      // 站点操作需要 formhash (来自登录页), 依赖站点 Cookie
-      String gh;
-      try {
-        gh = await ref.read(formhashProvider.future);
-      } catch (_) {
-        gh = '';
-      }
-      if (gh.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('点赞需要站点 Cookie 登录, 请到 设置 → 站点 Cookie 登录 配置'),
-            ),
-          );
-        }
-        return;
-      }
-      await client.post(
-        apiLike(kLikeTypeSay, widget.id, value: '赞', gh: gh),
-        host: kHost,
-      );
-      if (mounted) setState(() => _liked = true);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('点赞失败, 请确认已登录')));
-      }
-    } finally {
-      if (mounted) setState(() => _liking = false);
-    }
-  }
+  const _SayBubble({
+    required this.user,
+    required this.userId,
+    required this.content,
+    required this.isSelf,
+    required this.showName,
+    this.date = '',
+    this.onAt,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final say = widget.say;
-    final scheme = Theme.of(context).colorScheme;
-    final user = say.user;
-    final likeCount = say.likes.length + (_liked ? 1 : 0);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Avatar(
-              url: user?.avatarUrl ?? '',
-              size: 40,
-              name: user?.displayName,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user?.displayName ?? '用户${say.userId}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    friendlyTime(say.createdAt),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: '点赞',
-              icon: Icon(
-                _liked ? Icons.favorite : Icons.favorite_border,
-                color: _liked ? scheme.primary : scheme.onSurfaceVariant,
-              ),
-              onPressed: _liking ? null : _like,
-            ),
-          ],
-        ),
-        if (likeCount > 0)
-          Padding(
-            padding: const EdgeInsets.only(left: 50, top: 4),
-            child: Text(
-              '$likeCount 人赞过',
-              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-            ),
-          ),
-        const SizedBox(height: 8),
-        SelectableText(
-          say.content,
-          style: const TextStyle(fontSize: 15, height: 1.6),
-        ),
-      ],
+    final ds = context.ds;
+    final name = user?.displayName ?? '用户$userId';
+    final avatar = GestureDetector(
+      onLongPress: onAt == null ? null : () => onAt!(name),
+      child: Avatar(
+        url: user?.avatarUrl ?? '',
+        size: 36,
+        name: name,
+      ),
     );
-  }
-}
-
-/// 评论条目
-class _CommentTile extends StatelessWidget {
-  final SayComment comment;
-
-  const _CommentTile({required this.comment});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final user = comment.user;
+    final bubble = Container(
+      constraints: const BoxConstraints(maxWidth: 280),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isSelf ? ds.accentSoft : ds.surfaceCard,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(content, style: ds.body),
+    );
+    final nameText = showName
+        ? Padding(
+            padding: EdgeInsets.only(
+              left: isSelf ? 0 : 8,
+              right: isSelf ? 8 : 0,
+              bottom: 4,
+            ),
+            child: Text(name, style: ds.tiny),
+          )
+        : const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
         children: [
-          Avatar(url: user?.avatarUrl ?? '', size: 32, name: user?.displayName),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        user?.displayName ?? '用户${comment.userId}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+          Row(
+            mainAxisAlignment: isSelf
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: isSelf
+                ? [
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [nameText, bubble],
                       ),
                     ),
-                    Text(
-                      friendlyTime(comment.createdAt),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: scheme.onSurfaceVariant,
+                    const SizedBox(width: 8),
+                    avatar,
+                  ]
+                : [
+                    avatar,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [nameText, bubble],
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  comment.content,
-                  style: const TextStyle(fontSize: 14, height: 1.5),
-                ),
-              ],
-            ),
           ),
+          if (date.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                date,
+                textAlign: TextAlign.center,
+                style: ds.caption,
+              ),
+            ),
         ],
       ),
     );
@@ -461,7 +422,7 @@ class _SayComposeScreenState extends ConsumerState<SayComposeScreen> {
 
   Future<void> _submit() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
       String gh;
@@ -472,9 +433,7 @@ class _SayComposeScreenState extends ConsumerState<SayComposeScreen> {
       }
       if (gh.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('发表吐槽需要站点 Cookie 登录')));
+          showBgmToast(context, '发表吐槽需要站点 Cookie 登录');
         }
         return;
       }
@@ -485,16 +444,12 @@ class _SayComposeScreenState extends ConsumerState<SayComposeScreen> {
         data: {'say_input': text, 'formhash': gh, 'submit': '提交'},
       );
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('已发表')));
+        showBgmToast(context, '已发表');
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('发表失败: ${apiErrorMessage(e)}')));
+        showBgmToast(context, '发表失败: ${apiErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -503,34 +458,38 @@ class _SayComposeScreenState extends ConsumerState<SayComposeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ds = context.ds;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('新吐槽'),
-        actions: [
-          TextButton(
-            onPressed: _sending ? null : _submit,
-            child: _sending
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('发表'),
+      appBar: BgmAppBar(
+        titleWidget: Align(
+          alignment: Alignment.centerLeft,
+          child: Text('新吐槽', style: ds.section),
+        ),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text('点击底部输入框录入吐槽内容', style: ds.caption),
+          ),
+          const Spacer(),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+              child: BgmField(
+                controller: _controller,
+                autofocus: true,
+                maxLength: 500,
+                minLines: 1,
+                maxLines: 4,
+                hintText: '新吐槽',
+                onSubmitted: (_) => _submit(),
+              ),
+            ),
           ),
         ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: TextField(
-          controller: _controller,
-          autofocus: true,
-          maxLines: 8,
-          maxLength: 500,
-          decoration: const InputDecoration(
-            hintText: '说点什么...',
-            border: OutlineInputBorder(),
-          ),
-        ),
       ),
     );
   }

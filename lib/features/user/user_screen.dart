@@ -16,8 +16,15 @@ import '../../shared/models/collection.dart';
 import '../../shared/models/user.dart';
 
 import '../../shared/widgets/cover.dart';
+import '../../shared/widgets/bgm_button.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/tab_title.dart';
+import '../../shared/widgets/app_bar.dart';
+
+import '../../shared/widgets/mesume.dart';
+import '../../shared/widgets/score.dart';
+
+import '../progress/progress_filter.dart';
 
 import '../subject/collection_sheet.dart';
 import 'user_models.dart';
@@ -27,17 +34,25 @@ import 'zone_screen.dart';
 const kUserMenus = [
   ('我的空间', Icons.person_pin_outlined, 'zone'),
   ('我的好友', Icons.group_outlined, 'friends'),
-  ('我的反向好友', Icons.group_add_outlined, 'rev-friends'),
+  ('谁加我为好友', Icons.group_add_outlined, 'rev-friends'),
   ('我的人物', Icons.person_outline, '/my-mono'),
   ('我的目录', Icons.folder_special_outlined, '/my-catalogs'),
   ('我的日志', Icons.edit_note_outlined, '/my-blogs'),
   ('我的词云', Icons.cloud_outlined, '/wordcloud'),
-  ('时光机', Icons.timeline, '/my-timeline'),
-  ('Netaba 统计', Icons.bar_chart_outlined, 'netaba'),
-  ('照片墙', Icons.photo_library_outlined, '/my-milestone'),
-  ('本地管理', Icons.folder_outlined, '/settings/smb'),
-  ('本地备份', Icons.inbox_outlined, '/settings/backup'),
-  ('设置', Icons.settings_outlined, '/settings'),
+  ('我的时间线', Icons.timeline, '/my-timeline'),
+  ('我的netaba.re', Icons.bar_chart_outlined, 'netaba'),
+];
+
+/// 原版时光机工具栏更多
+List<(String, String)> myCollectionMoreItems({
+  required bool list,
+  required bool pagination,
+  required bool showYear,
+}) => [
+  ('layout', '布　局〔${list ? '列表' : '网格'}〕'),
+  ('pagination', '分页器〔${pagination ? '开启' : '关闭'}〕'),
+  if (!list) ('year', '年　份〔${showYear ? '显示' : '不显示'}〕'),
+  ('setting', '设置'),
 ];
 
 /// 收藏状态 Tab (原项目 COLLECTION_STATUS, 无「全部」)
@@ -69,7 +84,15 @@ final collectionStatsProvider = FutureProvider<CollectionStats>((ref) async {
 });
 
 /// 「我的」Tab 收藏浏览查询
-typedef MyCollectionsArg = ({String type, int status});
+typedef MyCollectionsArg = ({
+  String userId,
+  String type,
+  int status,
+  int page,
+  bool pagination,
+  String order,
+  String tag,
+});
 
 final myCollectionsProvider =
     AsyncNotifierProvider.family<
@@ -80,276 +103,330 @@ final myCollectionsProvider =
 
 class MyCollectionsNotifier
     extends FamilyAsyncNotifier<ZoneCollectionsData, MyCollectionsArg> {
-  @override
-  Future<ZoneCollectionsData> build(MyCollectionsArg arg) => _fetch(0);
+  static const pageSize = 24;
 
-  Future<ZoneCollectionsData> _fetch(int offset) async {
-    final me = ref.read(currentUserProvider);
-    if (me == null) return const ZoneCollectionsData(hasMore: false);
-    final userId = me.username.isEmpty ? '${me.id}' : me.username;
+  @override
+  Future<ZoneCollectionsData> build(MyCollectionsArg arg) =>
+      _fetch(arg.pagination ? arg.page : 1);
+
+  Future<ZoneCollectionsData> _fetch(int page) async {
+    final userId = arg.userId;
+    if (userId.isEmpty) return const ZoneCollectionsData(hasMore: false);
     final client = ref.read(apiClientProvider);
+    try {
+      final html = await client.fetchHtml(
+        htmlUserCollections(
+          userId,
+          scope: arg.type,
+          type: htmlCollectionStatus(arg.status),
+          order: arg.order,
+          tag: arg.tag,
+          page: page,
+        ),
+      );
+      final parsed = parseUserCollections(
+        html,
+        subjectType: arg.type,
+        status: arg.status,
+      );
+      if (parsed.items.isNotEmpty || parsed.pageTotal > 1) {
+        return ZoneCollectionsData(
+          items: parsed.items,
+          offset: (page - 1) * pageSize,
+          total: parsed.pageTotal * pageSize,
+          hasMore: page < parsed.pageTotal,
+          pageTotal: parsed.pageTotal,
+        );
+      }
+    } catch (_) {}
     final data = await client.get(
       apiV0UsersCollections(
         userId,
         '${v0SubjectTypeInt(arg.type)}',
         100,
-        offset,
+        arg.pagination ? (arg.page - 1) * 100 : 0,
         '${arg.status}',
       ),
     );
+
     final parsed = UserCollection.fromJson(data as Map<String, dynamic>);
     return ZoneCollectionsData(
       items: parsed.data,
       offset: parsed.offset,
       total: parsed.total,
       hasMore: parsed.offset + parsed.data.length < parsed.total,
+      pageTotal: (parsed.total / 100).ceil().clamp(1, 9999),
     );
   }
 
   Future<void> loadMore() async {
+    if (arg.pagination) return;
     final current = state.valueOrNull;
     if (current == null || !current.hasMore) return;
     try {
-      final next = await _fetch(current.offset + 100);
+      final nextPage = (current.offset ~/ pageSize) + 2;
+      final next = await _fetch(nextPage);
       state = AsyncData(
         ZoneCollectionsData(
           items: [...current.items, ...next.items],
           offset: next.offset,
           total: next.total,
           hasMore: next.hasMore,
+          pageTotal: next.pageTotal,
         ),
       );
     } catch (_) {}
   }
 }
 
+typedef MyCollectionTagsArg = ({String userId, String type, int status});
+
+/// 时光机标签 (原项目 userCollectionsTags, 主站 #userTagList)
+final myCollectionTagsProvider =
+    FutureProvider.family<List<UserCollectionTag>, MyCollectionTagsArg>((
+      ref,
+      arg,
+    ) async {
+      try {
+        final html = await ref
+            .read(apiClientProvider)
+            .fetchHtml(
+              htmlUserCollections(
+                arg.userId,
+                scope: arg.type,
+                type: htmlCollectionStatus(arg.status),
+              ),
+            );
+        return parseUserCollectionsTags(html);
+      } catch (_) {
+        return const [];
+      }
+    });
+
 /// 用户 Tab (Tab 5) — 对齐原项目 screens/user/v2 收藏浏览
 class UserScreen extends ConsumerStatefulWidget {
-  const UserScreen({super.key});
+  final String? userId;
+
+  const UserScreen({super.key, this.userId});
 
   @override
   ConsumerState<UserScreen> createState() => _UserScreenState();
 }
 
-class _UserScreenState extends ConsumerState<UserScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(
-    length: kMyStatusTabs.length,
-    vsync: this,
-  );
+class _UserScreenState extends ConsumerState<UserScreen> {
+  int _status = 0;
   String _type = 'anime';
   String _order = '';
+  String _tag = '';
   String _query = '';
+  int _page = 1;
   bool _searchOpen = false;
+  bool _fixed = false;
+  final _filterController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _tab.addListener(() {
-      if (_tab.indexIsChanging) return;
-      setState(() {});
-    });
+  static const _headerHeight = 280.0;
+  static const _fixedOffset = 20.0;
+
+  String _userIdOf(User user) =>
+      user.username.isEmpty ? '${user.id}' : user.username;
+
+  bool _onScroll(ScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical) return false;
+    final next = n.metrics.pixels >= _headerHeight - 88 - _fixedOffset;
+    if (next != _fixed) setState(() => _fixed = next);
+    return false;
   }
 
   @override
   void dispose() {
-    _tab.dispose();
+    _filterController.dispose();
     super.dispose();
   }
 
-  String _userIdOf(User user) =>
-      user.username.isEmpty ? '${user.id}' : user.username;
   @override
   Widget build(BuildContext context) {
     final isLogin = ref.watch(isLoggedInProvider);
-    final user = ref.watch(currentUserProvider);
-    if (!isLogin || user == null) {
-      return Scaffold(
-        appBar: AppBar(title: const TabLogoTitle('我的')),
-
-        body: const _LoginGate(),
-      );
+    final me = ref.watch(currentUserProvider);
+    final targetId = widget.userId?.trim() ?? '';
+    final isMe = targetId.isEmpty || (me != null && _userIdOf(me) == targetId);
+    if (isMe && (!isLogin || me == null)) {
+      return Scaffold(appBar: const LogoHeader(), body: const _LoginGate());
     }
+    final user = isMe
+        ? me!
+        : User(id: 0, username: targetId, nickname: targetId);
 
-    final status = kMyStatusTabs[_tab.index].$1;
-    final arg = (type: _type, status: status);
+    final status = kMyStatusTabs[_status].$1;
+    final pagination = ref.watch(
+      settingsStoreProvider.select((s) => s.userPagination),
+    );
+    final arg = (
+      userId: _userIdOf(user),
+      type: _type,
+      status: status,
+      page: _page,
+      pagination: pagination,
+      order: _order,
+      tag: _tag,
+    );
+
     final async = ref.watch(myCollectionsProvider(arg));
     final stats = ref.watch(collectionStatsProvider).valueOrNull;
+    final tags =
+        ref
+            .watch(
+              myCollectionTagsProvider((
+                userId: _userIdOf(user),
+                type: _type,
+                status: status,
+              )),
+            )
+            .valueOrNull ??
+        const [];
 
     return Scaffold(
-      body: Column(
-        children: [
-          _MyHeader(user: user, userId: _userIdOf(user)),
-          Material(
-            color: Theme.of(context).colorScheme.surface,
-            child: Row(
-              children: [
-                PopupMenuButton<String>(
-                  tooltip: '类型',
-                  onSelected: (v) => setState(() => _type = v),
-                  itemBuilder: (_) => [
-                    for (final t in kUserTypeTabs)
-                      PopupMenuItem(value: t.$1, child: Text(t.$2)),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          kUserTypeTabs
-                              .firstWhere(
-                                (e) => e.$1 == _type,
-                                orElse: () => ('anime', '动画'),
-                              )
-                              .$2,
-                          style: context.ds.label,
-                        ),
-                        const Icon(Icons.arrow_drop_down, size: 18),
-                      ],
+      appBar: isMe
+          ? null
+          : BgmAppBar(title: '$targetId的收藏', showBackButton: true),
+      body: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: Column(
+          children: [
+            if (isMe)
+              _MyHeader(user: user, userId: _userIdOf(user), fixed: _fixed),
+
+            ColoredBox(
+              color: context.ds.surfaceCard,
+              child: Row(
+                children: [
+                  PopupMenuButton<String>(
+                    tooltip: '类型',
+                    onSelected: (v) => setState(() {
+                      _type = v;
+                      _tag = '';
+                      _page = 1;
+                    }),
+                    itemBuilder: (_) => [
+                      for (final t in kUserTypeTabs)
+                        PopupMenuItem(value: t.$1, child: Text(t.$2)),
+                    ],
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                      child: _UserTypeBtn(
+                        label: kUserTypeTabs
+                            .firstWhere(
+                              (e) => e.$1 == _type,
+                              orElse: () => ('anime', '动画'),
+                            )
+                            .$2,
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: TabBar(
-                    controller: _tab,
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    onTap: (_) => setState(() {}),
-                    tabs: [
-                      for (final t in kMyStatusTabs)
-                        Tab(
-                          child: _StatusTabLabel(
+
+                  Expanded(
+                    child: BgmTabStrip(
+                      scrollable: true,
+                      index: _status,
+                      onSelect: (i) => setState(() {
+                        _status = i;
+                        _tag = '';
+                        _page = 1;
+                      }),
+                      tabs: [
+                        for (final t in kMyStatusTabs)
+                          _StatusTabLabel(
                             title: SubjectType.statusText(t.$1, _type),
                             count: stats?.count(_type, t.$1) ?? 0,
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          _MyToolBar(
-            order: _order,
-            searchOpen: _searchOpen,
-            onOrder: (v) => setState(() => _order = v),
-            onToggleSearch: () => setState(() {
-              _searchOpen = !_searchOpen;
-              if (!_searchOpen) _query = '';
-            }),
-            onToggleLayout: () => unawaited(
-              SettingsStore.instance.setUserList(
-                !SettingsStore.instance.userList,
+                ],
               ),
             ),
-          ),
-          if (_searchOpen)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-              child: TextField(
-                autofocus: true,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  prefixIcon: Icon(Icons.search, size: 18),
-                  hintText: '搜索收藏',
-                  border: OutlineInputBorder(),
+
+            _MyToolBar(
+              order: _order,
+              tag: _tag,
+              tags: tags,
+              searchOpen: _searchOpen,
+              page: _page,
+              pageTotal: pagination ? (async.valueOrNull?.pageTotal ?? 1) : 0,
+              onOrder: (v) => setState(() {
+                _order = v;
+                _page = 1;
+              }),
+              onTag: (v) => setState(() {
+                _tag = parseUserCollectionTagSelect(v);
+                _page = 1;
+              }),
+
+              onPage: (v) => setState(() => _page = v),
+              onToggleSearch: () => setState(() {
+                _searchOpen = !_searchOpen;
+                if (!_searchOpen) _query = '';
+              }),
+              onToggleLayout: () => unawaited(
+                SettingsStore.instance.setUserList(
+                  !SettingsStore.instance.userList,
                 ),
+              ),
+            ),
+
+            if (_searchOpen)
+              ProgressFilterBar(
+                controller: _filterController,
+                length: 0,
+                fetching: false,
                 onChanged: (v) => setState(() => _query = v.trim()),
               ),
-            ),
-          Expanded(
-            child: async.when(
-              loading: () => const Loading(text: '加载中...'),
-              error: (e, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(apiErrorMessage(e), style: context.ds.caption),
-                    TextButton(
-                      onPressed: () =>
-                          ref.invalidate(myCollectionsProvider(arg)),
-                      child: const Text('重试'),
-                    ),
-                  ],
+
+            Expanded(
+              child: async.when(
+                loading: () => const Loading(text: '加载中...'),
+                error: (e, _) => BgmRetry(
+                  message: apiErrorMessage(e),
+                  onRetry: () => ref.invalidate(myCollectionsProvider(arg)),
                 ),
-              ),
-              data: (data) {
-                final q = _query.trim();
-                var items = _sorted(data.items, _order);
-                if (q.isNotEmpty) {
-                  items = items
-                      .where(
-                        (e) =>
-                            pinYinFilterValue(e.subject.displayName, q) !=
+                data: (data) {
+                  final q = _query.trim();
+                  var items = data.items;
+                  if (q.isNotEmpty) {
+                    items = [
+                      for (final e in items)
+                        if (pinYinFilterValue(e.subject.displayName, q) !=
                                 null ||
                             pinYinFilterValue(e.subject.name, q) != null ||
-                            pinYinFilterValue(e.subject.nameCn, q) != null,
-                      )
-                      .toList();
-                }
-                if (items.isEmpty) {
-                  return const Center(child: Text('暂无收藏'));
-                }
-                final store = ref.watch(settingsStoreProvider);
-                final showMore =
-                    data.hasMore && q.isEmpty && !store.userPagination;
-                final extra = showMore || store.userPagination ? 1 : 0;
-                return RefreshIndicator(
-                  onRefresh: () async =>
-                      ref.invalidate(myCollectionsProvider(arg)),
-                  child: store.userList
-                      ? ListView.builder(
-                          itemCount: items.length + extra,
-                          itemBuilder: (context, index) {
-                            if (index >= items.length) {
-                              return _MyListFooter(
-                                loaded: items.length,
-                                total: data.total,
-                                showMore: showMore,
-                                onMore: () => unawaited(
-                                  ref
-                                      .read(myCollectionsProvider(arg).notifier)
-                                      .loadMore(),
-                                ),
-                              );
-                            }
-                            return _MyCollectionRow(
-                              item: items[index],
-                              showManage: store.userShowManage,
-                              commentsFull: store.userCommentsFull,
-                              commentsLines: store.userCommentsLines,
-                            );
-                          },
-                        )
-                      : CustomScrollView(
-                          slivers: [
-                            SliverPadding(
-                              padding: const EdgeInsets.all(8),
-                              sliver: SliverGrid(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: store.userGridNum,
-                                      childAspectRatio: 0.62,
-                                      crossAxisSpacing: 8,
-                                      mainAxisSpacing: 8,
-                                    ),
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) => _MyCollectionCard(
-                                    item: items[index],
-                                    showManage: store.userShowManage,
-                                  ),
-                                  childCount: items.length,
-                                ),
-                              ),
-                            ),
-                            if (extra > 0)
-                              SliverToBoxAdapter(
-                                child: _MyListFooter(
+                            pinYinFilterValue(e.subject.nameCn, q) != null)
+                          e,
+                    ];
+                  }
+
+                  if (items.isEmpty) {
+                    return const Center(child: _MyEmpty());
+                  }
+
+                  final store = ref.watch(settingsStoreProvider);
+                  final showMore =
+                      data.hasMore && q.isEmpty && !store.userPagination;
+                  final extra = showMore || store.userPagination ? 1 : 0;
+                  return RefreshIndicator(
+                    onRefresh: () async =>
+                        ref.invalidate(myCollectionsProvider(arg)),
+                    child: store.userList
+                        ? ListView.builder(
+                            itemCount: items.length + extra,
+                            itemBuilder: (context, index) {
+                              if (index >= items.length) {
+                                return _MyListFooter(
                                   loaded: items.length,
                                   total: data.total,
                                   showMore: showMore,
+                                  page: _page,
+                                  pageTotal: data.pageTotal,
+                                  onPage: store.userPagination
+                                      ? (v) => setState(() => _page = v)
+                                      : null,
                                   onMore: () => unawaited(
                                     ref
                                         .read(
@@ -357,53 +434,144 @@ class _UserScreenState extends ConsumerState<UserScreen>
                                         )
                                         .loadMore(),
                                   ),
+                                );
+                              }
+                              return _MyCollectionRow(
+                                item: items[index],
+                                showManage: store.userShowManage,
+                                commentsFull: store.userCommentsFull,
+                                commentsLines: store.userCommentsLines,
+                              );
+                            },
+                          )
+                        : CustomScrollView(
+                            slivers: [
+                              SliverPadding(
+                                padding: const EdgeInsets.all(8),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: store.userGridNum,
+                                        childAspectRatio: 0.62,
+                                        crossAxisSpacing: 8,
+                                        mainAxisSpacing: 8,
+                                      ),
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) => _MyCollectionCard(
+                                      item: items[index],
+                                      showManage: store.userShowManage,
+                                    ),
+                                    childCount: items.length,
+                                  ),
                                 ),
                               ),
-                          ],
-                        ),
-                );
-              },
+                              if (extra > 0)
+                                SliverToBoxAdapter(
+                                  child: _MyListFooter(
+                                    loaded: items.length,
+                                    total: data.total,
+                                    showMore: showMore,
+                                    page: _page,
+                                    pageTotal: data.pageTotal,
+                                    onPage: store.userPagination
+                                        ? (v) => setState(() => _page = v)
+                                        : null,
+                                    onMore: () => unawaited(
+                                      ref
+                                          .read(
+                                            myCollectionsProvider(arg).notifier,
+                                          )
+                                          .loadMore(),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                  );
+                },
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UserTypeBtn extends StatelessWidget {
+  final String label;
+
+  const _UserTypeBtn({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = context.ds;
+    return Container(
+      width: 56,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: ds.accentSoft,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ds.accent.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        label,
+        style: ds.caption.copyWith(
+          color: ds.accent,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _MyEmpty extends StatelessWidget {
+  const _MyEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    final speech = SettingsStore.instance.speech;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Mesume(size: 80),
+          const SizedBox(height: 12),
+          Text(
+            speech ? randomMesumeSpeech() : '暂无收藏',
+            style: context.ds.caption.copyWith(fontSize: 13),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
-  }
-
-  List<CollectionItem> _sorted(List<CollectionItem> items, String order) {
-    final next = [...items];
-    switch (order) {
-      case 'rate':
-        next.sort((a, b) => b.rate.compareTo(a.rate));
-      case 'date':
-        next.sort((a, b) => b.subject.airDate.compareTo(a.subject.airDate));
-      case 'title':
-        next.sort(
-          (a, b) => a.subject.displayName.compareTo(b.subject.displayName),
-        );
-      case 'score':
-        next.sort(
-          (a, b) => (b.subject.rating?.score ?? 0).compareTo(
-            a.subject.rating?.score ?? 0,
-          ),
-        );
-      default:
-        break;
-    }
-    return next;
   }
 }
 
 class _MyHeader extends ConsumerWidget {
   final User user;
   final String userId;
+  final bool fixed;
 
-  const _MyHeader({required this.user, required this.userId});
+  const _MyHeader({
+    required this.user,
+    required this.userId,
+    required this.fixed,
+  });
+
+  static const double _height = 280;
+  static const double _bar = 88;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SizedBox(
-      height: 220,
+    final ds = context.ds;
+    final top = MediaQuery.paddingOf(context).top;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      height: fixed ? _bar + top : _height,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -413,115 +581,211 @@ class _MyHeader extends ConsumerWidget {
               child: Image.network(user.avatarUrl, fit: BoxFit.cover),
             )
           else
-            ColoredBox(color: context.ds.accent),
-          const ColoredBox(color: Color(0x66000000)),
+            ColoredBox(color: ds.accent),
+          ColoredBox(color: Color(fixed ? 0x99000000 : 0x3D000000)),
           SafeArea(
             bottom: false,
-            child: Stack(
-              children: [
-                Align(
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: () => context.push('/settings/user'),
-                        child: Avatar(
-                          url: user.avatarUrl,
-                          size: 72,
-                          name: user.displayName,
-                          userId: userId,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      GestureDetector(
-                        onTap: ref.watch(settingsStoreProvider).logoToggleTheme
-                            ? () => ref
-                                  .read(settingsStoreProvider)
-                                  .toggleThemeMode()
-                            : null,
-                        onLongPress: () => context.push('/settings'),
-                        child: Text(
-                          user.displayName,
-                          style: context.ds.title.copyWith(color: Colors.white),
-                        ),
-                      ),
-
-                      GestureDetector(
-                        onLongPress: () =>
-                            Clipboard.setData(ClipboardData(text: userId)),
-                        child: Text(
-                          '@$userId',
-                          style: context.ds.caption.copyWith(
-                            color: Colors.white70,
+            child: fixed
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: [
+                        _menu(context),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => context.push('/settings/user'),
+                          child: Avatar(
+                            url: user.avatarUrl,
+                            size: 28,
+                            name: user.displayName,
+                            userId: userId,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: Row(
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            user.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ds.bodyStrong.copyWith(color: Colors.white),
+                          ),
+                        ),
+                        _trailing(context),
+                      ],
+                    ),
+                  )
+                : Stack(
                     children: [
-                      PopupMenuButton<String>(
-                        tooltip: '更多',
-                        icon: const Icon(Icons.more_vert, color: Colors.white),
-                        onSelected: (path) {
-                          switch (path) {
-                            case 'zone':
-                              context.push('/user/$userId');
-                            case 'friends':
-                              context.push('/my-friends');
-                            case 'rev-friends':
-                              context.push('/my-friends?rev=1');
-                            case 'netaba':
-                              context.push(
-                                '/web/${Uri.encodeComponent('https://netaba.re/user/$userId')}',
-                              );
-                            case '/my-timeline':
-                              context.push('/user/$userId/timeline');
-                            case '/my-milestone':
-                              context.push('/user/$userId/milestone');
-                            default:
-                              context.push(path);
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          for (final menu in kUserMenus)
-                            PopupMenuItem(value: menu.$3, child: Text(menu.$1)),
-                        ],
+                      Align(
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () => context.push('/settings/user'),
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xCCFFFFFF),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Avatar(
+                                  url: user.avatarUrl,
+                                  size: 72,
+                                  name: user.displayName,
+                                  userId: userId,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap:
+                                      ref
+                                          .watch(settingsStoreProvider)
+                                          .logoToggleTheme
+                                      ? () => ref
+                                            .read(settingsStoreProvider)
+                                            .toggleThemeMode()
+                                      : null,
+                                  onLongPress: () => context.push('/settings'),
+                                  child: Text(
+                                    user.displayName,
+                                    style: ds.title.copyWith(
+                                      color: Colors.white,
+                                      shadows: const [
+                                        Shadow(
+                                          color: Color(0x66000000),
+                                          blurRadius: 6,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onLongPress: () => Clipboard.setData(
+                                    ClipboardData(text: userId),
+                                  ),
+                                  child: Text(
+                                    ' @$userId',
+                                    style: ds.title.copyWith(
+                                      color: Colors.white,
+                                      shadows: const [
+                                        Shadow(
+                                          color: Color(0x66000000),
+                                          blurRadius: 6,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.logout, color: Colors.white),
-                        tooltip: '退出登录',
-                        onPressed: () =>
-                            ref.read(authControllerProvider.notifier).logout(),
-                      ),
+                      Positioned(top: 4, left: 4, child: _menu(context)),
+                      Positioned(top: 4, right: 4, child: _trailing(context)),
                     ],
                   ),
-                ),
-              ],
-            ),
           ),
+          if (!fixed)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                height: 16,
+                decoration: BoxDecoration(
+                  color: ds.surfaceCard,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _menu(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: '菜单',
+      icon: const Icon(Icons.menu, color: Colors.white),
+      onSelected: (path) {
+        switch (path) {
+          case 'zone':
+            context.push('/user/$userId');
+          case 'friends':
+            context.push('/my-friends');
+          case 'rev-friends':
+            context.push('/my-friends?rev=1');
+          case 'netaba':
+            context.push(
+              '/web/${Uri.encodeComponent('https://netaba.re/user/$userId')}',
+            );
+          case '/my-timeline':
+            context.push('/user/$userId/timeline');
+          case '/my-milestone':
+            context.push('/user/$userId/milestone');
+          default:
+            context.push(path);
+        }
+      },
+      itemBuilder: (_) => [
+        for (final menu in kUserMenus)
+          PopupMenuItem(value: menu.$3, child: Text(menu.$1)),
+      ],
+    );
+  }
+
+  Widget _trailing(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        BgmHeaderAction(
+          tooltip: '照片墙',
+          icon: const Icon(
+            Icons.image_aspect_ratio,
+            color: Colors.white,
+            size: 21,
+          ),
+          onPressed: () => context.push('/user/$userId/milestone'),
+        ),
+        BgmHeaderAction(
+          icon: Icon(BgmIcons.setting, color: Colors.white, size: 20),
+          tooltip: '设置',
+          onPressed: () => context.push('/settings'),
+        ),
+      ],
     );
   }
 }
 
 class _MyToolBar extends StatelessWidget {
   final String order;
+  final String tag;
+  final List<UserCollectionTag> tags;
   final bool searchOpen;
+  final int page;
+  final int pageTotal;
   final ValueChanged<String> onOrder;
+  final ValueChanged<String> onTag;
+  final ValueChanged<int> onPage;
   final VoidCallback onToggleSearch;
   final VoidCallback onToggleLayout;
 
   const _MyToolBar({
     required this.order,
+    required this.tag,
+    required this.tags,
     required this.searchOpen,
+    required this.page,
+    required this.pageTotal,
     required this.onOrder,
+    required this.onTag,
+    required this.onPage,
     required this.onToggleSearch,
     required this.onToggleLayout,
   });
@@ -532,6 +796,7 @@ class _MyToolBar extends StatelessWidget {
     final orderLabel = kMyOrderOptions
         .firstWhere((e) => e.$1 == order, orElse: () => ('', '收藏时间'))
         .$2;
+    final tagItems = userCollectionTagMenuItems(tags);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
       child: Row(
@@ -545,15 +810,41 @@ class _MyToolBar extends StatelessWidget {
             ],
             child: _ChipLabel(text: orderLabel, icon: Icons.sort),
           ),
+          PopupMenuButton<String>(
+            tooltip: '标签',
+            onSelected: onTag,
+            itemBuilder: (_) => [
+              for (final item in tagItems)
+                PopupMenuItem(value: item, child: Text(item)),
+            ],
+            child: _ChipLabel(
+              text: userCollectionTagLabel(tag),
+              icon: Icons.bookmark_border,
+            ),
+          ),
+          if (store.userPagination)
+            PopupMenuButton<int>(
+              tooltip: '分页',
+              onSelected: onPage,
+              itemBuilder: (_) => [
+                for (var i = 1; i <= pageTotal; i++)
+                  PopupMenuItem(value: i, child: Text('$i')),
+              ],
+              child: _ChipLabel(text: '$page', icon: Icons.notes),
+            ),
           const Spacer(),
-          IconButton(
+          BgmHeaderAction(
             tooltip: searchOpen ? '关闭搜索' : '搜索',
             icon: Icon(searchOpen ? Icons.close : Icons.search),
             onPressed: onToggleSearch,
           ),
-          PopupMenuButton<String>(
-            tooltip: '更多',
-            icon: const Icon(Icons.more_vert),
+
+          BgmHeaderMore(
+            items: myCollectionMoreItems(
+              list: store.userList,
+              pagination: store.userPagination,
+              showYear: store.userShowYear,
+            ),
             onSelected: (value) {
               switch (value) {
                 case 'layout':
@@ -566,22 +857,6 @@ class _MyToolBar extends StatelessWidget {
                   context.push('/settings');
               }
             },
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'layout',
-                child: Text(store.userList ? '布局: 网格' : '布局: 列表'),
-              ),
-              PopupMenuItem(
-                value: 'pagination',
-                child: Text(store.userPagination ? '分页: 关闭' : '分页: 开启'),
-              ),
-              if (!store.userList)
-                PopupMenuItem(
-                  value: 'year',
-                  child: Text(store.userShowYear ? '年份: 不显示' : '年份: 显示'),
-                ),
-              const PopupMenuItem(value: 'setting', child: Text('设置')),
-            ],
           ),
         ],
       ),
@@ -600,10 +875,8 @@ class _MyCollectionCard extends StatelessWidget {
     return InkWell(
       onTap: () => context.push('/subject/${item.subject.id}'),
       onLongPress: showManage
-          ? () => showModalBottomSheet<void>(
+          ? () => showBgmSheet<void>(
               context: context,
-              isScrollControlled: true,
-              useSafeArea: true,
               builder: (_) => CollectionSheet(subjectId: item.subject.id),
             )
           : null,
@@ -626,11 +899,12 @@ class _MyCollectionCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: context.ds.caption,
           ),
-          if (SettingsStore.instance.userShowYear &&
-              item.subject.airDate.isNotEmpty)
+          if (SettingsStore.instance.userShowYear)
             Text(
               formatSubjectAirDate(
-                item.subject.airDate,
+                item.subject.airDate.isNotEmpty
+                    ? item.subject.airDate
+                    : item.tip,
                 showMonth: item.subject.type == 'anime',
               ),
               style: context.ds.tiny,
@@ -645,20 +919,48 @@ class _MyListFooter extends StatelessWidget {
   final int loaded;
   final int total;
   final bool showMore;
+  final int page;
+  final int pageTotal;
+  final ValueChanged<int>? onPage;
   final VoidCallback onMore;
 
   const _MyListFooter({
     required this.loaded,
     required this.total,
     required this.showMore,
+    this.page = 1,
+    this.pageTotal = 1,
+    this.onPage,
     required this.onMore,
   });
 
   @override
   Widget build(BuildContext context) {
     if (showMore) {
-      return Center(
-        child: TextButton(onPressed: onMore, child: const Text('加载更多')),
+      return LoadMoreLink(onTap: onMore);
+    }
+    if (onPage != null && pageTotal > 1) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Row(
+          children: [
+            BgmTextAction(
+              '上一页',
+              onPressed: page > 1 ? () => onPage!(page - 1) : null,
+            ),
+            Expanded(
+              child: Text(
+                '$page / $pageTotal',
+                textAlign: TextAlign.center,
+                style: context.ds.caption,
+              ),
+            ),
+            BgmTextAction(
+              '下一页',
+              onPressed: page < pageTotal ? () => onPage!(page + 1) : null,
+            ),
+          ],
+        ),
       );
     }
     return Padding(
@@ -701,19 +1003,24 @@ class _ChipLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = context.ds;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 30),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: ds.surfaceCard,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: ds.border, width: 0.5),
+        color: ds.surfaceCard.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: ds.textHint),
+          Icon(icon, size: 18, color: ds.textPrimary),
           const SizedBox(width: 4),
-          Text(text, style: ds.caption),
-          Icon(Icons.arrow_drop_down, size: 16, color: ds.textHint),
+          Text(
+            text,
+            style: ds.caption.copyWith(
+              color: ds.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -781,33 +1088,44 @@ class _MyCollectionRow extends StatelessWidget {
                         ),
                       ),
 
+                      if (item.tip.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          item.tip,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: ds.tiny.copyWith(color: ds.textSecondary),
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         [
-                          SubjectType.statusText(item.type, item.subject.type),
-                          if (item.epStatus > 0) '看到第${item.epStatus}话',
-                          if (item.rate > 0) '我的评分 ${item.rate}',
-                          if (score > 0) '站点 ${score.toStringAsFixed(1)}',
+                          if (item.rate > 0) '★ ${item.rate}',
+                          if (score > 0) score.toStringAsFixed(1),
+                          if (item.updatedAt.isNotEmpty) item.updatedAt,
+                          if (item.tags.isNotEmpty) item.tags.take(4).join(' '),
                         ].join(' · '),
-
-                        style: ds.caption.copyWith(color: ds.textHint),
+                        style: ds.tiny.copyWith(color: ds.textHint),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+
                       if (!commentsFull && commentText != null) commentText,
                     ],
                   ),
                 ),
                 if (showManage)
-                  IconButton(
-                    tooltip: '收藏管理',
-                    icon: const Icon(Icons.star_outline, size: 20),
-                    onPressed: () => showModalBottomSheet<void>(
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => showBgmSheet<void>(
                       context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
                       builder: (_) =>
                           CollectionSheet(subjectId: item.subject.id),
+                    ),
+                    child: const SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Icon(Icons.star_outline, size: 20),
                     ),
                   ),
               ],
@@ -833,17 +1151,17 @@ class _LoginGate extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.account_circle_outlined,
-            size: 56,
-            color: context.ds.textHint,
-          ),
+          const Mesume(size: 80),
           const SizedBox(height: 12),
-          const Text('登录后同步你的收藏与进度'),
+          Text(
+            '登录后同步你的收藏与进度',
+            style: context.ds.caption.copyWith(fontSize: 13),
+          ),
           const SizedBox(height: 16),
-          FilledButton(
+          BgmButton(
+            '登录',
+            expand: false,
             onPressed: () => context.push('/login'),
-            child: const Text('登录'),
           ),
         ],
       ),
@@ -873,28 +1191,24 @@ class UserCollectionsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(userCollectionsProvider(type));
     return Scaffold(
-      appBar: AppBar(title: Text('我的${SubjectType.pluralText(type)}')),
+      appBar: BgmAppBar(title: '我的${SubjectType.pluralText(type)}'),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Loading(),
         error: (_, _) => const Center(child: Text('加载失败')),
         data: (items) => ListView.builder(
           itemCount: items.length,
           itemBuilder: (context, index) {
             final item = items[index];
-            return ListTile(
+            return BgmTextRow(
               leading: Cover(
                 url: item.subject.images.common,
                 width: 44,
                 height: 58,
+                radius: 4,
               ),
-              title: Text(
-                item.subject.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                '${SubjectType.statusText(item.type, item.subject.type)} · 第${item.epStatus}话',
-              ),
+              title: item.subject.displayName,
+              subtitle:
+                  '${SubjectType.statusText(item.type, item.subject.type)} · 第${item.epStatus}话',
               onTap: () => context.push('/subject/${item.subject.id}'),
             );
           },

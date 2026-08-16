@@ -13,53 +13,68 @@ import '../../shared/widgets/score.dart';
 import 'subject_models.dart';
 import 'subject_notes.dart';
 import 'subject_providers.dart';
+
 import '../../shared/models/collection.dart';
 
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+
+/// 原版用户评分 Header Filter DATA
+const kRatingFilterItems = [('所有', false), ('好友', true)];
 
 /// 评分分布
 /// 路由: /subject/:id/rating
-class RatingScreen extends ConsumerWidget {
+class RatingScreen extends ConsumerStatefulWidget {
   final int id;
 
   const RatingScreen({super.key, required this.id});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stats = ref.watch(ratingStatsProvider(id));
+  ConsumerState<RatingScreen> createState() => _RatingScreenState();
+}
+
+class _RatingScreenState extends ConsumerState<RatingScreen> {
+  bool _friends = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = ref.watch(ratingStatsProvider(widget.id));
     return Scaffold(
       appBar: BgmAppBar(
-        title: '评分分布',
+        title: extraNamedTitle(
+          ref
+              .watch(subjectDetailProvider(widget.id))
+              .valueOrNull
+              ?.subject
+              .displayName,
+          '用户评分',
+        ),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlSubjectRating(id)),
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: BgmSegmented<bool>(
+              values: [
+                for (final item in kRatingFilterItems) (item.$2, item.$1),
+              ],
+
+              selected: _friends,
+              onSelect: (v) => setState(() => _friends = v),
+            ),
+          ),
+          BgmHeaderMore.browser(
+            () => openExternalUrl(htmlSubjectRating(widget.id)),
           ),
         ],
       ),
-
       body: stats.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(ratingStatsProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => BgmRetry(
+          onRetry: () => ref.invalidate(ratingStatsProvider(widget.id)),
         ),
         data: (value) => value.total == 0 && value.comments.isEmpty
             ? const Empty(text: '暂无评分数据')
-            : RatingView(subjectId: id, stats: value),
+            : RatingView(subjectId: widget.id, stats: value, friends: _friends),
       ),
     );
   }
@@ -68,7 +83,14 @@ class RatingScreen extends ConsumerWidget {
 class RatingView extends ConsumerStatefulWidget {
   final int subjectId;
   final RatingStats stats;
-  const RatingView({super.key, required this.subjectId, required this.stats});
+  final bool friends;
+
+  const RatingView({
+    super.key,
+    required this.subjectId,
+    required this.stats,
+    this.friends = false,
+  });
 
   @override
   ConsumerState<RatingView> createState() => _RatingViewState();
@@ -78,7 +100,6 @@ class _RatingViewState extends ConsumerState<RatingView> {
   /// 0=全部, 1=想看, 2=看过, 3=在看, 4=搁置, 5=抛弃 (CollectionStatus)
   int _status = 0;
   int _filter = 0; // 0 = 全部分数, 1-10
-  bool _friends = false;
 
   static const _statusToKey = {
     1: 'wishes',
@@ -132,7 +153,7 @@ class _RatingViewState extends ConsumerState<RatingView> {
     final theme = Theme.of(context);
     final stats = widget.stats;
     final statusKey = _statusToKey[_status] ?? 'collections';
-    final ratingPage = _friends
+    final ratingPage = widget.friends
         ? ref
               .watch(
                 subjectRatingProvider((
@@ -144,13 +165,14 @@ class _RatingViewState extends ConsumerState<RatingView> {
               .valueOrNull
         : null;
     final comments =
-        (_friends ? (ratingPage?.items ?? const []) : stats.comments).where((
-          c,
-        ) {
-          if (!_friends && !_matchStatus(c)) return false;
-          if (_filter != 0 && c.star != _filter) return false;
-          return true;
-        }).toList();
+        (widget.friends ? (ratingPage?.items ?? const []) : stats.comments)
+            .where((c) {
+              if (!widget.friends && !_matchStatus(c)) return false;
+              if (_filter != 0 && c.star != _filter) return false;
+              return true;
+            })
+            .toList();
+
     final maxCount = stats.counts.values.fold<int>(0, (a, b) => a > b ? a : b);
 
     return ListView(
@@ -288,12 +310,9 @@ class _RatingViewState extends ConsumerState<RatingView> {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
-                child: TextButton(
+                child: BgmTextAction(
+                  '标准差 ${stats.deviation.toStringAsFixed(2)} ${stats.dispute}',
                   onPressed: () => context.push(ratingDeviationNotePath()),
-                  child: Text(
-                    '标准差 ${stats.deviation.toStringAsFixed(2)} ${stats.dispute}',
-                    style: context.ds.caption,
-                  ),
                 ),
               ),
             ],
@@ -301,45 +320,26 @@ class _RatingViewState extends ConsumerState<RatingView> {
         ),
         const SizedBox(height: 16),
 
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 36,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    for (final (value, label) in _typedStatusTabs(
-                      ref
-                              .watch(subjectDetailProvider(widget.subjectId))
-                              .valueOrNull
-                              ?.subject
-                              .type ??
-                          'anime',
-                    ))
-                      _FilterChip(
-                        label: label,
-                        selected: _status == value,
-                        onTap: () => setState(() => _status = value),
-                      ),
-                  ],
+        SizedBox(
+          height: 36,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final (value, label) in _typedStatusTabs(
+                ref
+                        .watch(subjectDetailProvider(widget.subjectId))
+                        .valueOrNull
+                        ?.subject
+                        .type ??
+                    'anime',
+              ))
+                _FilterChip(
+                  label: label,
+                  selected: _status == value,
+                  onTap: () => setState(() => _status = value),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('全部')),
-                ButtonSegment(value: true, label: Text('好友')),
-              ],
-              selected: {_friends},
-              onSelectionChanged: (v) => setState(() => _friends = v.first),
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
 
         const SizedBox(height: 8),
@@ -399,12 +399,7 @@ class _FilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        selected: selected,
-        onSelected: (_) => onTap(),
-        visualDensity: VisualDensity.compact,
-      ),
+      child: BgmFilterChip(label: label, selected: selected, onTap: onTap),
     );
   }
 }

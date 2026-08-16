@@ -20,6 +20,7 @@ class Subject {
   final int rank;
   final int volums;
   final bool nsfw;
+  final bool collected;
 
   const Subject({
     required this.id,
@@ -40,6 +41,7 @@ class Subject {
     this.rank = 0,
     this.volums = 0,
     this.nsfw = false,
+    this.collected = false,
   });
 
   /// 旧版 API / v0 API 返回数字类型 (1=book 2=anime 3=music 4=game 6=real),
@@ -92,6 +94,7 @@ class Subject {
     rank: (json['rank'] as num?)?.toInt() ?? 0,
     volums: (json['volums'] as num?)?.toInt() ?? 0,
     nsfw: json['nsfw'] == true,
+    collected: json['collected'] == true,
   );
 
   /// 展示名: 对齐原版 cnFirst

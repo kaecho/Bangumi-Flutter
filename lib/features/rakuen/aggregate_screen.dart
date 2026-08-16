@@ -7,6 +7,9 @@ import '../webview/note_screen.dart';
 import '../../shared/widgets/loading.dart';
 
 import 'rakuen_providers.dart';
+import '../../shared/widgets/app_bar.dart';
+
+import '../../shared/widgets/bgm_button.dart';
 
 /// 帖子聚合 (移植自原项目 rakuen/history)
 ///
@@ -38,25 +41,24 @@ class _AggregateScreenState extends ConsumerState<AggregateScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('帖子聚合'),
+      appBar: BgmAppBar(
+        title: '帖子聚合',
         actions: [
-          IconButton(
-            tooltip: '说明',
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => context.push(
+          BgmHeaderMore(
+            items: const [('info', '说明')],
+            onSelected: (_) => context.push(
               extraNotePath(
                 title: '帖子聚合',
                 message: const ['能快速查看回复和贴贴信息。', '会员支持同时显示更多自己的回复。'],
-
                 advance: true,
               ),
             ),
           ),
         ],
-        bottom: TabBar(
+
+        bottom: BgmControlledTabStrip(
           controller: _tab,
-          tabs: [for (final t in _tabs) Tab(text: t)],
+          tabs: [for (final t in _tabs) Text(t)],
         ),
       ),
 
@@ -95,18 +97,9 @@ class _MyReplyListState extends ConsumerState<_MyReplyList> {
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             const SizedBox(height: 80),
-            Center(
-              child: Text(
-                apiErrorMessage(e),
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: OutlinedButton(
-                onPressed: () => ref.invalidate(myReplyProvider),
-                child: const Text('重试'),
-              ),
+            BgmRetry(
+              message: apiErrorMessage(e),
+              onRetry: () => ref.invalidate(myReplyProvider),
             ),
           ],
         ),
@@ -124,31 +117,21 @@ class _MyReplyListState extends ConsumerState<_MyReplyList> {
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
             itemCount: rows.length + (value.hasMore ? 1 : 0),
-            separatorBuilder: (_, _) => const Divider(height: 1, indent: 56),
+            separatorBuilder: (_, _) => const BgmHairline(),
             itemBuilder: (context, index) {
               if (index == rows.length) {
-                return ListTile(
-                  title: const Center(
-                    child: Text('加载更多', style: TextStyle(fontSize: 12)),
-                  ),
+                return BgmTextRow(
+                  title: '加载更多',
                   onTap: () =>
                       ref.read(myReplyProvider(_page).notifier).loadMore(),
                 );
               }
               final t = rows[index];
-              return ListTile(
-                dense: true,
-                title: Text(
-                  t.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  '${t.userName} · ${t.replies} 回复 · ${t.time}',
-                  style: const TextStyle(fontSize: 11),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              return BgmTextRow(
+                title: t.title,
+                replies: t.replyCount,
+
+                subtitle: '${t.userName} · ${t.time}',
                 onTap: () {
                   final parts = t.topicId.split('/');
                   if (parts.length == 2) {
@@ -175,18 +158,16 @@ class _FavorList extends ConsumerWidget {
     }
     return ListView.separated(
       itemCount: items.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, indent: 16),
+      separatorBuilder: (_, _) => const BgmHairline(),
       itemBuilder: (_, i) {
         final t = items[i];
-        return ListTile(
-          title: Text(t.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-            [
-              if (t.group.isNotEmpty) t.group,
-              if (t.userName.isNotEmpty) t.userName,
-              if (t.replies > 0) '${t.replies} 回复',
-            ].join(' · '),
-          ),
+        return BgmTextRow(
+          title: t.title,
+          replies: t.replies,
+          subtitle: [
+            if (t.group.isNotEmpty) t.group,
+            if (t.userName.isNotEmpty) t.userName,
+          ].join(' · '),
           onTap: () => context.push('/rakuen/topic/${t.topicId}'),
           onLongPress: () => ref.read(topicFavorProvider.notifier).toggle(t),
         );
@@ -203,11 +184,9 @@ class _HotList extends ConsumerWidget {
     final async = ref.watch(hotTopicsProvider);
     return async.when(
       loading: () => const Loading(text: '加载中...'),
-      error: (e, _) => Center(
-        child: TextButton(
-          onPressed: () => ref.invalidate(hotTopicsProvider),
-          child: Text('重试: ${apiErrorMessage(e)}'),
-        ),
+      error: (e, _) => BgmRetry(
+        message: apiErrorMessage(e),
+        onRetry: () => ref.invalidate(hotTopicsProvider),
       ),
       data: (items) {
         if (items.isEmpty) return const Center(child: Text('暂无热门'));
@@ -215,22 +194,16 @@ class _HotList extends ConsumerWidget {
           onRefresh: () async => ref.invalidate(hotTopicsProvider),
           child: ListView.separated(
             itemCount: items.length,
-            separatorBuilder: (_, _) => const Divider(height: 1, indent: 16),
+            separatorBuilder: (_, _) => const BgmHairline(),
             itemBuilder: (_, i) {
               final t = items[i];
-              return ListTile(
-                title: Text(
-                  t.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  [
-                    if (t.group.isNotEmpty) t.group,
-                    if (t.userName.isNotEmpty) t.userName,
-                    if (t.replies.isNotEmpty) '${t.replyCount} 回复',
-                  ].join(' · '),
-                ),
+              return BgmTextRow(
+                title: t.title,
+                replies: t.replyCount,
+                subtitle: [
+                  if (t.group.isNotEmpty) t.group,
+                  if (t.userName.isNotEmpty) t.userName,
+                ].join(' · '),
                 onTap: t.topicId.isEmpty
                     ? null
                     : () => context.push('/rakuen/topic/${t.topicId}'),
@@ -254,17 +227,15 @@ class _CacheList extends ConsumerWidget {
     }
     return ListView.separated(
       itemCount: items.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, indent: 16),
+      separatorBuilder: (_, _) => const BgmHairline(),
       itemBuilder: (_, i) {
         final t = items[i];
-        return ListTile(
-          title: Text(t.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-            [
-              if (t.group.isNotEmpty) t.group,
-              if (t.userName.isNotEmpty) t.userName,
-            ].join(' · '),
-          ),
+        return BgmTextRow(
+          title: t.title,
+          subtitle: [
+            if (t.group.isNotEmpty) t.group,
+            if (t.userName.isNotEmpty) t.userName,
+          ].join(' · '),
           onTap: () => context.push('/rakuen/topic/${t.topicId}'),
         );
       },

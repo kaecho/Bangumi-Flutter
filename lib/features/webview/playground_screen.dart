@@ -4,6 +4,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_endpoints.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 开发沙盒 (API 调试)
 ///
@@ -36,11 +39,16 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> {
       _statusCode = null;
     });
     try {
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 20),
-        headers: {'User-Agent': 'Bangumi/Flutter (https://github.com/kaecho/Bangumi-Flutter)'},
-      ));
+      final dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 20),
+          headers: {
+            'User-Agent':
+                'Bangumi/Flutter (https://github.com/kaecho/Bangumi-Flutter)',
+          },
+        ),
+      );
       final resp = await dio.get<dynamic>(input);
       setState(() {
         _statusCode = resp.statusCode;
@@ -79,18 +87,12 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('API 沙盒'),
+      appBar: BgmAppBar(
+        title: 'API 沙盒',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '发送',
-            icon: _loading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send),
+            icon: _loading ? const BgmSpinner() : const Icon(Icons.send),
             onPressed: _loading ? null : _send,
           ),
         ],
@@ -99,13 +101,9 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: TextField(
+            child: BgmField(
               controller: _controller,
-              decoration: const InputDecoration(
-                hintText: '输入 URL 或相对路径, 如 /calendar',
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
+              hintText: '输入 URL 或相对路径, 如 /calendar',
               keyboardType: TextInputType.url,
               onSubmitted: (_) => _send(),
             ),
@@ -116,7 +114,10 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> {
               children: [
                 if (_statusCode != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: (_statusCode! >= 200 && _statusCode! < 300)
                           ? Colors.green.shade100
@@ -147,7 +148,7 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          const Divider(height: 1),
+          const BgmHairline(),
           Expanded(
             child: _response.isEmpty && !_loading
                 ? const Center(child: Text('输入地址后点击发送'))
@@ -155,7 +156,11 @@ class _PlaygroundScreenState extends State<PlaygroundScreen> {
                     padding: const EdgeInsets.all(12),
                     child: SelectableText(
                       _response.isEmpty ? '请求中...' : _response,
-                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace', height: 1.5),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        height: 1.5,
+                      ),
                     ),
                   ),
           ),

@@ -107,10 +107,22 @@ void main() {
 
   group('apiEpStatus', () {
     test('对齐原版 watched/queue/drop/remove', () {
-      expect(apiEpStatus(12, 'watched'), 'https://api.bgmapi.com/ep/12/status/watched');
-      expect(apiEpStatus(12, 'queue'), 'https://api.bgmapi.com/ep/12/status/queue');
-      expect(apiEpStatus(12, 'drop'), 'https://api.bgmapi.com/ep/12/status/drop');
-      expect(apiEpStatus(12, 'remove'), 'https://api.bgmapi.com/ep/12/status/remove');
+      expect(
+        apiEpStatus(12, 'watched'),
+        'https://api.bgmapi.com/ep/12/status/watched',
+      );
+      expect(
+        apiEpStatus(12, 'queue'),
+        'https://api.bgmapi.com/ep/12/status/queue',
+      );
+      expect(
+        apiEpStatus(12, 'drop'),
+        'https://api.bgmapi.com/ep/12/status/drop',
+      );
+      expect(
+        apiEpStatus(12, 'remove'),
+        'https://api.bgmapi.com/ep/12/status/remove',
+      );
     });
   });
 
@@ -119,7 +131,6 @@ void main() {
       expect(htmlTimelineReply(99), '/timeline/99/new_reply?ajax=1');
     });
   });
-
 
   group('apiUserCatalogsHtml', () {
     test('创建的走 /index, 收藏的走 /index/collect', () {
@@ -162,6 +173,12 @@ void main() {
     });
   });
 
+  group('htmlUserMonoPage', () {
+    test('用户人物走 /user/{id}/mono', () {
+      expect(htmlUserMonoPage('sakura'), 'https://bgm.tv/user/sakura/mono');
+    });
+  });
+
   group('htmlDollars', () {
     test('聊天室与轮询参数', () {
       expect(htmlDollars(), 'https://bgm.tv/dollars');
@@ -176,6 +193,52 @@ void main() {
   group('htmlCatalogDetail', () {
     test('目录详情走主站 /index/{id}', () {
       expect(htmlCatalogDetail(8), 'https://bgm.tv/index/8');
+    });
+    test('目录留言走主站 /index/{id}/comments', () {
+      expect(htmlCatalogComments(8), 'https://bgm.tv/index/8/comments');
+    });
+
+    test('新建目录与添加条目走主站 POST', () {
+      expect(htmlCatalogCreate(), 'https://bgm.tv/index/create');
+      expect(htmlCatalogAddRelated(8), 'https://bgm.tv/index/8/add_related');
+    });
+    test('网页版目录和反向解除好友', () {
+      expect(
+        htmlSpaCatalogDetail(8),
+        'https://bangumi-app.5t5.top/iframe.html?id=screens-catalogdetail--catalog-detail'
+        '&viewMode=story&catalogId=8',
+      );
+      expect(
+        spaStoryId('CatalogDetail'),
+        'screens-catalogdetail--catalog-detail',
+      );
+      expect(
+        spaStoryId('DiscoveryBlog'),
+        'screens-discoveryblog--discovery-blog',
+      );
+      expect(spaStoryId('Staff'), 'screens-staff--staff');
+      expect(
+        htmlSpa('DiscoveryBlog'),
+        'https://bangumi-app.5t5.top/iframe.html?id=screens-discoveryblog--discovery-blog&viewMode=story',
+      );
+      expect(htmlMonoVoices(8), 'https://bgm.tv/person/8/works/voice');
+      expect(
+        htmlMonoVoices(8, position: '/anime'),
+        'https://bgm.tv/person/8/works/voice/anime',
+      );
+      expect(
+        htmlMonoWorks('person', 8),
+        'https://bgm.tv/person/8/works?sort=date&page=1',
+      );
+      expect(
+        htmlMonoWorks('person', 8, position: '/position/1', sort: 'rank'),
+        'https://bgm.tv/person/8/works/position/1?sort=rank&page=1',
+      );
+
+      expect(
+        apiDisconnectRev('12', 'hash'),
+        'https://bgm.tv/disconnect/rev/12?gh=hash',
+      );
     });
   });
 
@@ -266,5 +329,67 @@ void main() {
       );
     });
   });
-}
 
+  group('login / cookie merge', () {
+    test('mergeSiteCookies 只保留 chii_* 并覆盖同名', () {
+      expect(
+        mergeSiteCookies('chii_sid=old; foo=bar', [
+          'chii_auth=token; Path=/',
+          'chii_sid=new; HttpOnly',
+          'unrelated=x',
+        ]),
+        'chii_sid=new; chii_auth=token',
+      );
+    });
+
+    test('oauthCodeFromUrl 抽 query', () {
+      expect(
+        oauthCodeFromUrl('https://bgm.tv/dev/app?code=abc123&state=1'),
+        'abc123',
+      );
+      expect(oauthCodeFromUrl(null), isNull);
+    });
+
+    test('loginFailMessage 识别封禁', () {
+      expect(loginFailMessage('累计错误, 15 分钟内您将不能登录本站。'), contains('15 分钟'));
+    });
+
+    test('htmlSignupCaptcha 可固定时间戳', () {
+      expect(htmlSignupCaptcha(1), 'https://bgm.tv/signup/captcha?1');
+      expect(htmlLogin(), 'https://bgm.tv/login');
+      expect(htmlFollowTheRabbit(), 'https://bgm.tv/FollowTheRabbit');
+    });
+  });
+
+  group('html tag extras', () {
+    test('htmlTypeTag 空关键字走类型页, 有关键字走 search/tag', () {
+      expect(htmlTypeTag('anime'), '/anime/tag');
+      expect(htmlTypeTag('anime', page: 2), '/anime/tag?page=2');
+      expect(htmlTypeTag('book', filter: 'TV'), '/search/tag/book/TV?page=1');
+    });
+
+    test('htmlTagSubjects 拼 sort airtime meta', () {
+      expect(
+        htmlTagSubjects('anime', 'TV'),
+        '/anime/tag/TV?sort=collects&page=1&meta=',
+      );
+      expect(
+        htmlTagSubjects(
+          'anime',
+          'TV',
+          sort: 'rank',
+          airtime: '2024-4',
+          meta: true,
+        ),
+        '/anime/tag/TV/airtime/2024-4?sort=rank&page=1&meta=1',
+      );
+    });
+
+    test('p1 用户时间线默认 limit=1', () {
+      expect(
+        apiP1UsersTimeline('sai'),
+        'https://next.bgm.tv/p1/users/sai/timeline?limit=1',
+      );
+    });
+  });
+}

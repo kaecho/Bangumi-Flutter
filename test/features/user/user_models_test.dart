@@ -1,8 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:bangumi/features/user/origin_utils.dart';
+import 'package:bangumi/core/api/api_endpoints.dart';
+
 import 'package:bangumi/features/user/user_models.dart';
 import 'package:bangumi/shared/models/collection.dart';
+import 'package:bangumi/features/user/user_screen.dart';
+import 'package:bangumi/features/user/zone_screen.dart';
+import 'package:bangumi/features/user/friends_screen.dart';
+import 'package:bangumi/features/user/user_timeline_screen.dart';
+import 'package:bangumi/features/user/setting_screen.dart';
+import 'package:bangumi/features/user/server_status_screen.dart';
+import 'package:bangumi/features/user/user_notes.dart';
+import 'package:bangumi/features/user/pm_screen.dart';
+import 'package:bangumi/features/user/milestone_screen.dart';
+import 'package:bangumi/features/user/qiafan_screen.dart';
 
 void main() {
   group('v0SubjectTypeInt', () {
@@ -206,6 +218,8 @@ void main() {
       expect(item.title, '你好');
       expect(item.content, 'Re: 这是内容');
       expect(item.isNew, isTrue);
+      expect(hasNewPm(items), isTrue);
+      expect(hasNewPm(const []), isFalse);
     });
   });
 
@@ -343,6 +357,319 @@ void main() {
       expect(extra.percent, 66.6);
       expect(extra.hobby, '12');
       expect(extra.recent, contains('3小时前'));
+    });
+  });
+
+  group('user Extra', () {
+    test('DATA_ME 对齐原版不含本地管理备份设置', () {
+      expect(kUserMenus.map((e) => e.$1).toList(), [
+        '我的空间',
+        '我的好友',
+        '谁加我为好友',
+        '我的人物',
+        '我的目录',
+        '我的日志',
+        '我的词云',
+        '我的时间线',
+        '我的netaba.re',
+      ]);
+    });
+
+    test('时光机工具栏更多对齐原版布局分页年份', () {
+      expect(
+        myCollectionMoreItems(
+          list: true,
+          pagination: true,
+          showYear: true,
+        ).map((e) => e.$2).toList(),
+        ['布　局〔列表〕', '分页器〔开启〕', '设置'],
+      );
+      expect(
+        myCollectionMoreItems(
+          list: false,
+          pagination: false,
+          showYear: false,
+        ).map((e) => e.$2).toList(),
+        ['布　局〔网格〕', '分页器〔关闭〕', '年　份〔不显示〕', '设置'],
+      );
+    });
+
+    test('时光机标签解析 #userTagList 一级文本', () {
+      const html = '''
+<ul id="userTagList">
+  <li><a class="l" href="/anime/list/u/collect?tag=TV">TV<small>12</small></a></li>
+  <li><a class="l" href="/anime/list/u/collect?tag=漫画改">漫画改<small>3</small></a></li>
+</ul>
+<div class="menu_inner"></div>
+''';
+      final tags = parseUserCollectionsTags(html);
+      expect(tags.map((e) => e.tag).toList(), ['TV', '漫画改']);
+      expect(tags.map((e) => e.count).toList(), [12, 3]);
+      expect(userCollectionTagMenuItems(tags), ['重置', 'TV (12)', '漫画改 (3)']);
+      expect(userCollectionTagMenuItems(tags, reset: false), [
+        '全部',
+        'TV (12)',
+        '漫画改 (3)',
+      ]);
+      expect(parseUserCollectionTagSelect('重置'), '');
+      expect(parseUserCollectionTagSelect('全部'), '');
+      expect(parseUserCollectionTagSelect('TV (12)'), 'TV');
+      expect(userCollectionTagLabel(''), '标签');
+      expect(userCollectionTagLabel('TV'), 'TV');
+    });
+
+    test('时光机收藏 HTML 对齐原版 HTML_USER_COLLECTIONS', () {
+      expect(
+        htmlUserCollections('sakura', scope: 'anime', type: 'do', tag: 'TV'),
+        'https://bgm.tv/anime/list/sakura/do?tag=TV&page=1',
+      );
+      expect(htmlCollectionStatus(1), 'wish');
+      expect(htmlCollectionStatus(2), 'collect');
+      expect(htmlCollectionStatus(3), 'do');
+      expect(htmlCollectionStatus(4), 'on_hold');
+      expect(htmlCollectionStatus(5), 'dropped');
+    });
+
+    test('时光机收藏 HTML 解析条目 tip 标签和时间', () {
+      const html = '''
+<ul id="browserItemList">
+  <li id="item_8" class="item">
+    <h3><a href="/subject/8" class="l">Code Geass</a><small class="grey">コードギアス</small></h3>
+    <img class="cover" src="//lain.bgm.tv/pic/cover/c/x.jpg" />
+    <p class="info tip">2006年10月6日 / TV</p>
+    <div class="collectInfo">
+      <span class="tip">标签: TV 机战</span>
+      <span class="tip_j">2026-8-1</span>
+    </div>
+    <span class="starlight stars9"></span>
+    <div class="text_main_even">好看</div>
+  </li>
+</ul>
+
+<div id="columnSubjectBrowserB"></div>
+<div class="page_inner"><span class="p_edge">( 1 / 3 )</span></div>
+''';
+      final page = parseUserCollections(html, subjectType: 'anime', status: 2);
+      expect(page.items, hasLength(1));
+      expect(page.items.first.subject.id, 8);
+      expect(page.items.first.subject.nameCn, 'Code Geass');
+      expect(page.items.first.subject.name, 'コードギアス');
+      expect(page.items.first.comment, '好看');
+      expect(page.items.first.tags, ['TV', '机战']);
+      expect(page.items.first.updatedAt, '2026-8-1');
+      expect(page.items.first.tip, contains('2006年10月6日'));
+      expect(page.items.first.rate, 9);
+      expect(page.pageTotal, 3);
+    });
+
+    test('空间更多文案对齐原版 MENU_DS', () {
+      expect(zoneMoreItems(blocked: false).map((e) => e.$2).toList(), [
+        '浏览器查看',
+        '复制链接',
+        '复制分享',
+        '发短信',
+        'TA的收藏',
+        'TA的好友',
+        '谁加TA为好友',
+        'TA的人物',
+        '加为好友',
+        '绝交',
+        '报告疑虑',
+      ]);
+      expect(
+        zoneMoreItems(blocked: true).map((e) => e.$1),
+        isNot(contains('block')),
+      );
+    });
+
+    test('空间收藏概览解析 collects 分组', () {
+      final sections = parseZoneCollectionsOverview([
+        {
+          'collects': [
+            {
+              'status': {'name': '在看'},
+              'count': 3,
+              'list': [
+                {
+                  'subject': {
+                    'id': 8,
+                    'name': 'コードギアス',
+                    'name_cn': 'Code Geass',
+                    'images': {'medium': '//lain.bgm.tv/pic/cover/c/x.jpg'},
+                  },
+                },
+              ],
+            },
+            {
+              'status': {'name': '想看'},
+              'count': 1,
+              'list': [
+                {
+                  'subject': {
+                    'id': 12,
+                    'name': 'CLANNAD',
+                    'name_cn': '',
+                    'images': {'common': 'https://lain.bgm.tv/c.jpg'},
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ]);
+      expect(sections.map((e) => e.status).toList(), [
+        CollectionStatus.doing,
+        CollectionStatus.wish,
+      ]);
+      expect(sections.first.title, '在看');
+      expect(sections.first.count, 3);
+      expect(sections.first.items.first.displayName, 'Code Geass');
+      expect(sections.first.items.first.cover, startsWith('https://'));
+      expect(sections.last.items.first.displayName, 'CLANNAD');
+      expect(zoneCollectionMoreItems(collapse: true, alignCenter: false), [
+        '自动折叠〔开〕',
+        '标题居中〔关〕',
+      ]);
+    });
+
+    test('好友顶栏菜单是浏览器查看和补充说明', () {
+      expect(kFriendsMoreItems.map((e) => e.$2).toList(), ['浏览器查看', '补充说明']);
+    });
+
+    test('好友标题区分我和TA', () {
+      expect(friendsTitle(rev: false, isMe: true), '我的好友');
+      expect(friendsTitle(rev: true, isMe: true), '谁加我为好友');
+      expect(friendsTitle(rev: false, isMe: false), 'TA的好友');
+      expect(friendsTitle(rev: true, isMe: false), '谁加TA为好友');
+    });
+    test('我的好友长按菜单对齐原版 DATA_FRIEND', () {
+      expect(friendMenuItems(rev: false).map((e) => e.$2).toList(), [
+        '发短信',
+        '解除好友',
+      ]);
+      expect(friendMenuItems(rev: true).map((e) => e.$2).toList(), ['移除对我的关注']);
+    });
+    test('好友过滤匹配用户名和 ID', () {
+      const list = [
+        Friend(userId: 'sai', userName: '神楽坂霧人'),
+        Friend(userId: '123', userName: 'sakura'),
+      ];
+      expect(filterFriends(list, '').map((e) => e.userId), ['sai', '123']);
+      expect(filterFriends(list, ' SAKURA ').map((e) => e.userId), ['123']);
+      expect(filterFriends(list, 'sai').map((e) => e.userName), ['神楽坂霧人']);
+      expect(filterFriends(list, 'nobody'), isEmpty);
+    });
+    test('好友活跃度按原版阈值分组', () {
+      const list = [
+        Friend(userId: 'a', userName: 'A'),
+        Friend(userId: 'b', userName: 'B'),
+        Friend(userId: 'c', userName: 'C'),
+      ];
+      const now = 1_700_000_000;
+      final groups = groupFriendsByActive(list, {
+        'a': now - 60,
+        'b': now - 40000,
+        'c': 0,
+      }, now);
+      expect(groups['一小时内'], ['a']);
+      expect(groups['一天内'], ['b']);
+      expect(groups['三天内'], isEmpty);
+      final entries = buildFriendList(
+        friends: list,
+        filter: '',
+        groups: groups,
+      );
+      expect(entries.whereType<FriendHeaderEntry>().map((e) => e.title), [
+        '一小时内',
+        '一天内',
+        '未知',
+      ]);
+      expect(entries.whereType<FriendItemEntry>().map((e) => e.friend.userId), [
+        'a',
+        'b',
+      ]);
+      expect(
+        friendsActiveRefreshIds(list, {'a': now - 60}, full: true, nowSec: now),
+        ['a', 'b', 'c'],
+      );
+      expect(
+        friendsActiveRefreshIds(
+          list,
+          {'a': now - 60, 'b': now - 200000, 'c': 0},
+          full: false,
+          nowSec: now,
+        ),
+        ['b', 'c'],
+      );
+      expect(
+        parseUserActiveCreatedAt([
+          {'createdAt': 8},
+        ]),
+        8,
+      );
+      expect(parseUserActiveCreatedAt([]), 0);
+    });
+
+    test('时间线标题带用户名', () {
+      expect(userTimelineTitle('sakura'), 'sakura的时间线');
+      expect(userTimelineTitle(''), '时间线');
+      expect(userTimelineTitle(null), '时间线');
+    });
+
+    test('服务可用性选项对齐原版 SETTING_SERVER_STATUS', () {
+      expect(kServerStatusNotifyItems.map((e) => e.$2).toList(), [
+        '不显示',
+        '降级时',
+        '中断时',
+      ]);
+    });
+
+    test('自定义源头顶栏只留说明', () {
+      expect(kOriginMoreItems.map((e) => e.$2).toList(), ['说明']);
+    });
+
+    test('网络探针标题对齐原版', () {
+      expect(kServerStatusTitle, '网络探针');
+    });
+
+    test('自定义跳转顶栏只留说明', () {
+      expect(kActionsMoreItems.map((e) => e.$2).toList(), ['说明']);
+    });
+    test('自定义跳转标题优先用条目标题', () {
+      expect(actionsTitle(null), '自定义跳转');
+      expect(actionsTitle(''), '自定义跳转');
+      expect(actionsTitle(' CLANNAD '), 'CLANNAD');
+    });
+
+    test('赞助和备份顶栏只留说明', () {
+      expect(kSponsorMoreItems.map((e) => e.$2).toList(), ['说明']);
+      expect(kBackupMoreItems.map((e) => e.$2).toList(), ['说明']);
+    });
+
+    test('照片墙列数对齐原版 2-5', () {
+      expect(kMilestoneColumns, ['2', '3', '4', '5']);
+    });
+
+    test('短信详情标题是全部或线程名加条数', () {
+      expect(pmHeaderTitle(compose: true), '短信');
+      expect(pmHeaderTitle(compose: false), '全部');
+      expect(
+        pmHeaderTitle(compose: false, threadTitle: 'Re', msgCount: 3),
+        'Re (3)',
+      );
+      expect(pmHeaderTitleSize('全部'), 16);
+      expect(pmHeaderTitleSize('这是一条很长的短信标题'), 15);
+      expect(pmShowThreadCount(2), isFalse);
+      expect(pmShowThreadCount(3), isTrue);
+      expect(pmShowScrollNav(threadCount: 1, messageCount: 3), isFalse);
+      expect(pmShowScrollNav(threadCount: 2, messageCount: 1), isTrue);
+      expect(pmPrevThreadIndex(labelIndexes: [0, 5, 9], currentIndex: 6), 5);
+      expect(pmNextThreadIndex(labelIndexes: [0, 5, 9], currentIndex: 6), 9);
+      expect(pmPrevThreadIndex(labelIndexes: [0], currentIndex: 0), isNull);
+    });
+
+    test('关于客户端标题对齐原版 qiafan', () {
+      expect(kQiafanTitle, '关于客户端');
     });
   });
 }

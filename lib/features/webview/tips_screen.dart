@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_endpoints.dart';
 import '../../core/utils/display.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 使用技巧条目
 class TipItem {
@@ -78,10 +80,10 @@ class TipsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('特色功能'),
+      appBar: BgmAppBar(
+        title: '特色功能',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '浏览器查看',
             icon: const Icon(Icons.open_in_new),
             onPressed: () => openExternalUrl(kZhinanHost),
@@ -95,8 +97,8 @@ class TipsScreen extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final tip = kTips[index];
-          return Card(
-            child: ExpansionTile(
+          return BgmCard(
+            child: BgmExpand(
               leading: CircleAvatar(
                 radius: 14,
                 child: Text(
@@ -104,12 +106,8 @@ class TipsScreen extends StatelessWidget {
                   style: const TextStyle(fontSize: 12),
                 ),
               ),
-              title: Text(
-                tip.title,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
+              title: tip.title,
               childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              expandedCrossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   tip.content,

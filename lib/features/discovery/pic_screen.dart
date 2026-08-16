@@ -9,7 +9,8 @@ import '../../shared/models/subject.dart' hide Tag;
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
-import '../../shared/widgets/score.dart';
+import '../../shared/widgets/bgm_button.dart';
+
 import 'widgets/discovery_html.dart';
 import 'widgets/recommend_list.dart';
 
@@ -59,7 +60,7 @@ class _PicScreenState extends ConsumerState<PicScreen> {
         actions: [
           PopupMenuButton<int>(
             tooltip: '筛选',
-            icon: const Icon(Icons.filter_list),
+            padding: EdgeInsets.zero,
             onSelected: (value) => setState(() => _type = value),
             itemBuilder: (_) => [
               for (final (value, label) in kRecommendTypes)
@@ -68,6 +69,11 @@ class _PicScreenState extends ConsumerState<PicScreen> {
                   child: Text(_type == value ? '· $label' : label),
                 ),
             ],
+            child: Icon(
+              Icons.filter_list,
+              size: 20,
+              color: _type == 2 ? null : Theme.of(context).colorScheme.primary,
+            ),
           ),
         ],
       ),
@@ -79,82 +85,46 @@ class _PicScreenState extends ConsumerState<PicScreen> {
                 children: [
                   const Text('登录后查看收藏照片墙'),
                   const SizedBox(height: 12),
-                  FilledButton.tonal(
+                  BgmButton(
+                    '去登录',
+                    expand: false,
                     onPressed: () => context.push('/login'),
-                    child: const Text('去登录'),
                   ),
                 ],
               ),
             )
-          : Column(
-              children: [
-                SizedBox(
-                  height: 44,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    children: [
-                      for (final (value, label) in kRecommendTypes)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: Tag(
-                            text: label,
-                            active: _type == value,
-                            onTap: () => setState(() => _type = value),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: subjects.when(
-                    loading: () => const Center(child: Loading()),
-                    error: (error, _) => Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('加载失败'),
-                          const SizedBox(height: 12),
-                          FilledButton.tonal(
-                            onPressed: () => ref.invalidate(picProvider(_type)),
-                            child: const Text('重试'),
-                          ),
-                        ],
+          : subjects.when(
+              loading: () => const Center(child: Loading()),
+              error: (error, _) =>
+                  BgmRetry(onRetry: () => ref.invalidate(picProvider(_type))),
+              data: (list) => list.isEmpty
+                  ? const Center(child: Text('暂无收藏'))
+                  : RefreshIndicator(
+                      onRefresh: () => ref.refresh(picProvider(_type).future),
+                      child: GridView.builder(
+                        padding: const EdgeInsets.all(10),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              mainAxisSpacing: 8,
+                              crossAxisSpacing: 8,
+                              childAspectRatio: 3 / 4,
+                            ),
+                        itemCount: list.length,
+                        itemBuilder: (context, index) {
+                          final subject = list[index];
+                          return GestureDetector(
+                            onTap: () => context.push('/subject/${subject.id}'),
+                            child: Cover(
+                              url: subject.images.medium,
+                              width: double.infinity,
+                              height: double.infinity,
+                              radius: 6,
+                            ),
+                          );
+                        },
                       ),
                     ),
-                    data: (list) => list.isEmpty
-                        ? const Center(child: Text('暂无收藏'))
-                        : RefreshIndicator(
-                            onRefresh: () =>
-                                ref.refresh(picProvider(_type).future),
-                            child: GridView.builder(
-                              padding: const EdgeInsets.all(10),
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 3,
-                                    mainAxisSpacing: 8,
-                                    crossAxisSpacing: 8,
-                                    childAspectRatio: 3 / 4,
-                                  ),
-                              itemCount: list.length,
-                              itemBuilder: (context, index) {
-                                final subject = list[index];
-                                return GestureDetector(
-                                  onTap: () =>
-                                      context.push('/subject/${subject.id}'),
-                                  child: Cover(
-                                    url: subject.images.medium,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    radius: 6,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                  ),
-                ),
-              ],
             ),
     );
   }

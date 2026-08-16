@@ -5,10 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/display.dart';
 
 import '../../core/api/api_endpoints.dart';
+import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 当前应用版本 (与 pubspec.yaml version 保持一致)
-const String kAppVersion = '1.0.4+5';
-
+const String kAppVersion = '1.0.5+6';
 
 /// GitHub Release 信息
 class GitHubRelease {
@@ -88,21 +90,20 @@ class VersionsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
     final changelog = ref.watch(changelogProvider);
     final release = ref.watch(releaseCheckProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('更新内容'),
+      appBar: BgmAppBar(
+        title: '更新内容',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '重新检查',
 
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.invalidate(releaseCheckProvider),
           ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: '浏览器查看',
             icon: const Icon(Icons.open_in_new),
             onPressed: () => openExternalUrl(htmlSingleDoc('ratl2b')),
@@ -113,12 +114,9 @@ class VersionsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: ListTile(
-              leading: Icon(Icons.info_outline, color: scheme.primary),
-              title: const Text('当前版本'),
-              subtitle: Text('Bangumi Flutter v$kAppVersion'),
-            ),
+          BgmSettingRow(
+            title: '当前版本',
+            subtitle: 'Bangumi Flutter v$kAppVersion',
           ),
           const SizedBox(height: 8),
           ..._releaseCards(context, release),
@@ -147,32 +145,25 @@ class VersionsScreen extends ConsumerWidget {
   ) {
     final scheme = Theme.of(context).colorScheme;
     if (release.isLoading) {
-      return const [Card(child: ListTile(title: Text('正在检查更新...')))];
+      return const [BgmSettingRow(title: '正在检查更新...')];
     }
     final value = release.valueOrNull;
     if (value == null) {
-      return const [Card(child: ListTile(title: Text('检查更新失败')))];
+      return const [BgmSettingRow(title: '检查更新失败')];
     }
     final newer = isNewerVersion(value.tagName, kAppVersion);
+    final row = BgmSettingRow(
+      title: newer ? '发现新版本 ${value.tagName}' : '已是最新版本',
+      subtitle: newer ? value.name : '当前版本已是最新',
+      trailing: newer
+          ? GestureDetector(
+              onTap: () => openExternalUrl(value.htmlUrl),
+              child: Text('查看', style: TextStyle(color: scheme.primary)),
+            )
+          : null,
+    );
     return [
-      Card(
-        color: newer ? scheme.primaryContainer : null,
-        child: ListTile(
-          leading: Icon(
-            newer ? Icons.system_update_alt : Icons.check_circle_outline,
-            color: scheme.primary,
-          ),
-          title: Text(newer ? '发现新版本 ${value.tagName}' : '已是最新版本'),
-          subtitle: Text(newer ? value.name : '当前版本已是最新'),
-          trailing: newer
-              ? TextButton(
-                  onPressed: () => openExternalUrl(value.htmlUrl),
-
-                  child: const Text('查看'),
-                )
-              : null,
-        ),
-      ),
+      if (newer) BgmCard(color: context.ds.accentSoft, child: row) else row,
     ];
   }
 }

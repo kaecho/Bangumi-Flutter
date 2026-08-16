@@ -43,76 +43,206 @@ import 'wiki_screen.dart';
 
 /// 小圣杯域路由
 final List<GoRoute> tinygrailRoutes = [
-  GoRoute(path: '/tinygrail/login', builder: (_, _) => const TinygrailLoginScreen()),
-  GoRoute(path: '/tinygrail/trade', builder: (_, _) => const TinygrailTradeScreen()),
-  GoRoute(path: '/tinygrail/chara/:id', builder: (_, state) {
-    final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-    return TinygrailCharaScreen(monoId: id);
-  }),
-  GoRoute(path: '/tinygrail/chara/:id/temple', builder: (_, state) {
-    final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-    return TinygrailCharaTempleScreen(monoId: id);
-  }),
-  GoRoute(path: '/tinygrail/chara/:id/valhalla', builder: (_, state) {
-    final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-    return TinygrailCharaValhallaScreen(monoId: id);
-  }),
-  GoRoute(path: '/tinygrail/rank', builder: (_, _) => const TinygrailOverviewScreen()),
-  GoRoute(path: '/tinygrail/overview', builder: (_, _) => const TinygrailOverviewScreen()),
-  GoRoute(path: '/tinygrail/rich', builder: (_, _) => const TinygrailRichScreen()),
-  GoRoute(path: '/tinygrail/star', builder: (_, _) => const TinygrailStarScreen()),
-  GoRoute(path: '/tinygrail/star-rank', builder: (_, _) => const TinygrailStarRankScreen()),
-  GoRoute(path: '/tinygrail/star-logs', builder: (_, _) => const TinygrailStarLogsScreen()),
-  GoRoute(path: '/tinygrail/fantasy', builder: (_, _) => const TinygrailFantasyScreen()),
-  GoRoute(path: '/tinygrail/valhalla', builder: (_, _) => const TinygrailValhallaScreen()),
-  GoRoute(path: '/tinygrail/temple', builder: (_, _) => const TinygrailTempleScreen()),
-  GoRoute(path: '/tinygrail/temples', builder: (_, _) => const TinygrailTemplesScreen()),
-  GoRoute(path: '/tinygrail/auction', builder: (_, _) => const TinygrailAuctionScreen()),
-  GoRoute(path: '/tinygrail/assets', builder: (_, _) => const TinygrailAssetsScreen()),
-  GoRoute(path: '/tinygrail/logs', builder: (_, _) => const TinygrailLogsScreen()),
-  GoRoute(path: '/tinygrail/ico', builder: (_, _) => const TinygrailIcoScreen()),
-  GoRoute(path: '/tinygrail/ico-deal/:id', builder: (_, state) {
-    final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-    return TinygrailIcoDealScreen(monoId: id);
-  }),
-  GoRoute(path: '/tinygrail/initial', builder: (_, state) {
-    final id = int.tryParse(state.uri.queryParameters['icoId'] ?? '') ?? 0;
-    return TinygrailInitialScreen(icoId: id);
-  }),
-  GoRoute(path: '/tinygrail/sacrifice', builder: (_, _) => const TinygrailSacrificeScreen()),
-  GoRoute(path: '/tinygrail/search', builder: (_, _) => const TinygrailSearchScreen()),
-  GoRoute(path: '/tinygrail/top-week', builder: (_, _) => const TinygrailTopWeekScreen()),
-  GoRoute(path: '/tinygrail/lottery-rank', builder: (_, _) => const TinygrailLotteryRankScreen()),
-  GoRoute(path: '/tinygrail/new-bangumi', builder: (_, _) => const TinygrailNewBangumiScreen()),
-  GoRoute(path: '/tinygrail/advance', builder: (_, _) => const TinygrailAdvanceScreen()),
-  GoRoute(path: '/tinygrail/advance-ask', builder: (_, _) => const TinygrailAdvanceAskScreen()),
-  GoRoute(path: '/tinygrail/advance-bid', builder: (_, _) => const TinygrailAdvanceBidScreen()),
-  GoRoute(path: '/tinygrail/advance-sacrifice', builder: (_, _) => const TinygrailAdvanceSacrificeScreen()),
-  GoRoute(path: '/tinygrail/advance-auction', builder: (_, _) => const TinygrailAdvanceAuctionScreen()),
-  GoRoute(path: '/tinygrail/advance-auction2', builder: (_, _) => const TinygrailAdvanceAuction2Screen()),
-  GoRoute(path: '/tinygrail/advance-state', builder: (_, _) => const TinygrailAdvanceStateScreen()),
-  GoRoute(path: '/tinygrail/chara-assets', builder: (_, _) => const TinygrailCharaAssetsScreen()),
-  GoRoute(path: '/tinygrail/relation', builder: (_, state) {
-    final ids = (state.uri.queryParameters['ids'] ?? '')
-        .split(',')
-        .map(int.tryParse)
-        .whereType<int>()
-        .toList();
-    return TinygrailRelationScreen(ids: ids);
-  }),
-  GoRoute(path: '/tinygrail/bid', builder: (_, _) => const TinygrailBidScreen()),
-  GoRoute(path: '/tinygrail/deal/:id', builder: (_, state) {
-    final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-    return TinygrailDealScreen(monoId: id);
-  }),
-  GoRoute(path: '/tinygrail/items', builder: (_, _) => const TinygrailItemsScreen()),
-  GoRoute(path: '/tinygrail/clipboard', builder: (_, _) => const TinygrailClipboardScreen()),
-  GoRoute(path: '/tinygrail/wiki', builder: (_, _) => const TinygrailWikiScreen()),
   GoRoute(
-    path: '/tinygrail/tree',
-    builder: (_, state) => TinygrailTreeScreen(
+    path: '/tinygrail/login',
+    builder: (_, _) => const TinygrailLoginScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/trade',
+    builder: (_, _) => const TinygrailTradeScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/chara/:id',
+    builder: (_, state) {
+      final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+      return TinygrailCharaScreen(monoId: id);
+    },
+  ),
+  GoRoute(
+    path: '/tinygrail/chara/:id/temple',
+    builder: (_, state) {
+      final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+      return TinygrailCharaTempleScreen(monoId: id);
+    },
+  ),
+  GoRoute(
+    path: '/tinygrail/chara/:id/valhalla',
+    builder: (_, state) {
+      final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+      return TinygrailCharaValhallaScreen(monoId: id);
+    },
+  ),
+  GoRoute(
+    path: '/tinygrail/rank',
+    builder: (_, _) => const TinygrailOverviewScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/overview',
+    builder: (_, _) => const TinygrailOverviewScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/rich',
+    builder: (_, _) => const TinygrailRichScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/star',
+    builder: (_, _) => const TinygrailStarScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/star-rank',
+    builder: (_, _) => const TinygrailStarRankScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/star-logs',
+    builder: (_, _) => const TinygrailStarLogsScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/fantasy',
+    builder: (_, _) => const TinygrailFantasyScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/valhalla',
+    builder: (_, _) => const TinygrailValhallaScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/temple',
+    builder: (_, _) => const TinygrailTempleScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/temples',
+    builder: (_, _) => const TinygrailTemplesScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/auction',
+    builder: (_, _) => const TinygrailAuctionScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/assets',
+    builder: (_, _) => const TinygrailAssetsScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/logs',
+    builder: (_, _) => const TinygrailLogsScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/ico',
+    builder: (_, _) => const TinygrailIcoScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/ico-deal/:id',
+    builder: (_, state) {
+      final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+      return TinygrailIcoDealScreen(monoId: id);
+    },
+  ),
+  GoRoute(
+    path: '/tinygrail/initial',
+    builder: (_, state) {
+      final id = int.tryParse(state.uri.queryParameters['icoId'] ?? '') ?? 0;
+      return TinygrailInitialScreen(icoId: id);
+    },
+  ),
+  GoRoute(
+    path: '/tinygrail/sacrifice',
+    builder: (_, _) => const TinygrailSacrificeScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/search',
+    builder: (_, _) => const TinygrailSearchScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/top-week',
+    builder: (_, _) => const TinygrailTopWeekScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/lottery-rank',
+    builder: (_, _) => const TinygrailLotteryRankScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/new-bangumi',
+    builder: (_, _) => const TinygrailNewBangumiScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/advance',
+    builder: (_, _) => const TinygrailAdvanceScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/advance-ask',
+    builder: (_, _) => const TinygrailAdvanceAskScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/advance-bid',
+    builder: (_, _) => const TinygrailAdvanceBidScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/advance-sacrifice',
+    builder: (_, _) => const TinygrailAdvanceSacrificeScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/advance-auction',
+    builder: (_, _) => const TinygrailAdvanceAuctionScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/advance-auction2',
+    builder: (_, _) => const TinygrailAdvanceAuction2Screen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/advance-state',
+    builder: (_, _) => const TinygrailAdvanceStateScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/chara-assets',
+    builder: (_, state) => TinygrailCharaAssetsScreen(
       userName: state.uri.queryParameters['user'] ?? '',
     ),
   ),
-  GoRoute(path: '/tinygrail/tree-rich', builder: (_, _) => const TinygrailTreeRichScreen()),
+  GoRoute(
+    path: '/tinygrail/relation',
+    builder: (_, state) {
+      final ids = (state.uri.queryParameters['ids'] ?? '')
+          .split(',')
+          .map(int.tryParse)
+          .whereType<int>()
+          .toList();
+      return TinygrailRelationScreen(
+        ids: ids,
+        name: state.uri.queryParameters['name'] ?? '',
+      );
+    },
+  ),
+  GoRoute(
+    path: '/tinygrail/bid',
+    builder: (_, state) => TinygrailBidScreen(
+      initialType: state.uri.queryParameters['type'] ?? 'bid',
+    ),
+  ),
+
+  GoRoute(
+    path: '/tinygrail/deal/:id',
+    builder: (_, state) {
+      final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+      return TinygrailDealScreen(monoId: id);
+    },
+  ),
+  GoRoute(
+    path: '/tinygrail/items',
+    builder: (_, _) => const TinygrailItemsScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/clipboard',
+    builder: (_, _) => const TinygrailClipboardScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/wiki',
+    builder: (_, _) => const TinygrailWikiScreen(),
+  ),
+  GoRoute(
+    path: '/tinygrail/tree',
+    builder: (_, state) =>
+        TinygrailTreeScreen(userName: state.uri.queryParameters['user'] ?? ''),
+  ),
+  GoRoute(
+    path: '/tinygrail/tree-rich',
+    builder: (_, _) => const TinygrailTreeRichScreen(),
+  ),
 ];

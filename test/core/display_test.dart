@@ -1,7 +1,14 @@
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:bangumi/core/utils/display.dart';
 import 'package:bangumi/shared/models/subject.dart';
+
+import 'package:bangumi/shared/widgets/mesume.dart';
+import 'package:bangumi/shared/widgets/mesume_speech.dart';
 
 void main() {
   group('cnjp', () {
@@ -10,6 +17,15 @@ void main() {
       expect(cnjp('魔法少女まどか☆マギカ', '魔法少女小圆', cnFirst: false), '魔法少女まどか☆マギカ');
       expect(cnjp('', '魔法少女小圆', cnFirst: false), '魔法少女小圆');
       expect(cnjp('まどか', '', cnFirst: true), 'まどか');
+    });
+  });
+
+  group('mesume', () {
+    test('话语池非空且随机落在池内', () {
+      expect(kMesumeSpeeches.length, 150);
+      expect(kMesumeAssets.length, 7);
+      final speech = randomMesumeSpeech(Random(1));
+      expect(kMesumeSpeeches, contains(speech));
     });
   });
 
@@ -28,6 +44,43 @@ void main() {
       expect(pinYinFilterValue('魔法少女小圆', '少女'), '少女');
       expect(pinYinFilterValue('Madoka Magica', 'magi'), 'Magi');
       expect(pinYinFilterValue('普通标题', 'xyz'), isNull);
+    });
+  });
+
+  group('homeListCoverSize / subjectHeadCoverSize / subjectHeadTitleSize', () {
+    const phone = Size(390, 844);
+
+    test('进度封面 82x114, compact 正方形 74', () {
+      expect(imgWidth(phone), 82);
+      expect(imgHeight(phone), 114);
+      expect(homeListCoverSize(phone, compact: false), (
+        width: 82.0,
+        height: 114.0,
+      ));
+      expect(homeListCoverSize(phone, compact: true), (
+        width: 74.0,
+        height: 74.0,
+      ));
+    });
+
+    test('条目 Head 封面按 IMG_WIDTH_LG * 1.2', () {
+      final normal = subjectHeadCoverSize(phone, music: false);
+      expect(normal.width, 150);
+      expect(normal.height, 210);
+
+      final music = subjectHeadCoverSize(phone, music: true);
+      expect(music.width, music.height);
+      expect(music.width, lessThanOrEqualTo(phone.width / 2));
+    });
+
+    test('Head 主标题手机 +2, 音乐再 -1', () {
+      expect(subjectHeadTitleSize('短', size: phone), 17);
+      expect(subjectHeadTitleSize('短', size: phone, music: true), 16);
+    });
+
+    test('getRating 四舍五入到档位', () {
+      expect(collectionRatingLabel(7.4), '推荐');
+      expect(collectionRatingLabel(7.5), '力荐');
     });
   });
 
@@ -76,10 +129,7 @@ void main() {
 
     test('旧 /pic/cover/c 与 grid 按档位升级到 r/N/l', () {
       expect(
-        applyCoverQuality(
-          'http://lain.bgm.tv/pic/cover/c/ab/cd.jpg',
-          'medium',
-        ),
+        applyCoverQuality('http://lain.bgm.tv/pic/cover/c/ab/cd.jpg', 'medium'),
         'https://lain.bgm.tv/r/400/pic/cover/l/ab/cd.jpg',
       );
       expect(
@@ -99,7 +149,6 @@ void main() {
         'https://lain.bgm.tv/r/400/pic/cover/l/ab/cd.jpg',
       );
     });
-
   });
 
   group('Subject.nsfw', () {
@@ -173,6 +222,217 @@ void main() {
     });
   });
 
+  group('homeDoingMetaText / weekdayShort', () {
+    test('人数行未开 homeOnAir 时追加周几', () {
+      expect(weekdayShort(0), '日');
+      expect(weekdayShort(7), '日');
+      expect(weekdayShort(3), '三');
+      expect(
+        homeDoingMetaText(doing: 1234, type: 'anime', weekday: 5, onAir: true),
+        '1234 人在看 · 周五',
+      );
+      expect(
+        homeDoingMetaText(doing: 12, type: 'book', weekday: 1, onAir: true),
+        '12 人在读 · 周一',
+      );
+      expect(
+        homeDoingMetaText(doing: 12, type: 'game', weekday: 0, onAir: true),
+        '12 人在玩 · 周日',
+      );
+      expect(
+        homeDoingMetaText(
+          doing: 12,
+          type: 'anime',
+          weekday: 5,
+          onAir: true,
+          homeOnAir: true,
+        ),
+        '12 人在看',
+      );
+      expect(homeDoingMetaText(doing: 0, type: 'anime', onAir: true), '');
+    });
+  });
+
+  group('homeLeftText / homeNextInfo / joinHomeMeta', () {
+    test('季度未看与下沉文案', () {
+      expect(calcHomeSeason('2026-04-08'), (year: 2026, quarter: 2));
+      expect(
+        homeLeftText(
+          seasonYear: 2026,
+          quarter: 2,
+          airedUnwatched: 3,
+          type: 'anime',
+        ),
+        '2026 春 · 3 集未看',
+      );
+      expect(
+        homeLeftText(
+          seasonYear: 2026,
+          quarter: 2,
+          airedUnwatched: 0,
+          type: 'anime',
+          twoDigitYear: true,
+          sink: true,
+          hasNewEp: false,
+        ),
+        '26 春 · 已下沉',
+      );
+      expect(
+        homeLeftText(
+          seasonYear: 2026,
+          quarter: 1,
+          airedUnwatched: 0,
+          type: 'book',
+        ),
+        '2026',
+      );
+    });
+
+    test('下一集空格分隔或完结', () {
+      final now = DateTime(2026, 8, 14);
+      expect(
+        homeNextInfo(
+          eps: [
+            (sort: 3, airdate: '2026-08-20'),
+            (sort: 4, airdate: '2026-08-27'),
+          ],
+          now: now,
+          showSplit: false,
+        ),
+        'ep3 26-08-20 (6 天后)',
+      );
+      expect(
+        homeNextInfo(eps: [(sort: 12, airdate: '2026-07-01')], now: now),
+        '完结',
+      );
+      expect(homeNextInfo(eps: const [], now: now), '');
+    });
+
+    test('行内人数与季度下话拼接', () {
+      expect(
+        joinHomeMeta(
+          '12 人在看 · 周五',
+          left: '26 春 · 3 集未看',
+          next: 'ep3 26-08-20 (6 天后)',
+        ),
+        '12 人在看 · 周五 · 26 春 · 3 集未看 · ep3 26-08-20 (6 天后)',
+      );
+      expect(joinHomeMeta('', left: '26 春', next: '完结'), '26 春 · 完结');
+    });
+  });
+
+  group('onairProgressRatios', () {
+    test('已看与已放送按总分母缩放, 最小 2%', () {
+      expect(onairProgressRatios(watched: 6, aired: 8, total: 12), (
+        watched: 0.5,
+        aired: 8 / 12,
+      ));
+      expect(onairProgressRatios(watched: 1, aired: 0, total: 100), (
+        watched: 0.02,
+        aired: 0.0,
+      ));
+      expect(onairProgressRatios(watched: 0, aired: 0, total: 0), (
+        watched: 0.0,
+        aired: 0.0,
+      ));
+    });
+  });
+
+  group('currentOnAir', () {
+    test('倒序取最后一集已放送 sort, 第 0 集则 +1', () {
+      const eps = [
+        (type: 0, sort: 1, status: 'Air', airdate: ''),
+        (type: 0, sort: 2, status: 'Air', airdate: ''),
+        (type: 0, sort: 3, status: 'NA', airdate: ''),
+        (type: 1, sort: 1, status: 'Air', airdate: ''),
+      ];
+      expect(currentOnAir(eps: eps), 2);
+      expect(
+        currentOnAir(
+          eps: const [
+            (type: 0, sort: 0, status: 'Air', airdate: ''),
+            (type: 0, sort: 1, status: 'Air', airdate: ''),
+            (type: 0, sort: 2, status: 'NA', airdate: ''),
+          ],
+        ),
+        2,
+      );
+      expect(
+        currentOnAir(
+          eps: const [
+            (type: 0, sort: 0, status: 'Air', airdate: ''),
+            (type: 0, sort: 5, status: 'Air', airdate: ''),
+            (type: 0, sort: 6, status: 'NA', airdate: ''),
+          ],
+        ),
+        6,
+      );
+    });
+
+    test('无 status 时按放送日判断', () {
+      final now = DateTime(2026, 8, 14);
+      expect(
+        currentOnAir(
+          eps: const [
+            (type: 0, sort: 1, status: '', airdate: '2026-08-07'),
+            (type: 0, sort: 2, status: '', airdate: '2026-08-14'),
+            (type: 0, sort: 3, status: '', airdate: '2026-08-21'),
+          ],
+          now: now,
+        ),
+        2,
+      );
+    });
+
+    test('分母取 max(已放送, 总集)', () {
+      expect(onairProgressCounts(aired: 8, total: 12), (aired: 8, total: 12));
+      expect(onairProgressCounts(aired: 14, total: 12), (aired: 14, total: 14));
+    });
+  });
+
+  group('homeGridNumColumns / subjectHeaderForeground', () {
+    test('手机竖屏 4, 平板 5, 手机横屏 9', () {
+      expect(homeGridNumColumns(const Size(390, 844)), 4);
+      expect(homeGridNumColumns(const Size(844, 390)), 9);
+      expect(homeGridNumColumns(const Size(768, 1024)), 5);
+      expect(homeGridNumColumns(const Size(1024, 768)), 5);
+    });
+
+    test('未吸顶或暗色用白, 浅色吸顶用黑', () {
+      expect(
+        subjectHeaderForeground(fixed: false, dark: false),
+        const Color(0xFFFFFFFF),
+      );
+      expect(
+        subjectHeaderForeground(fixed: false, dark: true),
+        const Color(0xFFFFFFFF),
+      );
+      expect(
+        subjectHeaderForeground(fixed: true, dark: true),
+        const Color(0xFFFFFFFF),
+      );
+      expect(
+        subjectHeaderForeground(fixed: true, dark: false),
+        const Color(0xFF000000),
+      );
+    });
+  });
+
+  group('collectionRatingLabel / flipCollectBtnHeight', () {
+    test('1-10 分中文档位, 0 为空', () {
+      expect(collectionRatingLabel(0), '');
+      expect(collectionRatingLabel(1), '不忍直视');
+      expect(collectionRatingLabel(8), '力荐');
+      expect(collectionRatingLabel(10), '超神作');
+      expect(collectionRatingLabel(99), '超神作');
+    });
+
+    test('手机 44, 平板 50', () {
+      expect(flipCollectBtnHeight(const Size(390, 844)), 44);
+      expect(flipCollectBtnHeight(const Size(768, 1024)), 50);
+    });
+  });
+
   group('homeCountText / shouldSinkHomeItem', () {
     test('四种数字组合与下沉判定', () {
       expect(homeCountText(current: 4, total: 12), '4 / 12');
@@ -183,6 +443,48 @@ void main() {
       expect(shouldSinkHomeItem(watched: 6, aired: 6), isTrue);
       expect(shouldSinkHomeItem(watched: 5, aired: 6), isFalse);
       expect(shouldSinkHomeItem(watched: 6, aired: 6, pinned: true), isFalse);
+    });
+  });
+
+  group('todayOnAirWindow / airClockDigits', () {
+    test('HH:MM 与 HHMM 都解析成 4 位', () {
+      expect(airClockDigits('1930'), 1930);
+      expect(airClockDigits('19:30'), 1930);
+      expect(airClockDigits(''), 0);
+    });
+
+    test('取当前时刻前 10 条加后 1 条再反转', () {
+      // calendarFlat 拍平后再 reverse: 周日…周一
+      final stamps = [
+        70000,
+        60000,
+        50000,
+        42000,
+        41900,
+        40000,
+        30000,
+        20000,
+        10000,
+      ];
+      final window = todayOnAirWindow<int>(
+        items: stamps,
+        stampOf: (s) => s,
+        now: DateTime(2026, 8, 13, 19, 10), // Thursday 19:10 → 41910
+      );
+      expect(window, [
+        40000,
+        41900,
+        42000,
+        50000,
+        60000,
+        70000,
+        10000,
+        20000,
+        30000,
+        40000,
+        41900,
+        42000,
+      ]);
     });
   });
 
@@ -372,6 +674,15 @@ void main() {
         ),
         isFalse,
       );
+    });
+  });
+
+  group('t2s', () {
+    test('繁体转简体, 非汉字原样保留', () {
+      seedCnCharTables(sc: '头发', tc: '頭髮');
+      expect(t2s('頭髮'), '头发');
+      expect(t2s('abc頭髮123'), 'abc头发123');
+      expect(t2s('头发'), '头发');
     });
   });
 }

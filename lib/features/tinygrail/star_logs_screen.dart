@@ -4,19 +4,23 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/utils/format.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
-import '../../design_system/design_system.dart';
 
 /// 圣星记录
 class TinygrailStarLogsScreen extends ConsumerStatefulWidget {
   const TinygrailStarLogsScreen({super.key});
 
   @override
-  ConsumerState<TinygrailStarLogsScreen> createState() => _TinygrailStarLogsScreenState();
+  ConsumerState<TinygrailStarLogsScreen> createState() =>
+      _TinygrailStarLogsScreenState();
 }
 
-class _TinygrailStarLogsScreenState extends ConsumerState<TinygrailStarLogsScreen> {
+class _TinygrailStarLogsScreenState
+    extends ConsumerState<TinygrailStarLogsScreen> {
   int _page = 1;
   final List<TinygrailStarLog> _list = [];
   bool _loading = false;
@@ -48,7 +52,7 @@ class _TinygrailStarLogsScreenState extends ConsumerState<TinygrailStarLogsScree
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('圣星记录')),
+      appBar: BgmAppBar(title: '圣星记录'),
       body: _list.isEmpty
           ? (_loading ? const Loading() : const Empty(text: '暂无记录'))
           : RefreshIndicator(
@@ -62,14 +66,16 @@ class _TinygrailStarLogsScreenState extends ConsumerState<TinygrailStarLogsScree
                 itemBuilder: (context, index) {
                   if (index >= _list.length - 3 && _hasMore) _load();
                   final item = _list[index];
-                  return ListTile(
-                    onTap: () => context.push('/tinygrail/chara/${item.monoId}'),
-                    leading: Text('#${item.rank}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(
-                      '${item.userName} · 星之力 +${item.amount} · ${friendlyTime(item.time)}',
-                      style: context.ds.meta,
+                  return BgmTextRow(
+                    onTap: () =>
+                        context.push('/tinygrail/chara/${item.monoId}'),
+                    leading: Text(
+                      '#${item.rank}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
+                    title: item.name,
+                    subtitle:
+                        '${item.userName} · 星之力 +${item.amount} · ${friendlyTime(item.time)}',
                   );
                 },
               ),

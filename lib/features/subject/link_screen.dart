@@ -2,21 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/api/api_endpoints.dart';
 import '../../core/storage/settings_store.dart';
-import '../../core/utils/display.dart';
+import '../../design_system/design_system.dart';
 import '../../shared/models/collection.dart';
 import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'collection_sheet.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import 'subject_notes.dart';
 
-import '../../design_system/design_system.dart';
 
 /// 关联条目
 /// 路由: /subject/:id/link
+/// Extra 对齐原版: 齿轮打开设置抽屉, 不是弹出菜单。
 class LinkScreen extends ConsumerWidget {
   final int id;
 
@@ -25,65 +26,32 @@ class LinkScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final relations = ref.watch(subjectRelationsProvider(id));
-    final store = ref.watch(settingsStoreProvider);
+    final count = relations.valueOrNull?.length ?? 0;
     return Scaffold(
       appBar: BgmAppBar(
-        title: '关联条目',
+        title: extraNamedTitle(
+          ref.watch(subjectDetailProvider(id)).valueOrNull?.subject.displayName,
+          '关联',
+          named: (n) => '$n的关联',
+          count: count,
+        ),
+
         showBackButton: true,
         actions: [
-          PopupMenuButton<String>(
-            onSelected: (v) {
-              switch (v) {
-                case 'cover':
-                  store.setSubjectLinkCover(!store.subjectLinkCover);
-                case 'rating':
-                  store.setSubjectLinkRating(!store.subjectLinkRating);
-                case 'collected':
-                  store.setSubjectLinkCollected(!store.subjectLinkCollected);
-              }
-            },
-            itemBuilder: (_) => [
-              CheckedPopupMenuItem(
-                value: 'cover',
-                checked: store.subjectLinkCover,
-                child: const Text('显示封面'),
-              ),
-              CheckedPopupMenuItem(
-                value: 'rating',
-                checked: store.subjectLinkRating,
-                child: const Text('显示评分'),
-              ),
-              CheckedPopupMenuItem(
-                value: 'collected',
-                checked: store.subjectLinkCollected,
-                child: const Text('显示收藏状态'),
-              ),
-            ],
-          ),
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlSubjectRelations(id)),
+          BgmHeaderAction(
+            tooltip: '设置',
+            icon: const Icon(Icons.settings_outlined, size: 20),
+            onPressed: () => showBgmSheet<void>(
+              context: context,
+              builder: (_) => const _LinkSettingSheet(),
+            ),
           ),
         ],
       ),
-
       body: relations.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(subjectRelationsProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => BgmRetry(
+          onRetry: () => ref.invalidate(subjectRelationsProvider(id)),
         ),
         data: (items) => items.isEmpty
             ? const Empty(text: '暂无关联条目')
@@ -92,6 +60,55 @@ class LinkScreen extends ConsumerWidget {
                 itemCount: items.length,
                 itemBuilder: (_, i) => _RelationRow(item: items[i]),
               ),
+      ),
+    );
+  }
+}
+
+class _LinkSettingSheet extends ConsumerWidget {
+  const _LinkSettingSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final store = ref.watch(settingsStoreProvider);
+    return BgmSheet(
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('关联显示', style: context.ds.section),
+                ),
+              ),
+              BgmSettingRow(
+                title: '显示封面',
+                trailing: BgmSwitch(
+                  value: store.subjectLinkCover,
+                  onChanged: store.setSubjectLinkCover,
+                ),
+              ),
+              BgmSettingRow(
+                title: '显示评分',
+                trailing: BgmSwitch(
+                  value: store.subjectLinkRating,
+                  onChanged: store.setSubjectLinkRating,
+                ),
+              ),
+              BgmSettingRow(
+                title: '显示收藏状态',
+                trailing: BgmSwitch(
+                  value: store.subjectLinkCollected,
+                  onChanged: store.setSubjectLinkCollected,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

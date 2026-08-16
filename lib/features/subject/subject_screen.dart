@@ -22,6 +22,8 @@ import '../../shared/widgets/score.dart';
 import 'collection_sheet.dart';
 
 import '../rakuen/rakuen_providers.dart';
+import '../rakuen/reviews_screen.dart';
+
 import '../user/origin_setting_screen.dart';
 import '../user/origin_utils.dart';
 import '../user/smb_screen.dart';
@@ -30,6 +32,10 @@ import 'subject_models.dart';
 import 'subject_notes.dart';
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import 'tag_better.dart';
+
+import 'subject_comments_screen.dart';
 
 class SubjectScreen extends ConsumerStatefulWidget {
   final int id;
@@ -67,6 +73,7 @@ class _SubjectScreenState extends ConsumerState<SubjectScreen> {
     return Scaffold(
       appBar: BgmAppBar(
         showBackButton: true,
+        title: '条目',
         titleWidget: _compact
             ? detail.maybeWhen(
                 data: (value) => _SubjectHeaderTitle(detail: value),
@@ -81,22 +88,9 @@ class _SubjectScreenState extends ConsumerState<SubjectScreen> {
 
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 8),
-              Text(apiErrorMessage(e), style: const TextStyle(fontSize: 12)),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(subjectDetailProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => BgmRetry(
+          message: apiErrorMessage(e),
+          onRetry: () => ref.invalidate(subjectDetailProvider(id)),
         ),
         data: (value) {
           final store = ref.watch(settingsStoreProvider);
@@ -106,10 +100,8 @@ class _SubjectScreenState extends ConsumerState<SubjectScreen> {
             final split = _subjectSplit(store.subjectSplitStyles, context);
             Widget body = child;
             if (mode == 'fold') {
-              body = ExpansionTile(
-                tilePadding: const EdgeInsets.symmetric(horizontal: AppGap.x8),
-                childrenPadding: EdgeInsets.zero,
-                title: Text(switch (key) {
+              body = BgmExpand(
+                title: switch (key) {
                   'showTags' => '标签',
                   'showSummary' => '简介',
                   'showInfo' => '详情',
@@ -118,7 +110,7 @@ class _SubjectScreenState extends ConsumerState<SubjectScreen> {
                   'showCharacter' => '角色',
                   'showStaff' => '制作人员',
                   'showAnitabi' => '取景地标',
-                  'showRelations' => '关联条目',
+                  'showRelations' => '关联',
                   'showCatalog' => '目录',
                   'showBlog' => '日志',
                   'showTopic' => '帖子',
@@ -126,10 +118,12 @@ class _SubjectScreenState extends ConsumerState<SubjectScreen> {
                   'showRecent' => '动态',
                   'showComment' => '吐槽',
                   _ => '更多',
-                }, style: context.ds.section),
+                },
+                titlePadding: const EdgeInsets.symmetric(horizontal: AppGap.x8),
                 children: [child],
               );
             }
+
             if (split == null) return body;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -347,11 +341,12 @@ class _SubjectHeaderTitle extends StatelessWidget {
 Widget? _subjectSplit(String style, BuildContext context) {
   if (style == 'off' || style.isEmpty) return null;
   if (style.startsWith('line')) {
-    return Divider(
+    return BgmHairline(
       height: style == 'line-2' ? 16 : 8,
       thickness: style == 'line-2' ? 2 : 1,
     );
   }
+
   final color = switch (style) {
     'title-warning' || 'underline-warning' => context.ds.star,
     'title-primary' || 'underline-primary' => context.ds.accent,
@@ -681,13 +676,55 @@ class _SubjectHeader extends ConsumerWidget {
     int watched,
     int total,
   ) {
-    showDialog<void>(
+    var value = watched.toDouble();
+    showBgmDialog<void>(
       context: context,
-      builder: (_) => _BatchProgressDialog(
-        subjectId: subjectId,
-        watched: watched,
-        total: total,
+      title: '设置观看进度',
+      content: StatefulBuilder(
+        builder: (ctx, setLocal) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('看到第 ${value.round()} 话 / 共 $total 话', style: context.ds.body),
+            BgmSlider(
+              value: value.clamp(0, total.toDouble()),
+              max: total.toDouble(),
+              divisions: total,
+              label: '${value.round()}',
+              onChanged: (v) => setLocal(() => value = v),
+            ),
+          ],
+        ),
       ),
+      actions: (ctx) => [
+        BgmButton(
+          '取消',
+          type: BgmButtonType.plain,
+          expand: false,
+          onPressed: () => Navigator.pop(ctx),
+        ),
+        BgmButton(
+          '保存',
+          expand: false,
+          onPressed: () async {
+            try {
+              await updateWatchedEpsAction(ref, subjectId, value.round());
+              invalidateSubjectState(ref, subjectId);
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+                showBgmToast(
+                  context,
+                  '进度已更新',
+                  duration: const Duration(seconds: 1),
+                );
+              }
+            } catch (e) {
+              if (ctx.mounted) {
+                showBgmToast(context, '更新失败: ${apiErrorMessage(e)}');
+              }
+            }
+          },
+        ),
+      ],
     );
   }
 
@@ -705,20 +742,15 @@ class _SubjectHeader extends ConsumerWidget {
       await updateCollectionAction(ref, subjectId, type: status);
       invalidateSubjectState(ref, subjectId);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '已${SubjectType.statusText(status, detail.subject.type)}',
-            ),
-            duration: const Duration(seconds: 1),
-          ),
+        showBgmToast(
+          context,
+          '已${SubjectType.statusText(status, detail.subject.type)}',
+          duration: const Duration(seconds: 1),
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('操作失败: ${apiErrorMessage(e)}')));
+        showBgmToast(context, '操作失败: ${apiErrorMessage(e)}');
       }
     }
   }
@@ -743,9 +775,7 @@ class _SubjectHeader extends ConsumerWidget {
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已复制标题'), duration: Duration(seconds: 1)),
-    );
+    showBgmToast(context, '已复制标题', duration: const Duration(seconds: 1));
   }
 }
 
@@ -951,89 +981,6 @@ class _ProgressBar extends StatelessWidget {
   }
 }
 
-/// 批量设置进度对话框
-class _BatchProgressDialog extends ConsumerStatefulWidget {
-  final int subjectId;
-  final int watched;
-  final int total;
-
-  const _BatchProgressDialog({
-    required this.subjectId,
-    required this.watched,
-    required this.total,
-  });
-
-  @override
-  ConsumerState<_BatchProgressDialog> createState() =>
-      _BatchProgressDialogState();
-}
-
-class _BatchProgressDialogState extends ConsumerState<_BatchProgressDialog> {
-  late double _value = widget.watched.toDouble();
-  bool _submitting = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('设置观看进度'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '看到第 ${_value.round()} 话 / 共 ${widget.total} 话',
-            style: context.ds.body,
-          ),
-          Slider(
-            value: _value.clamp(0, widget.total.toDouble()),
-            max: widget.total.toDouble(),
-            divisions: widget.total,
-            label: '${_value.round()}',
-            onChanged: (v) => setState(() => _value = v),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: _submitting
-              ? null
-              : () async {
-                  setState(() => _submitting = true);
-                  try {
-                    await updateWatchedEpsAction(
-                      ref,
-                      widget.subjectId,
-                      _value.round(),
-                    );
-                    invalidateSubjectState(ref, widget.subjectId);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('进度已更新'),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('更新失败: ${apiErrorMessage(e)}')),
-                      );
-                    }
-                  }
-                  if (mounted) setState(() => _submitting = false);
-                },
-          child: const Text('保存'),
-        ),
-      ],
-    );
-  }
-}
-
 class _BookProgressInputs extends ConsumerStatefulWidget {
   final int subjectId;
   final int chap;
@@ -1086,18 +1033,11 @@ class _BookProgressInputsState extends ConsumerState<_BookProgressInputs> {
       );
       invalidateSubjectState(ref, widget.subjectId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('进度已更新'),
-            duration: Duration(seconds: 1),
-          ),
-        );
+        showBgmToast(context, '进度已更新', duration: const Duration(seconds: 1));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('更新失败: ${apiErrorMessage(e)}')));
+        showBgmToast(context, '更新失败: ${apiErrorMessage(e)}');
       }
     }
     if (mounted) setState(() => _saving = false);
@@ -1113,23 +1053,15 @@ class _BookProgressInputsState extends ConsumerState<_BookProgressInputs> {
             const SizedBox(width: 6),
             SizedBox(
               width: 44,
-              child: TextField(
+              child: BgmField(
                 controller: _chap,
                 keyboardType: TextInputType.number,
                 style: context.ds.label,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 6,
-                  ),
-                ),
               ),
             ),
             if (widget.totalChap > 0)
               Text(' / ${widget.totalChap}', style: context.ds.caption),
-            IconButton(
-              visualDensity: VisualDensity.compact,
+            BgmHeaderAction(
               tooltip: 'Chap +1',
               icon: const Icon(Icons.add_circle_outline, size: 18),
               onPressed: _saving
@@ -1144,32 +1076,22 @@ class _BookProgressInputsState extends ConsumerState<_BookProgressInputs> {
             const SizedBox(width: 14),
             SizedBox(
               width: 44,
-              child: TextField(
+              child: BgmField(
                 controller: _vol,
                 keyboardType: TextInputType.number,
                 style: context.ds.label,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 6,
-                  ),
-                ),
               ),
             ),
-            IconButton(
-              visualDensity: VisualDensity.compact,
+            BgmHeaderAction(
               tooltip: 'Vol +1',
               icon: const Icon(Icons.add_circle_outline, size: 18),
               onPressed: _saving
                   ? null
                   : () => _save(chap: widget.chap, vol: widget.vol + 1),
             ),
+
             const Spacer(),
-            TextButton(
-              onPressed: _saving ? null : () => _save(),
-              child: const Text('更新'),
-            ),
+            BgmTextAction('更新', onPressed: _saving ? null : () => _save()),
           ],
         ),
       ],
@@ -1343,9 +1265,8 @@ class _EpSectionState extends ConsumerState<_EpSection> {
               if (ref.watch(settingsStoreProvider).showCustomOnair)
                 _SubjectOnAirChip(subjectId: subjectId),
 
-              IconButton(
+              BgmHeaderAction(
                 tooltip: _reverse ? '正序' : '倒序',
-                visualDensity: VisualDensity.compact,
                 icon: Icon(
                   Icons.swap_vert,
                   size: 20,
@@ -1353,9 +1274,10 @@ class _EpSectionState extends ConsumerState<_EpSection> {
                 ),
                 onPressed: () => setState(() => _reverse = !_reverse),
               ),
-              TextButton(
+
+              BgmTextAction(
+                '全部',
                 onPressed: () => context.push('/subject/$subjectId/episodes'),
-                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -1372,12 +1294,9 @@ class _EpSectionState extends ConsumerState<_EpSection> {
         if (eps.eps.length > shown.length)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppGap.x8),
-            child: TextButton(
+            child: BgmTextAction(
+              '查看全部 ${eps.eps.length} 话',
               onPressed: () => context.push('/subject/$subjectId/episodes'),
-              child: Text(
-                '查看全部 ${eps.eps.length} 话',
-                style: context.ds.label.copyWith(color: context.ds.accent),
-              ),
             ),
           ),
       ],
@@ -1412,10 +1331,7 @@ class _SubjectOnAirChip extends ConsumerWidget {
     } else if (weekday > 0) {
       label = kWeekdayCn[weekday % 7];
     }
-    return TextButton(
-      onPressed: () => _edit(context, ref, wd),
-      child: Text(label, style: context.ds.label),
-    );
+    return BgmTextAction(label, onPressed: () => _edit(context, ref, wd));
   }
 
   Future<void> _edit(BuildContext context, WidgetRef ref, int weekday) async {
@@ -1431,71 +1347,70 @@ class _SubjectOnAirChip extends ConsumerWidget {
         minute = parts[1].substring(2);
       }
     }
-    final saved = await showDialog<bool>(
+    final saved = await showBgmDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('自定义放送'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButton<int>(
+      title: '自定义放送',
+      content: StatefulBuilder(
+        builder: (ctx, setLocal) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: BgmSelect<int>(
                 value: wd,
-                isExpanded: true,
-                items: [
-                  for (var i = 0; i < 7; i++)
-                    DropdownMenuItem(value: i, child: Text(kWeekdayCn[i])),
-                ],
-                onChanged: (v) => setLocal(() => wd = v ?? wd),
+                items: [for (var i = 0; i < 7; i++) (i, kWeekdayCn[i])],
+                onChanged: (v) => setLocal(() => wd = v),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButton<String>(
-                      value: hour,
-                      isExpanded: true,
-                      items: [
-                        for (var h = 0; h < 24; h++)
-                          DropdownMenuItem(
-                            value: h.toString().padLeft(2, '0'),
-                            child: Text(h.toString().padLeft(2, '0')),
-                          ),
-                      ],
-                      onChanged: (v) => setLocal(() => hour = v ?? hour),
-                    ),
-                  ),
-                  const Text(' : '),
-                  Expanded(
-                    child: DropdownButton<String>(
-                      value: minute,
-                      isExpanded: true,
-                      items: [
-                        for (final m in const ['00', '15', '30', '45'])
-                          DropdownMenuItem(value: m, child: Text(m)),
-                      ],
-                      onChanged: (v) => setLocal(() => minute = v ?? minute),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                ref.read(settingsStoreProvider).clearCustomOnAir(subjectId);
-                Navigator.pop(ctx, false);
-              },
-              child: const Text('恢复默认'),
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('保存'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                BgmSelect<String>(
+                  value: hour,
+                  items: [
+                    for (var h = 0; h < 24; h++)
+                      (
+                        h.toString().padLeft(2, '0'),
+                        h.toString().padLeft(2, '0'),
+                      ),
+                  ],
+                  onChanged: (v) => setLocal(() => hour = v),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(':'),
+                ),
+                BgmSelect<String>(
+                  value: minute,
+                  items: const [
+                    ('00', '00'),
+                    ('15', '15'),
+                    ('30', '30'),
+                    ('45', '45'),
+                  ],
+                  onChanged: (v) => setLocal(() => minute = v),
+                ),
+              ],
             ),
           ],
         ),
       ),
+      actions: (ctx) => [
+        BgmButton(
+          '恢复默认',
+          type: BgmButtonType.plain,
+          expand: false,
+          onPressed: () {
+            ref.read(settingsStoreProvider).clearCustomOnAir(subjectId);
+            Navigator.pop(ctx, false);
+          },
+        ),
+        BgmButton(
+          '保存',
+          expand: false,
+          onPressed: () => Navigator.pop(ctx, true),
+        ),
+      ],
     );
     if (saved == true) {
       await ref
@@ -1584,8 +1499,7 @@ class _EpRow extends ConsumerWidget {
               ),
             ),
             if (isLogin)
-              IconButton(
-                visualDensity: VisualDensity.compact,
+              BgmHeaderAction(
                 tooltip: watched ? '取消看过' : '标记看过',
                 icon: Icon(
                   watched ? Icons.check_circle : Icons.radio_button_unchecked,
@@ -1603,13 +1517,12 @@ class _EpRow extends ConsumerWidget {
                     ref.invalidate(epStatusProvider(subjectId));
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('操作失败: ${apiErrorMessage(e)}')),
-                      );
+                      showBgmToast(context, '操作失败: ${apiErrorMessage(e)}');
                     }
                   }
                 },
               ),
+
             Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
           ],
         ),
@@ -1658,7 +1571,7 @@ class _TagSection extends ConsumerWidget {
           Row(
             children: [
               const Expanded(child: SectionHeader(title: '标签')),
-              IconButton(
+              BgmHeaderAction(
                 tooltip: store.subjectTagsExpand ? '收起' : '展开',
                 onPressed: () =>
                     store.setSubjectTagsExpand(!store.subjectTagsExpand),
@@ -1668,9 +1581,9 @@ class _TagSection extends ConsumerWidget {
                       : Icons.keyboard_arrow_down,
                 ),
               ),
-              TextButton(
+              BgmTextAction(
+                '全部',
                 onPressed: () => context.push('/subject/$subjectId/tag'),
-                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -1684,7 +1597,23 @@ class _TagSection extends ConsumerWidget {
                     onTap: () => context.push(
                       '/subject/$subjectId/typerank?tag=${Uri.encodeComponent(tag.name)}&type=$type',
                     ),
-                    child: Tag(text: tag.name),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Tag(text: tag.name),
+                        TypeRankBetterText(
+                          type: type,
+                          tag: tag.name,
+                          rank:
+                              ref
+                                  .watch(subjectDetailProvider(subjectId))
+                                  .valueOrNull
+                                  ?.subject
+                                  .rank ??
+                              0,
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -1717,9 +1646,9 @@ class _CharacterSection extends ConsumerWidget {
           child: Row(
             children: [
               const Expanded(child: SectionHeader(title: '角色')),
-              TextButton(
+              BgmTextAction(
+                '全部',
                 onPressed: () => context.push('/subject/$subjectId/characters'),
-                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -1796,9 +1725,9 @@ class _PersonSection extends ConsumerWidget {
           child: Row(
             children: [
               const Expanded(child: SectionHeader(title: '制作人员')),
-              TextButton(
+              BgmTextAction(
+                '全部',
                 onPressed: () => context.push('/subject/$subjectId/persons'),
-                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -1876,10 +1805,10 @@ class _RelationSection extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              const Expanded(child: SectionHeader(title: '相关条目')),
-              TextButton(
+              const Expanded(child: SectionHeader(title: '关联')),
+              BgmTextAction(
+                '全部',
                 onPressed: () => context.push('/subject/$subjectId/link'),
-                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -1955,9 +1884,9 @@ class _PreviewThumbsSection extends ConsumerWidget {
           Row(
             children: [
               const Expanded(child: SectionHeader(title: '预览')),
-              TextButton(
+              BgmTextAction(
+                '全部',
                 onPressed: () => context.push('/subject/$subjectId/preview'),
-                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -2008,17 +1937,14 @@ class _InfoPreviewSection extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: SectionHeader(title: '信息')),
-              TextButton(
+              const Expanded(child: SectionHeader(title: '详情')),
+              BgmTextAction(
+                '修订',
                 onPressed: () => context.push('/subject/$subjectId/wiki'),
-                child: Text('修订', style: context.ds.label),
               ),
-              TextButton(
+              BgmTextAction(
+                expandInPlace ? '全部' : '查看全部',
                 onPressed: () => context.push('/subject/$subjectId/info'),
-                child: Text(
-                  expandInPlace ? '全部' : '查看全部',
-                  style: context.ds.label,
-                ),
               ),
             ],
           ),
@@ -2080,10 +2006,10 @@ class _RatingPreviewSectionState extends ConsumerState<_RatingPreviewSection> {
           Row(
             children: [
               const Expanded(child: SectionHeader(title: '评分')),
-              TextButton(
+              BgmTextAction(
+                '全部',
                 onPressed: () =>
                     context.push('/subject/${widget.subjectId}/rating'),
-                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
@@ -2112,9 +2038,9 @@ class _RatingPreviewSectionState extends ConsumerState<_RatingPreviewSection> {
               ],
             )
           else
-            TextButton(
+            BgmTextAction(
+              '评分已隐藏，点击显示',
               onPressed: () => setState(() => _showScore = true),
-              child: Text('评分已隐藏，点击显示', style: context.ds.caption),
             ),
         ],
       ),
@@ -2140,26 +2066,18 @@ class _CatalogPreviewSection extends ConsumerWidget {
           Row(
             children: [
               const Expanded(child: SectionHeader(title: '目录')),
-              TextButton(
+              BgmTextAction(
+                '全部',
                 onPressed: () => context.push('/subject/$subjectId/catalogs'),
-                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
           for (final c in catalogs.take(3))
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                c.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.ds.label,
-              ),
-              subtitle: Text(
-                '${c.userName}${c.collected > 0 ? ' · ${c.collected} 收藏' : ''}',
-                style: context.ds.caption,
-              ),
+            BgmTextRow(
+              padding: EdgeInsets.zero,
+              title: c.title,
+              subtitle:
+                  '${c.userName}${c.collected > 0 ? ' · ${c.collected} 收藏' : ''}',
               onTap: () => context.push('/catalog/${c.id}'),
             ),
         ],
@@ -2185,36 +2103,29 @@ class _ReviewPreviewSection extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: SectionHeader(title: '评论')),
-              TextButton(
-                onPressed: () => context.push('/rakuen/reviews/$subjectId'),
-                child: Text('全部', style: context.ds.label),
+              const Expanded(child: SectionHeader(title: '日志')),
+              BgmTextAction(
+                '全部',
+                onPressed: () {
+                  final name = ref
+                      .read(subjectDetailProvider(subjectId))
+                      .valueOrNull
+                      ?.subject
+                      .displayName;
+                  context.push(reviewsPath(subjectId, name: name));
+                },
               ),
             ],
           ),
           for (final r in data.reviews.take(3))
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                r.title.isEmpty ? (r.content) : r.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.ds.label,
-              ),
-              subtitle: Text(
-                [
-                  if (r.user?.displayName.isNotEmpty == true)
-                    r.user!.displayName,
-                  if (r.replies > 0) '${r.replies} 回复',
-                ].join(' · '),
-                style: context.ds.caption,
-              ),
-              onTap: () {
-                if (r.id > 0) {
-                  context.push('/rakuen/blog/${r.id}');
-                }
-              },
+            BgmTextRow(
+              padding: EdgeInsets.zero,
+              title: r.title.isEmpty ? r.content : r.title,
+              replies: r.replies,
+              subtitle: r.user?.displayName,
+              onTap: r.id > 0
+                  ? () => context.push('/rakuen/blog/${r.id}')
+                  : null,
             ),
         ],
       ),
@@ -2239,30 +2150,19 @@ class _TopicPreviewSection extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: SectionHeader(title: '讨论版')),
-              TextButton(
+              const Expanded(child: SectionHeader(title: '帖子')),
+              BgmTextAction(
+                '全部',
                 onPressed: () => context.push('/subject/$subjectId/board'),
-                child: Text('全部', style: context.ds.label),
               ),
             ],
           ),
           for (final t in topics.take(3))
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                t.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.ds.label,
-              ),
-              subtitle: Text(
-                [
-                  if (t.userName.isNotEmpty) t.userName,
-                  if (t.replies.isNotEmpty) '${t.replyCount} 回复',
-                ].join(' · '),
-                style: context.ds.caption,
-              ),
+            BgmTextRow(
+              padding: EdgeInsets.zero,
+              title: t.title,
+              replies: t.replyCount,
+              subtitle: t.userName,
               onTap: t.topicId.isEmpty
                   ? null
                   : () => context.push('/rakuen/topic/${t.topicId}'),
@@ -2290,23 +2190,20 @@ class _AnitabiSection extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: SectionHeader(title: '巡礼')),
-              TextButton(
+              const Expanded(child: SectionHeader(title: '取景地标')),
+              BgmTextAction(
+                '地图',
                 onPressed: () => context.push(
                   '/web/${Uri.encodeComponent('https://anitabi.cn/map?bangumiId=$subjectId')}',
                 ),
-                child: Text('地图', style: context.ds.label),
               ),
             ],
           ),
           for (final s in spots.take(5))
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(s.name, style: context.ds.label),
-              subtitle: s.address.isEmpty
-                  ? null
-                  : Text(s.address, style: context.ds.caption),
+            BgmTextRow(
+              padding: EdgeInsets.zero,
+              title: s.name,
+              subtitle: s.address.isEmpty ? null : s.address,
             ),
         ],
       ),
@@ -2336,22 +2233,19 @@ class _SmbSection extends ConsumerWidget {
           Row(
             children: [
               const Expanded(child: SectionHeader(title: '本地')),
-              TextButton(
+              BgmTextAction(
+                '管理',
                 onPressed: () => context.push('/settings/smb'),
-                child: Text('管理', style: context.ds.label),
               ),
             ],
           ),
           for (final f in hits)
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
+            BgmTextRow(
+              padding: EdgeInsets.zero,
               leading: const Icon(Icons.folder_outlined, size: 20),
-              title: Text(f.name, style: context.ds.label),
-              subtitle: f.note.isEmpty
-                  ? null
-                  : Text(f.note, style: context.ds.caption),
-              onTap: () => context.push('/settings/smb'),
+              title: f.name,
+              subtitle: f.note.isEmpty ? null : f.note,
+              onTap: () => context.push('/settings/smb/${f.id}'),
             ),
         ],
       ),
@@ -2539,57 +2433,107 @@ class _RecentSection extends ConsumerWidget {
     if (extras == null || extras.recent.isEmpty) {
       return const SizedBox.shrink();
     }
+    final store = ref.watch(settingsStoreProvider);
+    final friends = store.subjectRecentType == '好友';
+    final type =
+        ref.watch(subjectDetailProvider(subjectId)).valueOrNull?.subject.type ??
+        'anime';
+    final action = SubjectType.action(type);
+    final doings = friends
+        ? ref
+              .watch(
+                subjectRatingProvider((
+                  id: subjectId,
+                  status: 'doings',
+                  friends: true,
+                )),
+              )
+              .valueOrNull
+              ?.items
+        : null;
+    final collections = friends
+        ? ref
+              .watch(
+                subjectRatingProvider((
+                  id: subjectId,
+                  status: 'collections',
+                  friends: true,
+                )),
+              )
+              .valueOrNull
+              ?.items
+        : null;
+    final who = friends
+        ? extraFriendsRecent(
+            doings: doings ?? const [],
+            collections: collections ?? const [],
+            action: action,
+          )
+        : extras.recent;
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x6, 0, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionHeader(title: '用户动态'),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 68,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(right: AppGap.x8),
-              itemCount: extras.recent.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final user = extras.recent[index];
-                return InkWell(
-                  onTap: () => context.push('/user/${user.userId}'),
-                  child: Row(
-                    children: [
-                      Avatar(url: user.avatar, size: 36),
-                      const SizedBox(width: 8),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 96),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: context.ds.label,
-                            ),
-                            Text(
-                              user.status,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: context.ds.tiny,
-                            ),
-                            if (user.star > 0)
-                              Stars(score: user.star.toDouble(), size: 9),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+          SectionHeader(
+            title: '动态',
+            trailing: BgmSegmented<String>(
+              values: const [('全站', '全站'), ('好友', '好友')],
+              selected: store.subjectRecentType,
+              onSelect: store.setSubjectRecentType,
             ),
           ),
+          const SizedBox(height: 8),
+          if (who.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: AppGap.x8, bottom: 8),
+              child: Text('暂无好友动态', style: context.ds.caption),
+            )
+          else
+            SizedBox(
+              height: 68,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(right: AppGap.x8),
+                itemCount: who.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final user = who[index];
+                  return InkWell(
+                    onTap: () => context.push('/user/${user.userId}'),
+                    child: Row(
+                      children: [
+                        Avatar(url: user.avatar, size: 36),
+                        const SizedBox(width: 8),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 96),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: context.ds.label,
+                              ),
+                              Text(
+                                user.status,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: context.ds.tiny,
+                              ),
+                              if (user.star > 0)
+                                Stars(score: user.star.toDouble(), size: 9),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -2631,9 +2575,7 @@ class _SubjectOriginButton extends ConsumerWidget {
         );
         if (url.isEmpty) return;
         if (context.mounted && SettingsStore.instance.openInfo) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('已复制地址，即将跳转')));
+          showBgmToast(context, '已复制地址，即将跳转');
         }
         await openExternalUrl(url);
       },
@@ -2647,40 +2589,93 @@ class _SubjectOriginButton extends ConsumerWidget {
 }
 
 /// 吐槽箱预览
-class _CommentSection extends ConsumerWidget {
+class _CommentSection extends ConsumerStatefulWidget {
   final int subjectId;
   const _CommentSection({required this.subjectId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_CommentSection> createState() => _CommentSectionState();
+}
+
+class _CommentSectionState extends ConsumerState<_CommentSection> {
+  String _interestType = '';
+  String _score = '全部';
+  bool _version = false;
+  bool _reverse = false;
+
+  @override
+  Widget build(BuildContext context) {
     final comments = ref
         .watch(
           subjectCommentsProvider((
-            id: subjectId,
+            id: widget.subjectId,
             page: 1,
-            interestType: '',
-            version: false,
+            interestType: _interestType,
+            version: _version,
           )),
         )
         .valueOrNull;
     if (comments == null || comments.items.isEmpty) {
       return const SizedBox.shrink();
     }
+    final items = _reverse ? comments.items.reversed.toList() : comments.items;
+    final visible = _score == '全部'
+        ? items
+        : [
+            for (final item in items)
+              if (_inScore(item.star, _score)) item,
+          ];
+    final type =
+        ref
+            .watch(subjectDetailProvider(widget.subjectId))
+            .valueOrNull
+            ?.subject
+            .type ??
+        'anime';
+    final statusFilters = typedStatusFilters(type);
+    final interestLabel = statusFilters
+        .firstWhere((e) => e.$2 == _interestType, orElse: () => ('全部', ''))
+        .$1;
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppGap.x8, 0, AppGap.x8, AppGap.x4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(child: SectionHeader(title: '吐槽箱')),
-              TextButton(
-                onPressed: () => context.push('/subject/$subjectId/comments'),
-                child: Text('全部', style: context.ds.label),
+          SubjectCommentChrome(
+            countLabel: '${comments.items.length}+',
+            hasVersion: comments.hasVersion,
+            version: _version,
+            interestType: _interestType,
+            interestLabel: interestLabel,
+            statusFilters: statusFilters,
+            score: _score,
+            reverse: _reverse,
+            extra: BgmTextAction(
+              '全部',
+              onPressed: () => context.push(
+                subjectCommentsPath(
+                  widget.subjectId,
+                  interestType: _interestType,
+                  score: _score,
+                  version: _version,
+                  reverse: _reverse,
+                ),
               ),
-            ],
+            ),
+            onVersion: () => setState(() {
+              _version = !_version;
+              _reverse = false;
+            }),
+            onStatus: (v) => setState(() {
+              _interestType = v;
+              _score = '全部';
+              _reverse = false;
+            }),
+            onScore: (v) => setState(() => _score = v),
+            onReverse: () => setState(() => _reverse = !_reverse),
           ),
-          for (final c in comments.items.take(3))
+
+          for (final c in visible.take(3))
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
@@ -2733,11 +2728,26 @@ class _CommentSection extends ConsumerWidget {
   }
 }
 
-/// 条目详情头部菜单 (移植自原项目 subject/header/menu + location 子页面入口)
-///
-/// 原版头部含 锚点跳转 / 贴贴娘 / 更多菜单(复制链接/复制分享/拼图分享/网页分享/设置);
-/// 本地因未实现锚点+聊天, 改为只放“更多”menus, 并在此菜单中聚合子页面入口
-/// (信息/章节/评分/预览/目录/维基), 让原本注册但无入口的 sub-routes 可达。
+bool _inScore(int star, String score) {
+  final parts = score.split('-');
+  if (parts.length != 2) return true;
+  final lo = int.tryParse(parts[0]) ?? 0;
+  final hi = int.tryParse(parts[1]) ?? 10;
+  return star >= lo && star <= hi;
+}
+
+/// 原版 MENU_DS: 浏览器查看〔id〕/ 复制链接 / 复制分享 / 拼图分享 / 客户端网页版本分享 / 设置
+List<(String, String)> subjectMoreItems(int subjectId) => [
+  ('web', '浏览器查看〔$subjectId〕'),
+  ('copyLink', '复制链接'),
+  ('copyShare', '复制分享'),
+  ('share', '拼图分享'),
+  ('webShare', '客户端网页版本分享'),
+  ('actions', '跳转管理'),
+  ('setting', '设置'),
+];
+
+/// 条目详情头部菜单 (原版 header/menu-component MENU_DS)
 class _SubjectMenuButton extends ConsumerWidget {
   final int subjectId;
 
@@ -2745,78 +2755,20 @@ class _SubjectMenuButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert),
-      tooltip: '更多',
+    return BgmHeaderMore(
+      items: [for (final item in subjectMoreItems(subjectId)) item],
       onSelected: (value) => _handle(context, ref, value),
-      itemBuilder: (context) => [
-        const PopupMenuItem(value: 'info', child: Text('条目信息')),
-        const PopupMenuItem(value: 'episodes', child: Text('章节列表')),
-        const PopupMenuItem(value: 'rating', child: Text('评分分布')),
-        const PopupMenuItem(value: 'preview', child: Text('截屏预览')),
-        const PopupMenuItem(value: 'catalogs', child: Text('包含的目录')),
-        const PopupMenuItem(value: 'board', child: Text('讨论版')),
-        const PopupMenuItem(value: 'wiki', child: Text('维基编辑历史')),
-        const PopupMenuItem(value: 'voices', child: Text('声优')),
-        const PopupMenuItem(value: 'characters', child: Text('角色')),
-        const PopupMenuItem(value: 'persons', child: Text('制作人员')),
-        const PopupMenuItem(value: 'link', child: Text('关联条目')),
-        const PopupMenuItem(value: 'overview', child: Text('概览')),
-        const PopupMenuItem(value: 'wordcloud', child: Text('词云')),
-        const PopupMenuDivider(),
-        if (ref.watch(settingsStoreProvider).exportICS)
-          const PopupMenuItem(value: 'ics', child: Text('导出日程')),
-        const PopupMenuItem(value: 'web', child: Text('在浏览器查看')),
-        const PopupMenuItem(value: 'copyLink', child: Text('复制链接')),
-        const PopupMenuItem(value: 'copyShare', child: Text('复制分享文案')),
-        const PopupMenuItem(value: 'webShare', child: Text('APP 网页版分享')),
-        const PopupMenuItem(value: 'share', child: Text('拼图分享')),
-        const PopupMenuItem(value: 'setting', child: Text('设置')),
-      ],
     );
   }
 
   void _handle(BuildContext context, WidgetRef ref, String value) {
     final id = subjectId;
     switch (value) {
-      case 'info':
-        context.push('/subject/$id/info');
-      case 'episodes':
-        context.push('/subject/$id/episodes');
-      case 'rating':
-        context.push('/subject/$id/rating');
-      case 'preview':
-        context.push('/subject/$id/preview');
-      case 'catalogs':
-        context.push('/subject/$id/catalogs');
-      case 'board':
-        context.push('/subject/$id/board');
-      case 'wiki':
-        context.push('/subject/$id/wiki');
-      case 'voices':
-        context.push('/subject/$id/voices');
-      case 'characters':
-        context.push('/subject/$id/characters');
-      case 'persons':
-        context.push('/subject/$id/persons');
-      case 'link':
-        context.push('/subject/$id/link');
-      case 'overview':
-        context.push('/subject/$id/overview');
-      case 'wordcloud':
-        final type =
-            ref.read(subjectDetailProvider(id)).valueOrNull?.subject.type ??
-            'anime';
-        context.push('/wordcloud?subjectId=$id&type=$type');
       case 'web':
         context.push('/web/${Uri.encodeComponent('$kHost/subject/$id')}');
       case 'copyLink':
         Clipboard.setData(ClipboardData(text: '$kHost/subject/$id'));
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('已复制链接')));
-        }
+        if (context.mounted) showBgmToast(context, '已复制链接');
       case 'copyShare':
         final detail = ref.read(subjectDetailProvider(id)).valueOrNull;
         final name = detail?.subject.displayName ?? '';
@@ -2825,11 +2777,7 @@ class _SubjectMenuButton extends ConsumerWidget {
         Clipboard.setData(
           ClipboardData(text: '【链接】$label | Bangumi番组计划\n$kHost/subject/$id'),
         );
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('已复制分享文案')));
-        }
+        if (context.mounted) showBgmToast(context, '已复制分享文案');
       case 'webShare':
         final detail = ref.read(subjectDetailProvider(id)).valueOrNull;
         final name = detail?.subject.displayName ?? '';
@@ -2840,35 +2788,16 @@ class _SubjectMenuButton extends ConsumerWidget {
           ClipboardData(text: '【链接】$label | Bangumi番组计划\n$url'),
         );
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('已复制 APP 网页版地址')));
+          showBgmToast(context, '已复制 APP 网页版地址');
           context.push('/web/${Uri.encodeComponent(url)}');
         }
-
       case 'share':
         context.push('/share/$id');
-      case 'ics':
+      case 'actions':
         final detail = ref.read(subjectDetailProvider(id)).valueOrNull;
-        final eps = ref.read(epListProvider(id)).valueOrNull?.eps ?? const [];
-        final custom = SettingsStore.instance.customOnAirOf(id);
-        final clock = custom != null && custom.contains('|')
-            ? custom.split('|').last
-            : '2000';
-        shareSubjectIcs(
-          subjectId: id,
-          title: detail?.subject.displayName ?? '条目 $id',
-          clock: clock,
-          eps: [
-            for (final ep in eps)
-              if (ep.type == 0)
-                (
-                  id: ep.id,
-                  sort: ep.sort,
-                  name: ep.displayName,
-                  airdate: ep.airdate,
-                ),
-          ],
+        final name = detail?.subject.displayName ?? '';
+        context.push(
+          '/settings/actions${name.isEmpty ? '' : '?name=${Uri.encodeQueryComponent(name)}'}',
         );
       case 'setting':
         context.push('/settings');

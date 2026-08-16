@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 同步类 WebView 页面骨架 (bilibili/豆瓣 同步共用)
 ///
@@ -60,29 +63,30 @@ class _SyncWebViewScaffoldState extends State<SyncWebViewScaffold> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
+      appBar: BgmAppBar(
+        title: widget.title,
         actions: [
           if (widget.notePath != null)
-            IconButton(
+            BgmHeaderAction(
               tooltip: '说明',
               icon: const Icon(Icons.info_outline),
               onPressed: () => context.push(widget.notePath!),
             ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: '刷新',
             icon: const Icon(Icons.refresh),
             onPressed: () => _controller.reload(),
           ),
         ],
       ),
+
       body: Column(
         children: [
           Expanded(
             child: Stack(
               children: [
                 WebViewWidget(controller: _controller),
-                if (_loading) const Center(child: CircularProgressIndicator()),
+                if (_loading) const Loading(),
               ],
             ),
           ),
@@ -111,9 +115,10 @@ class _SyncWebViewScaffoldState extends State<SyncWebViewScaffold> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
+                  BgmButton(
+                    '完成',
+                    expand: false,
                     onPressed: () => context.pop(),
-                    child: const Text('完成'),
                   ),
                 ],
               ),

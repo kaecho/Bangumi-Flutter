@@ -4,6 +4,11 @@ import 'package:bangumi/shared/widgets/app_bar.dart';
 import 'package:bangumi/shared/widgets/cover.dart';
 import 'package:bangumi/shared/widgets/loading.dart';
 import 'package:bangumi/shared/widgets/score.dart';
+import 'package:bangumi/shared/widgets/tab_bar.dart';
+import 'package:bangumi/shared/widgets/tab_title.dart';
+import 'package:bangumi/shared/widgets/bgm_button.dart';
+import 'package:bangumi/shared/widgets/menu_mark.dart';
+
 import 'package:flutter/material.dart';
 import 'package:widgetbook/widgetbook.dart';
 
@@ -19,8 +24,14 @@ class WidgetbookApp extends StatelessWidget {
       addons: [
         MaterialThemeAddon(
           themes: [
-            WidgetbookTheme(name: 'Light', data: AppTheme.light(AppPalette.defaultAccent)),
-            WidgetbookTheme(name: 'Dark', data: AppTheme.dark(AppPalette.defaultAccent)),
+            WidgetbookTheme(
+              name: 'Light',
+              data: AppTheme.light(AppPalette.defaultAccent),
+            ),
+            WidgetbookTheme(
+              name: 'Dark',
+              data: AppTheme.dark(AppPalette.defaultAccent),
+            ),
           ],
         ),
       ],
@@ -28,9 +39,18 @@ class WidgetbookApp extends StatelessWidget {
         WidgetbookCategory(
           name: 'Foundation',
           children: [
-            WidgetbookUseCase(name: 'Colors', builder: (_) => const _ColorGallery()),
-            WidgetbookUseCase(name: 'Typography', builder: (_) => const _TypeGallery()),
-            WidgetbookUseCase(name: 'Spacing & Radius', builder: (_) => const _SpacingGallery()),
+            WidgetbookUseCase(
+              name: 'Colors',
+              builder: (_) => const _ColorGallery(),
+            ),
+            WidgetbookUseCase(
+              name: 'Typography',
+              builder: (_) => const _TypeGallery(),
+            ),
+            WidgetbookUseCase(
+              name: 'Spacing & Radius',
+              builder: (_) => const _SpacingGallery(),
+            ),
           ],
         ),
         WidgetbookCategory(
@@ -43,7 +63,10 @@ class WidgetbookApp extends StatelessWidget {
                   name: 'Default',
                   builder: (context) => Center(
                     child: Tag(
-                      text: context.knobs.string(label: 'text', initialValue: 'TV 动画'),
+                      text: context.knobs.string(
+                        label: 'text',
+                        initialValue: 'TV 动画',
+                      ),
                       active: context.knobs.boolean(label: 'active'),
                     ),
                   ),
@@ -85,6 +108,19 @@ class WidgetbookApp extends StatelessWidget {
                     ),
                   ),
                 ),
+                WidgetbookUseCase(
+                  name: 'ScoreTag',
+                  builder: (context) => Center(
+                    child: ScoreTag(
+                      value: context.knobs.double.slider(
+                        label: 'score',
+                        initialValue: 8,
+                        min: 0,
+                        max: 10,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
             WidgetbookComponent(
@@ -93,7 +129,12 @@ class WidgetbookApp extends StatelessWidget {
                 WidgetbookUseCase(
                   name: 'Cover placeholder',
                   builder: (_) => const Center(
-                    child: Cover(url: '', width: 100, height: 130, radius: AppRadius.m),
+                    child: Cover(
+                      url: '',
+                      width: 100,
+                      height: 130,
+                      radius: AppRadius.m,
+                    ),
                   ),
                 ),
                 WidgetbookUseCase(
@@ -102,7 +143,10 @@ class WidgetbookApp extends StatelessWidget {
                     child: Avatar(
                       url: '',
                       size: 48,
-                      name: context.knobs.string(label: 'name', initialValue: '坂本'),
+                      name: context.knobs.string(
+                        label: 'name',
+                        initialValue: '坂本',
+                      ),
                     ),
                   ),
                 ),
@@ -118,9 +162,8 @@ class WidgetbookApp extends StatelessWidget {
                 WidgetbookUseCase(name: 'Empty', builder: (_) => const Empty()),
                 WidgetbookUseCase(
                   name: 'Skeleton',
-                  builder: (_) => const Center(
-                    child: Skeleton(width: 120, height: 16),
-                  ),
+                  builder: (_) =>
+                      const Center(child: Skeleton(width: 120, height: 16)),
                 ),
               ],
             ),
@@ -129,18 +172,132 @@ class WidgetbookApp extends StatelessWidget {
               useCases: [
                 WidgetbookUseCase(
                   name: 'Default',
-                  builder: (_) => const Column(
+                  builder: (_) => Column(
                     children: [
-                      SectionHeader(title: '简介'),
+                      const SectionHeader(title: '简介'),
                       SectionHeader(
                         title: '章节',
-                        trailing: Text('全部'),
+                        trailing: SectionMore(onTap: () {}),
                       ),
+                      LoadMoreLink(label: '加载更多', onTap: () {}),
                     ],
                   ),
                 ),
               ],
             ),
+            WidgetbookComponent(
+              name: 'BgmSelect',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Default',
+                  builder: (context) => Center(
+                    child: BgmSelect<String>(
+                      value: context.knobs.object.dropdown(
+                        label: 'value',
+                        options: const ['web', 'onair', 'default'],
+                        initialOption: 'onair',
+                      ),
+                      items: const [
+                        ('web', '网页'),
+                        ('onair', '放送'),
+                        ('default', 'APP'),
+                      ],
+                      onChanged: (_) {},
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmField',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Default',
+                  builder: (context) => Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: BgmField(
+                      hintText: context.knobs.string(
+                        label: 'hint',
+                        initialValue: '说点什么...',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmSettingRow',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Default',
+                  builder: (_) => Column(
+                    children: [
+                      BgmSettingRow(
+                        title: '看板娘吐槽',
+                        subtitle: '空列表底部显示 Bangumi 娘',
+                        trailing: BgmSwitch(value: true, onChanged: (_) {}),
+                      ),
+                      BgmSettingRow(title: '源头设置', arrow: true, onTap: () {}),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmTextRow',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Default',
+                  builder: (_) => const Column(
+                    children: [
+                      BgmTextRow(
+                        title: '关于新番讨论',
+                        replies: 12,
+                        subtitle: '动画 / 用户A',
+                      ),
+                      BgmTextRow(title: '本地收录', subtitle: 'SMB 目录'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmHeaderAction',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Default',
+                  builder: (_) => const Row(
+                    children: [
+                      BgmHeaderAction(icon: Icon(Icons.notifications_outlined)),
+                      BgmHeaderAction(icon: Icon(Icons.search)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmHeaderMore',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Browser',
+                  builder: (_) => BgmHeaderMore.browser(() {}),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmDiscoveryExtra',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'List',
+                  builder: (_) => BgmDiscoveryExtra(
+                    isList: true,
+                    onToggleLayout: () {},
+                    onScrollToTop: () {},
+                  ),
+                ),
+              ],
+            ),
+
             WidgetbookComponent(
               name: 'BgmAppBar',
               useCases: [
@@ -148,6 +305,272 @@ class WidgetbookApp extends StatelessWidget {
                   name: 'Default',
                   builder: (_) => const Scaffold(
                     appBar: BgmAppBar(title: '条目详情', showBackButton: true),
+                  ),
+                ),
+                WidgetbookUseCase(
+                  name: 'Overlay',
+                  builder: (_) => const Scaffold(
+                    extendBodyBehindAppBar: true,
+                    appBar: BgmAppBar(
+                      title: '条目',
+                      showBackButton: true,
+                      transparent: true,
+                      foregroundColor: Colors.white,
+                    ),
+                    body: ColoredBox(color: Colors.black54),
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'LogoHeader',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Centered logo',
+                  builder: (_) => const Scaffold(appBar: LogoHeader()),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmTabBar',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Selected label only',
+                  builder: (_) => Scaffold(
+                    bottomNavigationBar: BgmTabBar(
+                      index: 2,
+                      onSelect: (_) {},
+                      tabs: const [
+                        BgmTabItem(
+                          key: 'Discovery',
+                          label: '发现',
+                          icon: BgmIcons.home,
+                          iconSize: 19,
+                          path: '/discovery',
+                          child: SizedBox.shrink(),
+                          alwaysShow: true,
+                        ),
+                        BgmTabItem(
+                          key: 'Timeline',
+                          label: '时间胶囊',
+                          icon: Icons.access_time,
+                          iconSize: 21,
+                          path: '/timeline',
+                          child: SizedBox.shrink(),
+                          alwaysShow: true,
+                        ),
+                        BgmTabItem(
+                          key: 'Home',
+                          label: '收藏',
+                          icon: Icons.star_outline,
+                          path: '/progress',
+                          child: SizedBox.shrink(),
+                          alwaysShow: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            WidgetbookComponent(
+              name: 'BgmButton',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Types',
+                  builder: (_) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        BgmButton('登录'),
+                        SizedBox(height: 12),
+                        BgmButton('次要', type: BgmButtonType.plain),
+                        SizedBox(height: 12),
+                        BgmButton('浅底', type: BgmButtonType.ghost),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmTabStrip',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Underline',
+                  builder: (_) => BgmTabStrip(
+                    index: 1,
+                    onSelect: (_) {},
+                    tabs: const [Text('全部'), Text('动画'), Text('书籍')],
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmFilterChip',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Selected',
+                  builder: (_) => Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Wrap(
+                      spacing: 8,
+                      children: [
+                        BgmFilterChip(
+                          label: '全部',
+                          selected: true,
+                          onTap: () {},
+                        ),
+                        BgmFilterChip(
+                          label: '动画',
+                          selected: false,
+                          onTap: () {},
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmRetry',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Default',
+                  builder: (_) => BgmRetry(onRetry: () {}),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmSwitch',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'On Off',
+                  builder: (_) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Row(
+                      children: [
+                        BgmSwitch(value: true),
+                        SizedBox(width: 16),
+                        BgmSwitch(value: false),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmSegmented',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Theme',
+                  builder: (_) => Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: BgmSegmented<String>(
+                      values: const [
+                        ('light', '浅色'),
+                        ('dark', '深色'),
+                        ('system', '跟随'),
+                      ],
+                      selected: 'dark',
+                      onSelect: (_) {},
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmDialog',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Confirm',
+                  builder: (_) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: BgmDialog(
+                      title: '退出登录',
+                      content: Text('将清除本地 token 与站点 Cookie'),
+                      actions: [
+                        BgmButton(
+                          '取消',
+                          type: BgmButtonType.plain,
+                          expand: false,
+                        ),
+                        BgmButton('退出', expand: false),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmHairline',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Indented',
+                  builder: (_) => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: BgmHairline(indent: 56),
+                  ),
+                ),
+              ],
+            ),
+            WidgetbookComponent(
+              name: 'BgmMenuMark / Notify',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Wrap Badge Notify',
+                  builder: (_) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Row(
+                      children: [
+                        BgmMenuMark(icon: Icons.folder, badge: Icons.favorite),
+                        SizedBox(width: 16),
+                        BgmMenuMark(
+                          icon: Icons.attach_money,
+                          text: 'D',
+                          wrap: false,
+                        ),
+                        SizedBox(width: 16),
+                        BgmNotifyMark(unread: true),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            WidgetbookComponent(
+              name: 'BgmCard / Expand / Toast / Slider',
+              useCases: [
+                WidgetbookUseCase(
+                  name: 'Card Expand Slider',
+                  builder: (_) => Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        BgmCard(
+                          padding: const EdgeInsets.all(12),
+                          child: BgmExpand(
+                            title: '使用技巧',
+                            subtitle: '点开展开',
+                            children: [Text('验证码会自动识别, 也可点图刷新')],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        BgmSlider(
+                          value: 7,
+                          min: 0,
+                          max: 10,
+                          divisions: 10,
+                          onChanged: (_) {},
+                        ),
+                        const SizedBox(height: 12),
+                        const BgmSpinner(),
+                        const SizedBox(height: 12),
+                        BgmTextAction('加载更多', onPressed: () {}),
+                      ],
+                    ),
                   ),
                 ),
               ],

@@ -9,13 +9,19 @@ import '../../shared/models/group.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../user/pm_screen.dart';
+import 'rakuen_models.dart';
+
 import 'rakuen_providers.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 电波提醒
 /// 路由: /rakuen/notify
 class NotifyScreen extends ConsumerStatefulWidget {
-  const NotifyScreen({super.key});
+  final bool initialPm;
+
+  const NotifyScreen({super.key, this.initialPm = false});
 
   @override
   ConsumerState<NotifyScreen> createState() => _NotifyScreenState();
@@ -24,7 +30,11 @@ class NotifyScreen extends ConsumerStatefulWidget {
 class _NotifyScreenState extends ConsumerState<NotifyScreen>
     with SingleTickerProviderStateMixin {
   final _scrollController = ScrollController();
-  late final TabController _tab = TabController(length: 2, vsync: this);
+  late final TabController _tab = TabController(
+    length: 2,
+    vsync: this,
+    initialIndex: widget.initialPm ? 1 : 0,
+  );
 
   @override
   void initState() {
@@ -87,30 +97,16 @@ class _NotifyScreenState extends ConsumerState<NotifyScreen>
 
   @override
   Widget build(BuildContext context) {
-    final unreadAsync = ref.watch(notifyCountProvider);
-    final title =
-        unreadAsync.valueOrNull != null && unreadAsync.valueOrNull! > 0
-        ? '电波提醒 (${unreadAsync.valueOrNull})'
-        : '电波提醒';
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlNotify()),
-          ),
-        ],
-        bottom: TabBar(
+      appBar: BgmAppBar(
+        title: '电波提醒',
+        actions: [BgmHeaderMore.browser(() => openExternalUrl(htmlNotify()))],
+        bottom: BgmControlledTabStrip(
           controller: _tab,
-          tabs: const [
-            Tab(text: '提醒'),
-            Tab(text: '收件箱'),
-          ],
+          tabs: const [Text('提醒'), Text('收件箱')],
         ),
       ),
+
       body: TabBarView(
         controller: _tab,
         children: [
@@ -123,22 +119,26 @@ class _NotifyScreenState extends ConsumerState<NotifyScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('加载失败, 请确认已登录'),
-                      TextButton(
-                        onPressed: () => ref.invalidate(notifyProvider(1)),
-                        child: const Text('重试'),
+                      BgmRetry(
+                        message: '请确认已登录',
+                        onRetry: () => ref.invalidate(notifyProvider(1)),
                       ),
-                      TextButton(
+                      BgmTextAction(
+                        '配置站点 Cookie',
                         onPressed: () => context.push('/settings/cookies'),
-                        child: const Text('配置站点 Cookie'),
                       ),
                     ],
                   ),
                 ),
                 data: (data) {
-                  if (data.items.isEmpty) {
+                  final items = [
+                    for (final e in data.items)
+                      if (e is Notify) e,
+                  ];
+                  if (items.isEmpty) {
                     return const Center(child: Text('暂时没有提醒'));
                   }
+                  final merged = mergeNotifyItems(items);
                   return RefreshIndicator(
                     onRefresh: () async {
                       ref.invalidate(notifyProvider(1));
@@ -146,21 +146,25 @@ class _NotifyScreenState extends ConsumerState<NotifyScreen>
                     },
                     child: ListView.separated(
                       controller: _scrollController,
-                      itemCount: data.items.length + (data.hasMore ? 1 : 0),
-                      separatorBuilder: (_, _) => const Divider(indent: 56),
+                      itemCount: merged.length + (data.hasMore ? 1 : 0),
+                      separatorBuilder: (_, _) => const BgmHairline(indent: 56),
                       itemBuilder: (context, index) {
-                        if (index >= data.items.length) {
+                        if (index >= merged.length) {
                           return Center(
-                            child: TextButton(
+                            child: BgmTextAction(
+                              '加载更多',
                               onPressed: () => ref
                                   .read(notifyProvider(1).notifier)
                                   .loadMore(),
-                              child: const Text('加载更多'),
                             ),
                           );
                         }
-                        final item = data.items[index] as Notify;
-                        return _NotifyRow(item: item, onTap: () => _open(item));
+                        final entry = merged[index];
+                        return _NotifyRow(
+                          item: entry.item,
+                          badge: entry.badge,
+                          onTap: () => _open(entry.item),
+                        );
                       },
                     ),
                   );
@@ -178,9 +182,10 @@ class _NotifyScreenState extends ConsumerState<NotifyScreen>
 
 class _NotifyRow extends StatelessWidget {
   final Notify item;
+  final String badge;
   final VoidCallback onTap;
 
-  const _NotifyRow({required this.item, required this.onTap});
+  const _NotifyRow({required this.item, this.badge = '', required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -228,6 +233,16 @@ class _NotifyRow extends StatelessWidget {
                 ],
               ),
             ),
+            if (badge.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(left: 6, top: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: context.ds.border,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(badge, style: context.ds.tiny),
+              ),
             if (unread)
               Container(
                 margin: const EdgeInsets.only(left: 6, top: 4),

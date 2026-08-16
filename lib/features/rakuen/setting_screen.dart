@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import 'rakuen_settings.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 超展开设置 (屏蔽规则 / 楼层样式 / 引用折叠)
 /// 路由: /rakuen/setting
@@ -60,7 +62,7 @@ class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
     final settings = ref.watch(rakuenSettingsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('超展开设置')),
+      appBar: const BgmAppBar(title: '超展开设置'),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
@@ -254,9 +256,9 @@ class _RakuenSettingScreenState extends ConsumerState<RakuenSettingScreen> {
                 ref.read(rakuenSettingsProvider.notifier).untrackUser(v),
           ),
 
-          ListTile(
-            title: const Text('用户协议'),
-            trailing: const Icon(Icons.chevron_right),
+          BgmSettingRow(
+            title: '用户协议',
+            arrow: true,
             onTap: () => context.push('/rakuen/ugc-agree'),
           ),
         ],
@@ -272,15 +274,13 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
       child: Text(
         title,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: theme.colorScheme.primary,
+        style: context.ds.caption.copyWith(
+          color: context.ds.accent,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -302,14 +302,11 @@ class _SwitchItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
-      title: Text(title, style: const TextStyle(fontSize: 14)),
-      subtitle: subtitle == null
-          ? null
-          : Text(subtitle!, style: const TextStyle(fontSize: 12)),
-      value: value,
-      onChanged: onChanged,
-      dense: true,
+    return BgmSettingRow(
+      title: title,
+      subtitle: subtitle,
+      trailing: BgmSwitch(value: value, onChanged: onChanged),
+      onTap: () => onChanged(!value),
     );
   }
 }
@@ -333,29 +330,13 @@ class _SegmentedItem<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 14)),
-          if (subtitle != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(subtitle!, style: context.ds.caption),
-            ),
-          const SizedBox(height: 8),
-          SegmentedButton<T>(
-            segments: [
-              for (final option in options)
-                ButtonSegment(value: option, label: Text(label(option))),
-            ],
-            selected: {value},
-            onSelectionChanged: (selection) => onChanged(selection.first),
-            showSelectedIcon: false,
-            style: const ButtonStyle(visualDensity: VisualDensity.compact),
-          ),
-        ],
+    return BgmSettingRow(
+      title: title,
+      subtitle: subtitle,
+      below: BgmSegmented<T>(
+        values: [for (final option in options) (option, label(option))],
+        selected: value,
+        onSelect: onChanged,
       ),
     );
   }
@@ -382,53 +363,47 @@ class _BlockListEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Column(
+    return BgmSettingRow(
+      title: title,
+      subtitle: subtitle,
+      below: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 14)),
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(subtitle, style: context.ds.caption),
-          ),
-          const SizedBox(height: 6),
           Row(
             children: [
               Expanded(
-                child: TextField(
+                child: BgmField(
                   controller: controller,
-                  decoration: InputDecoration(
-                    hintText: addHint,
-                    isDense: true,
-                    border: const OutlineInputBorder(),
-                  ),
+                  hintText: addHint,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => onAdd(),
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.add),
-                color: theme.colorScheme.primary,
-                onPressed: onAdd,
+              GestureDetector(
+                onTap: onAdd,
+                child: Text(
+                  '添加',
+                  style: context.ds.meta.copyWith(color: context.ds.accent),
+                ),
               ),
             ],
           ),
-          if (items.isNotEmpty)
+          if (items.isNotEmpty) ...[
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 4,
               children: [
                 for (final item in items)
-                  InputChip(
-                    label: Text(item, style: const TextStyle(fontSize: 12)),
-                    onDeleted: () => onDelete(item),
-                    visualDensity: VisualDensity.compact,
+                  BgmFilterChip(
+                    label: item,
+                    selected: true,
+                    onTap: () => onDelete(item),
                   ),
               ],
             ),
+          ],
         ],
       ),
     );

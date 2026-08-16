@@ -9,11 +9,9 @@ class TinygrailNewBangumiScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const TinygrailCharaListScreen(
-      title: '新番角色',
-      tabs: [
-        ('最近活跃', 'nbc'),
-        ('最高市值', 'tnbc'),
-      ],
+      title: '新番榜单',
+      showIconGo: true,
+      tabs: [('最近活跃', 'nbc'), ('最高市值', 'tnbc')],
     );
   }
 }

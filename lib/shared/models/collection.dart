@@ -90,6 +90,7 @@ class CollectionItem {
   final int epStatus;
   final int volStatus;
   final String updatedAt;
+  final String tip;
 
   const CollectionItem({
     required this.subject,
@@ -102,6 +103,7 @@ class CollectionItem {
     this.epStatus = 0,
     this.volStatus = 0,
     this.updatedAt = '',
+    this.tip = '',
   });
 
   factory CollectionItem.fromJson(Map<String, dynamic> json) {
@@ -132,6 +134,7 @@ class CollectionItem {
       epStatus: (json['ep_status'] as num?)?.toInt() ?? 0,
       volStatus: (json['vol_status'] as num?)?.toInt() ?? 0,
       updatedAt: json['updated_at'] as String? ?? '',
+      tip: json['tip'] as String? ?? '',
     );
   }
 }

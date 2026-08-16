@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
-import '../../core/auth/site_cookies.dart';
 import '../../core/storage/settings_store.dart';
 import '../../core/utils/display.dart';
 import '../../core/utils/format.dart';
@@ -15,11 +14,13 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import '../../shared/widgets/tab_title.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/likes_grid.dart';
+
+import '../../shared/widgets/mesume.dart';
 
 import '../user/user_models.dart';
 
-/// 时间线点赞 type (原项目 LIKE_TYPE_TIMELINE)
-const int kLikeTypeTimeline = 40;
 
 /// 时间线类型 (移植自原项目 MODEL_TIMELINE_TYPE)
 const kTimelineTabs = [
@@ -29,6 +30,7 @@ const kTimelineTabs = [
   ('进度', 'progress'),
   ('日志', 'blog'),
   ('人物', 'mono'),
+  ('好友', 'relation'),
   ('小组', 'group'),
   ('维基', 'wiki'),
   ('目录', 'index'),
@@ -144,83 +146,61 @@ class TimelineScreen extends ConsumerStatefulWidget {
   ConsumerState<TimelineScreen> createState() => _TimelineScreenState();
 }
 
-class _TimelineScreenState extends ConsumerState<TimelineScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(
-    length: kTimelineTabs.length,
-    vsync: this,
-  );
+class _TimelineScreenState extends ConsumerState<TimelineScreen> {
+  int _type = 0;
   String _scope = 'friend';
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final canAct = ref.watch(canActAsLoggedInProvider);
-    final scopeLabel = kTimelineScopes
-        .firstWhere((e) => e.$1 == _scope, orElse: () => ('friend', '好友'))
-        .$2;
     return Scaffold(
-      appBar: AppBar(
-        title: const TabLogoTitle('时间线'),
-        actions: [
-          if (canAct)
-            IconButton(
-              icon: const Icon(Icons.add),
-              tooltip: '新吐槽',
-              onPressed: () => context.push('/timeline/say/new'),
-            ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(46),
-          child: Row(
-            children: [
-              PopupMenuButton<String>(
-                tooltip: '范围',
-                onSelected: (v) => setState(() => _scope = v),
-                itemBuilder: (_) => [
-                  for (final s in kTimelineScopes)
-                    PopupMenuItem(value: s.$1, child: Text(s.$2)),
-                ],
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(scopeLabel, style: context.ds.label),
-                      const Icon(Icons.arrow_drop_down, size: 18),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
-                child: TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  tabs: [for (final t in kTimelineTabs) Tab(text: t.$1)],
-                ),
-              ),
-            ],
-          ),
+      appBar: LogoHeader(
+        trailing: BgmHeaderAction(
+          icon: const Icon(Icons.add),
+          tooltip: '新吐槽',
+          onPressed: () {
+            if (!canAct) {
+              showBgmToast(context, '请先登录');
+              return;
+            }
+            context.push('/timeline/say/new');
+          },
         ),
       ),
-      body: canAct
-          ? TabBarView(
-              controller: _tabController,
+      body: Column(
+        children: [
+          SizedBox(
+            height: 42,
+            child: Row(
               children: [
-                for (final t in kTimelineTabs)
-                  _TimelineList(query: TimelineQuery(_scope, t.$2)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 9, 8, 9),
+                  child: BgmSelect<String>(
+                    value: _scope,
+                    items: kTimelineScopes,
+                    onChanged: (v) => setState(() => _scope = v),
+                  ),
+                ),
+                Expanded(
+                  child: BgmTabStrip(
+                    scrollable: true,
+                    index: _type,
+                    onSelect: (i) => setState(() => _type = i),
+                    tabs: [for (final t in kTimelineTabs) Text(t.$1)],
+                  ),
+                ),
               ],
-            )
-          : const _TimelineLoginGate(),
+            ),
+          ),
+          Expanded(
+            child: _TimelineList(
+              query: TimelineQuery(_scope, kTimelineTabs[_type].$2),
+            ),
+          ),
+        ],
+      ),
     );
   }
-
 }
 
 class _TimelineList extends ConsumerStatefulWidget {
@@ -254,25 +234,16 @@ class _TimelineListState extends ConsumerState<_TimelineList> {
 
   @override
   Widget build(BuildContext context) {
+    final canAct = ref.watch(canActAsLoggedInProvider);
+    if (!canAct &&
+        (widget.query.scope == 'friend' || widget.query.scope == 'me')) {
+      return const _TimelineLoginGate();
+    }
     final async = ref.watch(timelineProvider(widget.query));
     return async.when(
       loading: () => const Loading(),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '加载失败',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            TextButton(
-              onPressed: () => ref.invalidate(timelineProvider(widget.query)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      error: (e, _) => BgmRetry(
+        onRetry: () => ref.invalidate(timelineProvider(widget.query)),
       ),
       data: (data) {
         final store = ref.watch(settingsStoreProvider);
@@ -282,30 +253,40 @@ class _TimelineListState extends ConsumerState<_TimelineList> {
         ];
 
         if (items.isEmpty) {
-          return const Center(child: Text('暂无动态'));
+          return RefreshIndicator(
+            onRefresh: () async =>
+                ref.invalidate(timelineProvider(widget.query)),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [SizedBox(height: 80), _TimelineEmpty()],
+            ),
+          );
         }
-        return ListView.builder(
-          controller: _scrollController,
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            final date = _timelineDayLabel(item.createdAt);
-            final prev = index == 0
-                ? ''
-                : _timelineDayLabel(items[index - 1].createdAt);
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (date.isNotEmpty && date != prev)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-                    child: Text(date, style: context.ds.section),
-                  ),
-                _TimelineItemView(item: item, query: widget.query),
-              ],
-            );
-          },
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(timelineProvider(widget.query)),
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final date = _timelineDayLabel(item.createdAt);
+              final prev = index == 0
+                  ? ''
+                  : _timelineDayLabel(items[index - 1].createdAt);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (date.isNotEmpty && date != prev)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                      child: Text(date, style: context.ds.section),
+                    ),
+                  _TimelineItemView(item: item, query: widget.query),
+                ],
+              );
+            },
+          ),
         );
       },
     );
@@ -320,235 +301,190 @@ class _TimelineItemView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final user = item.user;
     final store = ref.watch(settingsStoreProvider);
+    final hideAvatar = query.scope == 'me';
+    final userId = user == null
+        ? ''
+        : (user.username.isEmpty ? '${user.id}' : user.username);
+    final remark = user == null ? '' : store.userRemarkOf(userId);
+    final name = user == null
+        ? ''
+        : (remark.isEmpty ? user.displayName : '[$remark]');
 
     return InkWell(
-      onTap: () {
-        if (item.type == 'say' && item.id > 0) {
-          context.push('/timeline/say/${item.id}');
-          return;
-        }
-        final sid = item.subject?.id;
-        if (sid != null && sid > 0) {
-          if (store.timelinePopable) {
-            showModalBottomSheet<void>(
-              context: context,
-              builder: (ctx) => SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Cover(
-                            url: item.subject!.images.common,
-                            width: 56,
-                            height: 76,
-                            radius: 4,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.subject!.displayName,
-                                  style: context.ds.title,
-                                ),
-                                if (!store.hideScore &&
-                                    (item.subject!.rating?.score ?? 0) > 0)
-                                  Text(
-                                    '${item.subject!.rating!.score} 分',
-                                    style: context.ds.caption.copyWith(
-                                      color: context.ds.star,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: () {
-                          Navigator.of(ctx).pop();
-                          context.push('/subject/$sid');
-                        },
-                        child: const Text('查看条目'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-            return;
-          }
-          context.push('/subject/$sid');
-        } else if (user != null) {
-          context.push('/user/${user.username}');
-        }
-      },
-
+      onTap: () => _open(context, store),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (user != null)
+            if (!hideAvatar && user != null)
               Avatar(
                 url: user.avatarUrl,
                 size: 36,
                 name: user.displayName,
-                userId: user.username.isEmpty ? '${user.id}' : user.username,
-              ),
-
-            const SizedBox(width: 10),
+                userId: userId,
+              )
+            else
+              const SizedBox(width: 36),
+            const SizedBox(width: 8),
             Expanded(
-              child: Column(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      if (user != null) ...[
-                        Text(
-                          () {
-                            final remark = ref
-                                .watch(settingsStoreProvider)
-                                .userRemarkOf(
-                                  user.username.isEmpty
-                                      ? '${user.id}'
-                                      : user.username,
-                                );
-                            return remark.isEmpty
-                                ? user.displayName
-                                : '[$remark]';
-                          }(),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        UserAgeBadge(
-                          userId: user.username.isEmpty
-                              ? '${user.id}'
-                              : user.username,
-                        ),
-                      ],
-
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _statusText(item),
-                          style: context.ds.caption,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        friendlyTime(item.createdAt),
-                        style: context.ds.tiny,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  if (item.subject != null)
-                    Row(
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Cover(
-                          url: item.subject!.images.common,
-                          width: 48,
-                          height: 64,
-                          radius: 4,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        Text.rich(
+                          TextSpan(
                             children: [
-                              Text(
-                                item.subject!.displayName,
-                                style: const TextStyle(fontSize: 13),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (!store.hideScore &&
-                                  item.subject!.rating != null &&
-                                  item.subject!.rating!.score > 0)
-                                Text(
-                                  '${item.subject!.rating!.score}分',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: context.ds.star,
+                              if (item.content.isEmpty) ...[
+                                if (name.isNotEmpty)
+                                  TextSpan(
+                                    text: name,
+                                    style: context.ds.bodyStrong.copyWith(
+                                      fontSize: 13,
+                                    ),
                                   ),
+                                if (user != null)
+                                  WidgetSpan(
+                                    alignment: PlaceholderAlignment.middle,
+                                    child: UserAgeBadge(userId: userId),
+                                  ),
+                                if (name.isNotEmpty) const TextSpan(text: ' '),
+                                TextSpan(
+                                  text: _statusText(item),
+                                  style: context.ds.caption,
+                                ),
+                              ] else
+                                TextSpan(
+                                  text: stripHtml(item.content),
+                                  style: context.ds.body,
                                 ),
                             ],
                           ),
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (item.subject != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            item.subject!.displayName,
+                            style: context.ds.bodyStrong.copyWith(fontSize: 13),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (!store.hideScore &&
+                              (item.subject!.rating?.score ?? 0) > 0)
+                            Text(
+                              '${item.subject!.rating!.score}分',
+                              style: context.ds.tiny.copyWith(
+                                color: context.ds.star,
+                              ),
+                            ),
+                        ],
+
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (item.id > 0 && item.type == 'say') ...[
+                              GestureDetector(
+                                onTap: () =>
+                                    context.push('/timeline/say/${item.id}'),
+                                child: Text(
+                                  '回复',
+                                  style: context.ds.caption.copyWith(
+                                    color: context.ds.accent,
+                                  ),
+                                ),
+                              ),
+                              Text(' · ', style: context.ds.caption),
+                            ],
+                            if (item.id > 0) ...[
+                              GestureDetector(
+                                onTap: () => showLikesGrid(
+                                  context: context,
+                                  ref: ref,
+                                  likeType: item.likeType == 0
+                                      ? (item.type == 'say'
+                                            ? kLikeTypeSay
+                                            : kLikeTypeTimeline)
+                                      : item.likeType,
+                                  mainId: item.id,
+                                  relatedId: item.relatedId > 0
+                                      ? item.relatedId
+                                      : item.id,
+                                ),
+                                child: Text(
+                                  '贴贴',
+                                  style: context.ds.caption.copyWith(
+                                    color: context.ds.accent,
+                                  ),
+                                ),
+                              ),
+                              Text(' · ', style: context.ds.caption),
+                            ],
+                            Expanded(
+                              child: Text(
+                                friendlyTime(item.createdAt),
+                                style: context.ds.caption,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  if (item.status?.text != null && item.status!.text.isNotEmpty)
-                    Text(
-                      item.status!.text,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.onSurface,
+                  ),
+                  if (item.subject != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Cover(
+                        url: item.subject!.images.common,
+                        width: 48,
+                        height: 64,
+                        radius: 4,
                       ),
                     ),
-                  if (item.content.isNotEmpty)
-                    Text(
-                      stripHtml(item.content),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  Row(
-                    children: [
-                      if (item.id > 0 && item.type == 'say')
-                        TextButton.icon(
-                          onPressed: () =>
-                              context.push('/timeline/say/${item.id}'),
-                          icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                          label: const Text('回复'),
-                        ),
-                      if (item.id > 0)
-                        TextButton.icon(
-                          onPressed: () => _like(context, ref),
-                          icon: const Icon(Icons.thumb_up_outlined, size: 16),
-                          label: const Text('贴贴'),
-                        ),
-                      if (item.clearHref.isNotEmpty)
-                        IconButton(
-                          tooltip: '删除',
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => _delete(context, ref),
-                        )
-                      else if (user != null)
-                        PopupMenuButton<int>(
-                          tooltip: '不看 TA',
-                          icon: const Icon(Icons.more_horiz, size: 18),
-                          onSelected: (days) {
-                            final id = user.username.isEmpty
-                                ? '${user.id}'
-                                : user.username;
-                            ref
-                                .read(settingsStoreProvider)
-                                .hideTimelineUser(id, days);
-                          },
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 1, child: Text('1天不看TA')),
-                            PopupMenuItem(value: 3, child: Text('3天不看TA')),
-                            PopupMenuItem(value: 7, child: Text('7天不看TA')),
-                          ],
-                        ),
-                    ],
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: item.clearHref.isNotEmpty
+                        ? GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _delete(context, ref),
+                            child: Icon(
+                              Icons.close,
+                              size: 18,
+                              color: context.ds.textSecondary,
+                            ),
+                          )
+                        : user == null
+                        ? null
+                        : PopupMenuButton<int>(
+                            tooltip: '不看 TA',
+                            padding: EdgeInsets.zero,
+                            iconSize: 18,
+                            icon: Icon(
+                              Icons.more_horiz,
+                              size: 18,
+                              color: context.ds.textSecondary,
+                            ),
+
+                            onSelected: (days) {
+                              ref
+                                  .read(settingsStoreProvider)
+                                  .hideTimelineUser(userId, days);
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 1, child: Text('1天不看TA')),
+                              PopupMenuItem(value: 3, child: Text('3天不看TA')),
+                              PopupMenuItem(value: 7, child: Text('7天不看TA')),
+                            ],
+                          ),
                   ),
                 ],
               ),
@@ -559,63 +495,83 @@ class _TimelineItemView extends ConsumerWidget {
     );
   }
 
-  Future<void> _like(BuildContext context, WidgetRef ref) async {
-    if (!ref.read(canActAsLoggedInProvider)) {
-      if (context.mounted) await context.push('/login');
+  void _open(BuildContext context, SettingsStore store) {
+    if (item.type == 'say' && item.id > 0) {
+      context.push('/timeline/say/${item.id}');
       return;
     }
-    String gh = '';
-    try {
-      gh = await ref.read(formhashProvider.future);
-    } catch (_) {}
-    if (gh.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('点赞需要站点 Cookie 登录')));
+    final sid = item.subject?.id;
+    if (sid != null && sid > 0) {
+      if (store.timelinePopable) {
+        showBgmSheet<void>(
+          context: context,
+          builder: (ctx) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Cover(
+                        url: item.subject!.images.common,
+                        width: 56,
+                        height: 76,
+                        radius: 4,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.subject!.displayName,
+                              style: context.ds.title,
+                            ),
+                            if (!store.hideScore &&
+                                (item.subject!.rating?.score ?? 0) > 0)
+                              Text(
+                                '${item.subject!.rating!.score} 分',
+                                style: context.ds.caption.copyWith(
+                                  color: context.ds.star,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  BgmButton(
+                    '查看条目',
+                    expand: false,
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      context.push('/subject/$sid');
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        return;
       }
-      return;
-    }
-    try {
-      final type = item.type == 'say' ? 50 : kLikeTypeTimeline;
-      await ref
-          .read(apiClientProvider)
-          .post(
-            apiLike(type, item.id, value: '赞', gh: gh),
-            host: kHost,
-          );
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('已贴贴')));
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('点赞失败')));
-      }
+      context.push('/subject/$sid');
+    } else if (item.user != null) {
+      context.push('/user/${item.user!.username}');
     }
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除时间线'),
-        content: const Text('确定删除这条动态?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final ok = await showBgmConfirm(
+      context,
+      title: '删除时间线',
+      message: '确定删除这条动态?',
+      confirmLabel: '删除',
     );
+
     if (ok != true) return;
     try {
       final client = ref.read(apiClientProvider);
@@ -628,15 +584,11 @@ class _TimelineItemView extends ConsumerWidget {
       ref.invalidate(timelineProvider(query));
 
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('已删除')));
+        showBgmToast(context, '已删除');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('删除失败: $e')));
+        showBgmToast(context, '删除失败: $e');
       }
     }
   }
@@ -693,31 +645,23 @@ bool _keepTimelineItem(SettingsStore store, TimelineItem item) {
   return true;
 }
 
-class _TimelineLoginGate extends ConsumerWidget {
-  const _TimelineLoginGate();
+class _TimelineEmpty extends StatelessWidget {
+  const _TimelineEmpty();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Center(
+  Widget build(BuildContext context) {
+    final speech = SettingsStore.instance.speech;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 32),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.lock_outline, size: 48, color: context.ds.textHint),
+          const Mesume(size: 80),
           const SizedBox(height: 12),
-          const Text('登录后查看时间线'),
-          const SizedBox(height: 8),
-          const Text(
-            'OAuth 或站点 Cookie 均可',
-            style: TextStyle(fontSize: 12),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: () => context.push('/login'),
-            child: const Text('登录'),
-          ),
-          TextButton(
-            onPressed: () => context.push('/settings/cookies'),
-            child: const Text('站点 Cookie 登录'),
+          Text(
+            speech ? randomMesumeSpeech() : '暂无动态',
+            style: context.ds.caption.copyWith(fontSize: 13),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -725,3 +669,17 @@ class _TimelineLoginGate extends ConsumerWidget {
   }
 }
 
+class _TimelineLoginGate extends StatelessWidget {
+  const _TimelineLoginGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: BgmButton(
+        '重新登录',
+        expand: false,
+        onPressed: () => context.push('/login'),
+      ),
+    );
+  }
+}

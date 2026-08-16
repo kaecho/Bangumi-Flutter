@@ -36,7 +36,8 @@ class Cache {
     if (entry == null) return null;
     if (maxAge != null) {
       final savedAt = entry['_t'] as int? ?? 0;
-      if (DateTime.now().millisecondsSinceEpoch - savedAt > maxAge.inMilliseconds) {
+      if (DateTime.now().millisecondsSinceEpoch - savedAt >
+          maxAge.inMilliseconds) {
         return null;
       }
     }
@@ -44,10 +45,9 @@ class Cache {
   }
 
   Future<void> put(String boxName, String key, dynamic value) async {
-    await Hive.box<dynamic>(boxName).put(key, {
-      '_t': DateTime.now().millisecondsSinceEpoch,
-      '_v': value,
-    });
+    await Hive.box<dynamic>(
+      boxName,
+    ).put(key, {'_t': DateTime.now().millisecondsSinceEpoch, '_v': value});
   }
 
   Future<void> remove(String boxName, String key) async {

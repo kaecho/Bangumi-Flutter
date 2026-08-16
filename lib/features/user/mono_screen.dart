@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
-import '../../core/auth/auth_controller.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'user_models.dart';
@@ -82,79 +81,18 @@ class UserMonoNotifier
   }
 }
 
-/// 用户收藏的人物 (自己或他人)
-class UserMonoScreen extends ConsumerStatefulWidget {
-  final String userId;
-  final String title;
-
-  const UserMonoScreen({super.key, required this.userId, this.title = '收藏的人物'});
-
-  @override
-  ConsumerState<UserMonoScreen> createState() => _UserMonoScreenState();
-}
-
-class _UserMonoScreenState extends ConsumerState<UserMonoScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 2, vsync: this);
-
-  @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        bottom: TabBar(
-          controller: _tab,
-          tabs: const [
-            Tab(text: '角色'),
-            Tab(text: '人物'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tab,
-        children: [
-          _MonoList(userId: widget.userId, kind: 'character'),
-          _MonoList(userId: widget.userId, kind: 'person'),
-        ],
-      ),
-    );
-  }
-}
-
-/// 我的人物 (当前登录用户收藏的角色/人物)
-class MyMonoScreen extends ConsumerWidget {
-  const MyMonoScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final me = ref.watch(currentUserProvider);
-    if (me == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('我的人物')),
-        body: const Center(child: Text('请先登录')),
-      );
-    }
-    return UserMonoScreen(userId: userPathId(me), title: '我的人物');
-  }
-}
-
-class _MonoList extends ConsumerStatefulWidget {
+/// 收藏人物网格 (Character / 独立页共用)
+class UserMonoList extends ConsumerStatefulWidget {
   final String userId;
   final String kind;
 
-  const _MonoList({required this.userId, required this.kind});
+  const UserMonoList({super.key, required this.userId, required this.kind});
 
   @override
-  ConsumerState<_MonoList> createState() => _MonoListState();
+  ConsumerState<UserMonoList> createState() => _UserMonoListState();
 }
 
-class _MonoListState extends ConsumerState<_MonoList> {
+class _UserMonoListState extends ConsumerState<UserMonoList> {
   final _scroll = ScrollController();
 
   UserMonoQuery get _query => UserMonoQuery(widget.userId, widget.kind);
@@ -195,13 +133,7 @@ class _MonoListState extends ConsumerState<_MonoList> {
           itemCount: data.items.length + (data.hasMore ? 1 : 0),
           itemBuilder: (context, index) {
             if (index >= data.items.length) {
-              return const Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              );
+              return const Center(child: BgmSpinner());
             }
             final mono = data.items[index];
             return InkWell(

@@ -29,7 +29,8 @@ class PagedData<T> {
 /// ```
 ///
 /// UI 层直接使用 [PagedGridView] / [PagedListView] 渲染。
-abstract class PagedNotifier<T, A> extends FamilyAsyncNotifier<PagedData<T>, A> {
+abstract class PagedNotifier<T, A>
+    extends FamilyAsyncNotifier<PagedData<T>, A> {
   /// 拉取第 [page] 页 (从 1 开始); 返回空列表表示没有更多数据
   Future<List<T>> fetchPage(A arg, int page);
 
@@ -47,26 +48,43 @@ abstract class PagedNotifier<T, A> extends FamilyAsyncNotifier<PagedData<T>, A> 
     if (current == null || !current.hasMore || state.isLoading) return;
     try {
       final next = await _load(arg, current.page + 1);
-      state = AsyncData(PagedData<T>(
-        items: [...current.items, ...next.items],
-        page: next.page,
-        hasMore: next.hasMore,
-      ));
+      state = AsyncData(
+        PagedData<T>(
+          items: [...current.items, ...next.items],
+          page: next.page,
+          hasMore: next.hasMore,
+        ),
+      );
     } catch (_) {
       // 单页失败不打断已加载内容, 滚动可再次触发
+    }
+  }
+
+  /// 分页模式: 替换为指定页, 不追加
+  Future<void> loadPage(int page) async {
+    if (page < 1 || state.isLoading) return;
+    try {
+      state = AsyncData(await _load(arg, page));
+    } catch (_) {
+      // 单页失败不打断已加载内容
     }
   }
 }
 
 /// 通用分页网格: 加载 / 错误重试 / 下拉刷新 / 滚动到底自动加载
 class PagedGridView<T, A> extends ConsumerStatefulWidget {
-  final AsyncNotifierProviderFamily<PagedNotifier<T, A>, PagedData<T>, A> provider;
+  final AsyncNotifierProviderFamily<PagedNotifier<T, A>, PagedData<T>, A>
+  provider;
   final A arg;
   final Widget Function(BuildContext context, T item, int index) itemBuilder;
   final int crossAxisCount;
   final double childAspectRatio;
   final EdgeInsetsGeometry padding;
   final String emptyText;
+  final ScrollController? controller;
+  final bool autoLoadMore;
+  final Widget? header;
+  final Widget? footer;
 
   const PagedGridView({
     super.key,
@@ -77,35 +95,57 @@ class PagedGridView<T, A> extends ConsumerStatefulWidget {
     this.childAspectRatio = 0.56,
     this.padding = const EdgeInsets.all(10),
     this.emptyText = '暂时没有内容',
+    this.controller,
+    this.header,
+    this.footer,
+    this.autoLoadMore = true,
   });
 
   @override
-  ConsumerState<PagedGridView<T, A>> createState() => _PagedGridViewState<T, A>();
+  ConsumerState<PagedGridView<T, A>> createState() =>
+      _PagedGridViewState<T, A>();
 }
 
 class _PagedGridViewState<T, A> extends ConsumerState<PagedGridView<T, A>> {
-  final ScrollController _controller = ScrollController();
+  ScrollController? _owned;
+
+  ScrollController get _controller => widget.controller ?? _owned!;
 
   @override
   void initState() {
     super.initState();
+    if (widget.controller == null) _owned = ScrollController();
     _controller.addListener(_onScroll);
   }
 
   @override
   void didUpdateWidget(covariant PagedGridView<T, A> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.arg != widget.arg) _controller.jumpTo(0);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_onScroll);
+      _owned?.removeListener(_onScroll);
+      if (widget.controller == null) {
+        _owned ??= ScrollController();
+      } else {
+        _owned?.dispose();
+        _owned = null;
+      }
+      _controller.addListener(_onScroll);
+    }
+    if (oldWidget.arg != widget.arg && _controller.hasClients) {
+      _controller.jumpTo(0);
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller.removeListener(_onScroll);
+    _owned?.dispose();
     super.dispose();
   }
 
   void _onScroll() {
-    if (!_controller.hasClients) return;
+    if (!widget.autoLoadMore || !_controller.hasClients) return;
     final position = _controller.position;
     if (position.pixels >= position.maxScrollExtent - 400) {
       ref.read(widget.provider(widget.arg).notifier).loadMore();
@@ -122,37 +162,41 @@ class _PagedGridViewState<T, A> extends ConsumerState<PagedGridView<T, A>> {
         onRetry: () => ref.invalidate(widget.provider(widget.arg)),
       ),
       data: (data) {
-        final grid = GridView.builder(
-          controller: _controller,
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: widget.padding,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: widget.crossAxisCount,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 12,
-            childAspectRatio: widget.childAspectRatio,
-          ),
-          itemCount: data.items.length,
-          itemBuilder: (context, index) =>
-              widget.itemBuilder(context, data.items[index], index),
-        );
-        if (data.items.isEmpty) {
-          return RefreshIndicator(
-            onRefresh: () => ref.refresh(widget.provider(widget.arg).future),
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
+        final padding = widget.padding.resolve(Directionality.of(context));
+        return RefreshIndicator(
+          onRefresh: () => ref.refresh(widget.provider(widget.arg).future),
+          child: CustomScrollView(
+            controller: _controller,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              if (widget.header != null)
+                SliverToBoxAdapter(child: widget.header!),
+              if (data.items.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Empty(text: widget.emptyText),
+                )
+              else
+                SliverPadding(
+                  padding: padding,
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: widget.crossAxisCount,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: widget.childAspectRatio,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) =>
+                          widget.itemBuilder(context, data.items[index], index),
+                      childCount: data.items.length,
+                    ),
+                  ),
                 ),
-              ],
-            ),
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: () => ref.refresh(widget.provider(widget.arg).future),
-          child: grid,
+              if (widget.footer != null)
+                SliverToBoxAdapter(child: widget.footer!),
+            ],
+          ),
         );
       },
     );
@@ -161,12 +205,16 @@ class _PagedGridViewState<T, A> extends ConsumerState<PagedGridView<T, A>> {
 
 /// 通用分页列表 (与 [PagedGridView] 相同的加载/刷新/翻页逻辑)
 class PagedListView<T, A> extends ConsumerStatefulWidget {
-  final AsyncNotifierProviderFamily<PagedNotifier<T, A>, PagedData<T>, A> provider;
+  final AsyncNotifierProviderFamily<PagedNotifier<T, A>, PagedData<T>, A>
+  provider;
   final A arg;
   final Widget Function(BuildContext context, T item, int index) itemBuilder;
   final EdgeInsetsGeometry padding;
   final String emptyText;
   final Widget? header;
+  final Widget? footer;
+  final ScrollController? controller;
+  final bool autoLoadMore;
 
   const PagedListView({
     super.key,
@@ -176,35 +224,56 @@ class PagedListView<T, A> extends ConsumerStatefulWidget {
     this.padding = const EdgeInsets.symmetric(vertical: 4),
     this.emptyText = '暂时没有内容',
     this.header,
+    this.footer,
+    this.controller,
+    this.autoLoadMore = true,
   });
 
   @override
-  ConsumerState<PagedListView<T, A>> createState() => _PagedListViewState<T, A>();
+  ConsumerState<PagedListView<T, A>> createState() =>
+      _PagedListViewState<T, A>();
 }
 
 class _PagedListViewState<T, A> extends ConsumerState<PagedListView<T, A>> {
-  final ScrollController _controller = ScrollController();
+  ScrollController? _owned;
+
+  ScrollController get _controller => widget.controller ?? _owned!;
 
   @override
   void initState() {
     super.initState();
+    if (widget.controller == null) _owned = ScrollController();
     _controller.addListener(_onScroll);
   }
 
   @override
   void didUpdateWidget(covariant PagedListView<T, A> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.arg != widget.arg) _controller.jumpTo(0);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_onScroll);
+      _owned?.removeListener(_onScroll);
+      if (widget.controller == null) {
+        _owned ??= ScrollController();
+      } else {
+        _owned?.dispose();
+        _owned = null;
+      }
+      _controller.addListener(_onScroll);
+    }
+    if (oldWidget.arg != widget.arg && _controller.hasClients) {
+      _controller.jumpTo(0);
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller.removeListener(_onScroll);
+    _owned?.dispose();
     super.dispose();
   }
 
   void _onScroll() {
-    if (!_controller.hasClients) return;
+    if (!widget.autoLoadMore || !_controller.hasClients) return;
     final position = _controller.position;
     if (position.pixels >= position.maxScrollExtent - 400) {
       ref.read(widget.provider(widget.arg).notifier).loadMore();
@@ -221,15 +290,25 @@ class _PagedListViewState<T, A> extends ConsumerState<PagedListView<T, A>> {
         onRetry: () => ref.invalidate(widget.provider(widget.arg)),
       ),
       data: (data) {
+        final extra =
+            (widget.header != null ? 1 : 0) + (widget.footer != null ? 1 : 0);
+        final headerOffset = widget.header != null ? 1 : 0;
         final list = ListView.builder(
           controller: _controller,
           physics: const AlwaysScrollableScrollPhysics(),
           padding: widget.padding,
-          itemCount: data.items.length + (widget.header != null ? 1 : 0),
+          itemCount: data.items.length + extra,
           itemBuilder: (context, index) {
             if (widget.header != null && index == 0) return widget.header!;
-            final item = data.items[index - (widget.header != null ? 1 : 0)];
-            return widget.itemBuilder(context, item, index);
+            final itemIndex = index - headerOffset;
+            if (itemIndex < data.items.length) {
+              return widget.itemBuilder(
+                context,
+                data.items[itemIndex],
+                itemIndex,
+              );
+            }
+            return widget.footer!;
           },
         );
         if (data.items.isEmpty) {
@@ -239,10 +318,8 @@ class _PagedListViewState<T, A> extends ConsumerState<PagedListView<T, A>> {
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
                 if (widget.header != null) widget.header!,
-                SizedBox(
-                  height: 320,
-                  child: Empty(text: widget.emptyText),
-                ),
+                SizedBox(height: 320, child: Empty(text: widget.emptyText)),
+                if (widget.footer != null) widget.footer!,
               ],
             ),
           );
@@ -264,36 +341,6 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '加载失败',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              message,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).colorScheme.outline,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
-        ],
-      ),
-    );
+    return BgmRetry(message: message, onRetry: onRetry);
   }
 }

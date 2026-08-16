@@ -11,6 +11,8 @@ import '../../core/utils/display.dart';
 import '../../shared/widgets/loading.dart';
 
 import 'user_models.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 目录类型计数文案
 const kCatalogTypeLabels = {
@@ -104,19 +106,20 @@ class UserCatalogsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('TA的目录'),
-        actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(apiUserCatalogsHtml(userId)),
-          ),
-        ],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: BgmAppBar(
+          title: 'TA的目录',
+          actions: [
+            BgmHeaderMore.browser(
+              () => openExternalUrl(apiUserCatalogsHtml(userId)),
+            ),
+          ],
+          bottom: const BgmDefaultTabStrip(tabs: [Text('创建的'), Text('收藏的')]),
+        ),
+        body: UserCatalogsTabs(userId: userId, showTabs: false),
       ),
-
-      body: UserCatalogsTabs(userId: userId),
     );
   }
 }
@@ -128,25 +131,24 @@ class MyCatalogsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(currentUserProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('我的目录'),
-        actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: BgmAppBar(
+          title: '我的目录',
+          actions: [
+            BgmHeaderMore.browser(() {
               final me = ref.read(currentUserProvider);
               if (me == null) return;
               openExternalUrl(apiUserCatalogsHtml(userPathId(me)));
-            },
-          ),
-        ],
+            }),
+          ],
+          bottom: const BgmDefaultTabStrip(tabs: [Text('创建的'), Text('收藏的')]),
+        ),
+        body: me == null
+            ? const Center(child: Text('请先登录'))
+            : UserCatalogsTabs(userId: userPathId(me), showTabs: false),
       ),
-
-      body: me == null
-          ? const Center(child: Text('请先登录'))
-          : UserCatalogsTabs(userId: userPathId(me)),
     );
   }
 }
@@ -154,29 +156,29 @@ class MyCatalogsScreen extends ConsumerWidget {
 /// 创建的 / 收藏的 (对齐原版 user/catalogs TABS)
 class UserCatalogsTabs extends StatelessWidget {
   final String userId;
+  final bool showTabs;
 
-  const UserCatalogsTabs({super.key, required this.userId});
+  const UserCatalogsTabs({
+    super.key,
+    required this.userId,
+    this.showTabs = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final body = TabBarView(
+      children: [
+        UserCatalogsList(userId: userId),
+        UserCatalogsList(userId: userId, collect: true),
+      ],
+    );
+    if (!showTabs) return body;
     return DefaultTabController(
       length: 2,
       child: Column(
         children: [
-          const TabBar(
-            tabs: [
-              Tab(text: '创建的'),
-              Tab(text: '收藏的'),
-            ],
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                UserCatalogsList(userId: userId),
-                UserCatalogsList(userId: userId, collect: true),
-              ],
-            ),
-          ),
+          const BgmDefaultTabStrip(tabs: [Text('创建的'), Text('收藏的')]),
+          Expanded(child: body),
         ],
       ),
     );
@@ -225,18 +227,8 @@ class _UserCatalogsListState extends ConsumerState<UserCatalogsList> {
     final async = ref.watch(userCatalogsProvider(_query));
     return async.when(
       loading: () => const Loading(),
-      error: (_, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('加载失败'),
-            TextButton(
-              onPressed: () => ref.invalidate(userCatalogsProvider(_query)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
+      error: (_, _) =>
+          BgmRetry(onRetry: () => ref.invalidate(userCatalogsProvider(_query))),
       data: (data) {
         if (data.items.isEmpty) return const Center(child: Text('暂无目录'));
         return ListView.builder(
@@ -247,13 +239,7 @@ class _UserCatalogsListState extends ConsumerState<UserCatalogsList> {
             if (index >= data.items.length) {
               return const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
+                child: Center(child: BgmSpinner(size: 20)),
               );
             }
             final catalog = data.items[index];

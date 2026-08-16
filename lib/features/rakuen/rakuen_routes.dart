@@ -44,7 +44,12 @@ final List<GoRoute> rakuenRoutes = [
     builder: (_, state) =>
         BoardScreen(boardKey: state.pathParameters['key'] ?? 'topiclist'),
   ),
-  GoRoute(path: '/rakuen/notify', builder: (_, _) => const NotifyScreen()),
+  GoRoute(
+    path: '/rakuen/notify',
+    builder: (_, state) =>
+        NotifyScreen(initialPm: state.uri.queryParameters['type'] == 'pm'),
+  ),
+
   GoRoute(path: '/rakuen/history', builder: (_, _) => const AggregateScreen()),
   // 浏览历史 (port 特有功能: 本地浏览记录, 与原版 rakuen/history 语义不同)
   GoRoute(path: '/history/browse', builder: (_, _) => const HistoryScreen()),
@@ -61,6 +66,7 @@ final List<GoRoute> rakuenRoutes = [
     path: '/rakuen/reviews/:subjectId',
     builder: (_, state) => ReviewsScreen(
       subjectId: int.tryParse(state.pathParameters['subjectId'] ?? '') ?? 0,
+      name: state.uri.queryParameters['name'] ?? '',
     ),
   ),
   GoRoute(path: '/rakuen/ugc-agree', builder: (_, _) => const UgcAgreeScreen()),

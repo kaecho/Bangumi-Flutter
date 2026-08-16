@@ -15,10 +15,14 @@ class AppTheme {
     Color seed, {
     bool deepDark = false,
   }) {
+    // 不用 fromSeed: Material You 会把 #FE8A95  squish 成另一套粉
     final scheme = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: brightness,
+      primary: seed,
+      onPrimary: Colors.white,
     );
+
     final ds = AppThemeData.fromScheme(scheme, deepDark: deepDark);
 
     return ThemeData(
@@ -127,6 +131,8 @@ class AppTheme {
         linearTrackColor: ds.border,
         circularTrackColor: ds.border,
       ),
+      popupMenuTheme: PopupMenuThemeData(iconColor: ds.textPrimary),
+
       snackBarTheme: const SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.lAll),

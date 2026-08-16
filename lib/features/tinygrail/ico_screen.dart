@@ -9,7 +9,7 @@ class TinygrailIcoScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const TinygrailCharaListScreen(
-      title: '新股申购',
+      title: 'ICO 榜单',
       tabs: [
         ('最多资金', 'mvi'),
         ('最高人气', 'mpi'),

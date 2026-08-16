@@ -11,13 +11,28 @@ import '../../shared/widgets/loading.dart';
 import 'rakuen_models.dart';
 import 'rakuen_providers.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
+
+/// 原版影评 HeaderV2: `{name}的影评` / 影评
+String reviewsTitle(String? name) {
+  final n = name?.trim() ?? '';
+  return n.isEmpty ? '影评' : '$n的影评';
+}
+
+String reviewsPath(int subjectId, {String? name}) {
+  final n = name?.trim() ?? '';
+  if (n.isEmpty) return '/rakuen/reviews/$subjectId';
+  return '/rakuen/reviews/$subjectId?name=${Uri.encodeQueryComponent(n)}';
+}
 
 /// 条目评论/长评
 /// 路由: /rakuen/reviews/:subjectId
 class ReviewsScreen extends ConsumerStatefulWidget {
   final int subjectId;
+  final String name;
 
-  const ReviewsScreen({super.key, required this.subjectId});
+  const ReviewsScreen({super.key, required this.subjectId, this.name = ''});
 
   @override
   ConsumerState<ReviewsScreen> createState() => _ReviewsScreenState();
@@ -46,13 +61,12 @@ class _ReviewsScreenState extends ConsumerState<ReviewsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('影评'),
+      appBar: BgmAppBar(
+        title: reviewsTitle(widget.name),
+
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlReviews(widget.subjectId)),
+          BgmHeaderMore.browser(
+            () => openExternalUrl(htmlReviews(widget.subjectId)),
           ),
         ],
       ),
@@ -62,18 +76,8 @@ class _ReviewsScreenState extends ConsumerState<ReviewsScreen> {
           final async = ref.watch(reviewsProvider(widget.subjectId));
           return async.when(
             loading: () => const Loading(height: double.infinity),
-            error: (e, _) => Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('加载失败'),
-                  TextButton(
-                    onPressed: () =>
-                        ref.invalidate(reviewsProvider(widget.subjectId)),
-                    child: const Text('重试'),
-                  ),
-                ],
-              ),
+            error: (e, _) => BgmRetry(
+              onRetry: () => ref.invalidate(reviewsProvider(widget.subjectId)),
             ),
             data: (data) {
               if (data.reviews.isEmpty) {
@@ -82,15 +86,15 @@ class _ReviewsScreenState extends ConsumerState<ReviewsScreen> {
               return ListView.separated(
                 controller: _scrollController,
                 itemCount: data.reviews.length + (data.hasMore ? 1 : 0),
-                separatorBuilder: (_, _) => const Divider(indent: 16),
+                separatorBuilder: (_, _) => const BgmHairline(indent: 16),
                 itemBuilder: (context, index) {
                   if (index >= data.reviews.length) {
                     return Center(
-                      child: TextButton(
+                      child: BgmTextAction(
+                        '加载更多',
                         onPressed: () => ref
                             .read(reviewsProvider(widget.subjectId).notifier)
                             .loadMore(),
-                        child: const Text('加载更多'),
                       ),
                     );
                   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'advance_list.dart';
+import 'tinygrail_notes.dart';
+
 
 /// 献祭推荐
 class TinygrailAdvanceSacrificeScreen extends StatelessWidget {
@@ -12,6 +14,7 @@ class TinygrailAdvanceSacrificeScreen extends StatelessWidget {
       title: '献祭推荐',
       provider: advanceSacrificeProvider,
       valueLabel: '增益',
+      notePath: tinygrailAdvanceSacrificeNotePath(),
     );
   }
 }

@@ -4,10 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
-import '../../design_system/design_system.dart';
 
 /// 热门榜单 (移植自原项目 screens/tinygrail/overview)
 ///
@@ -25,6 +26,8 @@ class _TinygrailOverviewScreenState
     extends ConsumerState<TinygrailOverviewScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab = TabController(length: 5, vsync: this);
+  String _go = '卖出';
+
 
   @override
   void dispose() {
@@ -35,12 +38,17 @@ class _TinygrailOverviewScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('热门榜单'),
-        bottom: TabBar(
+      appBar: BgmAppBar(
+        title: '热门榜单',
+        actions: [
+          TinygrailIconGo(
+            value: _go,
+            onChanged: (v) => setState(() => _go = v),
+          ),
+        ],
+        bottom: BgmControlledTabStrip(
           controller: _tab,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
+          scrollable: true,
           tabs: const [
             Tab(text: '精炼排行'),
             Tab(text: '最高股息'),
@@ -52,12 +60,12 @@ class _TinygrailOverviewScreenState
       ),
       body: TabBarView(
         controller: _tab,
-        children: const [
-          _RefineList(),
-          _CharaList(type: 'msrc'),
-          _CharaList(type: 'mvc'),
-          _CharaList(type: 'mrc'),
-          _CharaList(type: 'mfc'),
+        children: [
+          const _RefineList(),
+          _CharaList(type: 'msrc', go: _go),
+          _CharaList(type: 'mvc', go: _go),
+          _CharaList(type: 'mrc', go: _go),
+          _CharaList(type: 'mfc', go: _go),
         ],
       ),
     );
@@ -102,40 +110,19 @@ class _RefineListState extends ConsumerState<_RefineList> {
           },
           child: ListView.separated(
             itemCount: list.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const BgmHairline(),
             itemBuilder: (context, index) {
               final item = list[index];
-              return ListTile(
+              return BgmTextRow(
                 leading: Cover(
                   url: item.cover.replaceFirst('//', 'https://'),
                   width: 40,
                   height: 40,
                   radius: 6,
                 ),
-                title: Row(
-                  children: [
-                    Text('${index + 1}', style: context.ds.caption),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        item.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '精炼 Lv.${item.refine}',
-                      style: context.ds.tiny.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                subtitle: Text(
-                  '@${item.userName.isEmpty ? item.userId : item.userName} · 献祭 ${item.sacrifices}',
-                  style: context.ds.meta,
-                ),
+                title: item.name,
+                subtitle:
+                    '#${index + 1} · 精炼 Lv.${item.refine} · @${item.userName.isEmpty ? item.userId : item.userName} · 献祭 ${item.sacrifices}',
                 onTap: () => context.push('/tinygrail/chara/${item.monoId}'),
               );
             },
@@ -149,8 +136,9 @@ class _RefineListState extends ConsumerState<_RefineList> {
 /// 角色排行 tab (type 见 apiTinygrailRankList)
 class _CharaList extends ConsumerStatefulWidget {
   final String type;
+  final String go;
 
-  const _CharaList({required this.type});
+  const _CharaList({required this.type, required this.go});
 
   @override
   ConsumerState<_CharaList> createState() => _CharaListState();
@@ -203,12 +191,13 @@ class _CharaListState extends ConsumerState<_CharaList> {
                 },
                 child: ListView.separated(
                   itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const BgmHairline(),
                   itemBuilder: (context, index) {
                     final chara = list[index];
                     return CharaTile(
                       chara: chara,
-                      onTap: () => context.push('/tinygrail/chara/${chara.id}'),
+                      onTap: () =>
+                          context.push(tinygrailIconGoPath(chara.id, widget.go)),
                     );
                   },
                 ),

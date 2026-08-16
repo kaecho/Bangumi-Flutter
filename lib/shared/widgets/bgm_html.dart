@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/utils/display.dart';
 import '../../design_system/design_system.dart';
+import 'loading.dart';
 
 /// 通用 HTML 渲染 (帖子/日志/楼层内容)
 ///
@@ -118,7 +119,6 @@ class BgmHtml extends StatelessWidget {
           emojiSize: emojiSize,
         ),
       ],
-
 
       onLinkTap: (url, attributes, element) {
         if (url == null || url.isEmpty) return;
@@ -235,13 +235,7 @@ class _BgmImageExtension extends HtmlExtension {
                   return SizedBox(
                     width: emoji ? emojiSize.toDouble() : 24,
                     height: emoji ? emojiSize.toDouble() : 24,
-                    child: const Center(
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
+                    child: const Center(child: BgmSpinner(size: 16)),
                   );
                 },
                 errorBuilder: (context, error, stack) => SizedBox(
@@ -370,4 +364,3 @@ class _MaskTextState extends State<_MaskText> {
     );
   }
 }
-

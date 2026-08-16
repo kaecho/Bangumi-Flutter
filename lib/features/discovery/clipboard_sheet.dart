@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/utils/url_match.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 原项目 discovery/index LinkModal LINKS
 const kClipboardPresets = <({String key, String value, String text})>[
@@ -47,7 +48,7 @@ class _ClipboardSheetState extends State<ClipboardSheet> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showBgmToast(context, msg);
   }
 
   void _submit() {
@@ -75,18 +76,17 @@ class _ClipboardSheetState extends State<ClipboardSheet> {
   }
 
   Future<void> _pickPreset() async {
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showBgmSheet<String>(
       context: context,
-      isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: ListView(
           shrinkWrap: true,
           children: [
-            const ListTile(title: Text('预设')),
+            const BgmActionRow(title: '预设'),
             for (final item in kClipboardPresets)
-              ListTile(
-                title: Text(item.key),
-                subtitle: Text(item.text, style: context.ds.caption),
+              BgmActionRow(
+                title: item.key,
+                subtitle: item.text,
                 onTap: () => Navigator.pop(ctx, item.value),
               ),
           ],
@@ -113,27 +113,32 @@ class _ClipboardSheetState extends State<ClipboardSheet> {
             const SizedBox(height: AppGap.x2),
             Text('可能由于权限问题，未能在剪贴板中匹配到链接，请手动粘贴或输入', style: context.ds.caption),
             const SizedBox(height: 12),
-            TextField(
+            BgmField(
               controller: _controller,
               autofocus: true,
-              decoration: const InputDecoration(
-                hintText: '输入或粘贴 bgm.tv 的链接',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+              hintText: '输入或粘贴 bgm.tv 的链接',
               onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                TextButton(onPressed: _pickPreset, child: const Text('预设')),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                GestureDetector(
+                  onTap: _pickPreset,
+                  child: Text(
+                    '预设',
+                    style: context.ds.caption.copyWith(
+                      color: context.ds.accent,
+                    ),
+                  ),
                 ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Text('取消', style: context.ds.caption),
+                ),
+
                 const SizedBox(width: 8),
-                FilledButton(onPressed: _submit, child: const Text('提交')),
+                BgmButton('提交', expand: false, onPressed: _submit),
               ],
             ),
           ],

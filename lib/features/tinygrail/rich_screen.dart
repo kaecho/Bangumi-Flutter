@@ -6,6 +6,8 @@ import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 番市首富 (原项目 1-100 / 周股息 / 流动资产)
 class TinygrailRichScreen extends ConsumerStatefulWidget {
@@ -29,25 +31,21 @@ class _TinygrailRichScreenState extends ConsumerState<TinygrailRichScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('番市首富'),
-
+      appBar: BgmAppBar(
+        title: '番市首富',
         actions: [
-          IconButton(
-            icon: const Icon(Icons.grid_view_outlined),
+          BgmHeaderAction(
+            icon: const Icon(Icons.insert_chart_outlined),
             tooltip: '富豪树',
             onPressed: () => context.push('/tinygrail/tree-rich'),
           ),
         ],
-        bottom: TabBar(
+        bottom: BgmControlledTabStrip(
           controller: _tab,
-          tabs: const [
-            Tab(text: '1-100'),
-            Tab(text: '周股息'),
-            Tab(text: '流动资产'),
-          ],
+          tabs: const [Text('1-100'), Text('周股息'), Text('流动资产')],
         ),
       ),
+
       body: TabBarView(
         controller: _tab,
         children: const [
@@ -77,7 +75,7 @@ class _RichList extends ConsumerWidget {
             ? const Empty(text: '暂无数据')
             : ListView.separated(
                 itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const BgmHairline(),
                 itemBuilder: (context, index) {
                   final item = list[index];
                   return UserTile(

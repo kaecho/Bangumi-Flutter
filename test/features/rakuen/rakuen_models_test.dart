@@ -6,6 +6,14 @@ import 'package:bangumi/features/rakuen/rakuen_models.dart';
 import 'package:bangumi/features/rakuen/rakuen_settings.dart';
 import 'package:bangumi/features/rakuen/widgets/fixed_textarea.dart';
 import 'package:bangumi/shared/widgets/bgm_html.dart';
+import 'package:bangumi/features/rakuen/blog_screen.dart';
+import 'package:bangumi/features/rakuen/group_screen.dart';
+import 'package:bangumi/features/rakuen/rakuen_screen.dart';
+import 'package:bangumi/features/rakuen/topic_screen.dart';
+import 'package:bangumi/features/rakuen/widgets/topic_row.dart';
+import 'package:bangumi/features/rakuen/reviews_screen.dart';
+import 'package:bangumi/features/rakuen/mine_screen.dart';
+import 'package:bangumi/shared/models/group.dart';
 
 
 void main() {
@@ -244,7 +252,6 @@ void main() {
     });
   });
 
-
   group('insertBbcode / quoteReply', () {
     test('选中文字包 BBCode', () {
       final r = insertBbcode(
@@ -277,5 +284,106 @@ void main() {
       expect(p.postUid, '1184949');
     });
   });
-}
 
+  group('rakuen Extra', () {
+    test('超展开顶栏菜单对齐原版 IconMore', () {
+      expect(kRakuenMoreItems.map((e) => e.$2).toList(), [
+        '小组搜索',
+        '超展开设置',
+        '添加新讨论',
+      ]);
+    });
+
+    test('帖子顶栏含 id 行和举报', () {
+      expect(topicMoreItems('group/1').map((e) => e.$2).toList(), [
+        '帖子 · group/1',
+        '网页版查看',
+        '复制链接',
+        '复制分享',
+        '举报',
+      ]);
+    });
+
+    test('日志顶栏是浏览器查看复制链接复制分享', () {
+      expect(kBlogMoreItems.map((e) => e.$2).toList(), [
+        '浏览器查看',
+        '复制链接',
+        '复制分享',
+      ]);
+    });
+
+    test('小组顶栏加入退出随状态变, 时间格式可切', () {
+      expect(
+        groupMoreItems(
+          joined: false,
+          canJoin: true,
+          canQuit: false,
+          lastDate: true,
+        ).map((e) => e.$2).toList(),
+        ['浏览器查看', '小组成员', '加入小组', '时间格式〔最近〕'],
+      );
+      expect(
+        groupMoreItems(
+          joined: true,
+          canJoin: false,
+          canQuit: true,
+          lastDate: false,
+        ).map((e) => e.$2).toList(),
+        ['浏览器查看', '小组成员', '退出小组', '时间格式〔日期〕'],
+      );
+    });
+
+    test('已是绝对日期的小组时间不再二次格式化', () {
+      expect(
+        formatRakuenTopicTime('2024-1-1 10:00', lastDate: true),
+        '2024-1-1 10:00',
+      );
+      expect(formatRakuenTopicTime('', lastDate: true), '');
+    });
+
+    test('影评标题带条目名, 路径带 name', () {
+      expect(reviewsTitle('CLANNAD'), 'CLANNAD的影评');
+      expect(reviewsTitle(''), '影评');
+      expect(reviewsPath(8), '/rakuen/reviews/8');
+      expect(reviewsPath(8, name: 'CLANNAD'), '/rakuen/reviews/8?name=CLANNAD');
+    });
+
+    test('我的小组 Extra 是我的和全部, 可按名过滤', () {
+      expect(kMineGroupTypes.map((e) => e.$2).toList(), ['我的', '全部']);
+      const list = [
+        MyGroup(id: 'a', cover: '', name: '新番乐园'),
+        MyGroup(id: 'b', cover: '', name: '邦纪'),
+      ];
+      expect(filterMineGroups(list, '新番').map((e) => e.id), ['a']);
+      expect(filterMineGroups(list, 'B').map((e) => e.id), ['b']);
+      expect(filterMineGroups(list, ''), hasLength(2));
+    });
+
+    test('日志吐槽标题计楼层加子回复', () {
+      expect(commentSectionTitle(0), '吐槽');
+      expect(commentSectionTitle(3), '吐槽 3');
+      expect(blogFavorTopicId(8), 'blog/8');
+      expect(commentFloorCount(const []), 0);
+    });
+
+    test('电波提醒连续相同项合并显示 xN', () {
+      const a = Notify(
+        title: '回了你',
+        content: '嗨',
+        avatar: 'a.png',
+        url: '/t/1',
+      );
+      const b = Notify(
+        title: '回了你',
+        content: '嗨',
+        avatar: 'a.png',
+        url: '/t/1',
+      );
+      const c = Notify(title: '另条', content: '嗨', avatar: 'a.png', url: '/t/2');
+      final merged = mergeNotifyItems([a, b, c]);
+      expect(merged, hasLength(2));
+      expect(merged.first.badge, 'x2');
+      expect(merged.last.badge, '');
+    });
+  });
+}

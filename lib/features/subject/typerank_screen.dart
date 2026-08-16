@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/api/api_endpoints.dart';
-import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 
 import 'collection_sheet.dart';
 import '../discovery/discovery_notes.dart';
+import '../discovery/typerank_screen.dart';
+import '../discovery/typerank_data.dart';
+
 import 'subject_models.dart';
-import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 分类排行 (共享某标签的条目)
 /// 路由: /subject/:id/typerank?tag=&type=
@@ -30,55 +31,37 @@ class SubjectTypeRankScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final list = ref.watch(typerankProvider((type: type, tag: tag)));
+    final packed = ref.watch(typeRankPackedProvider((type: type, tag: tag)));
+    final total = packed.valueOrNull?.ids.length;
     return Scaffold(
       appBar: BgmAppBar(
-        title: '标签: $tag',
+        title: typeRankTitle(type, tag, total: total),
         showBackButton: true,
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '标签',
             icon: const Icon(Icons.bookmark_border),
-            onPressed: () => context.push('/subject/$id/tag'),
+            onPressed: () => context.push(typeRankBookmarkPath(type, tag)),
           ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: '说明',
             icon: const Icon(Icons.info_outline),
             onPressed: () => context.push(typeRankNotePath()),
           ),
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () =>
-                openExternalUrl('$kHost${htmlTagSubjects(type, tag)}'),
-          ),
         ],
       ),
-
-      body: list.when(
+      body: packed.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () =>
-                    ref.invalidate(typerankProvider((type: type, tag: tag))),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => BgmRetry(
+          onRetry: () =>
+              ref.invalidate(typeRankPackedProvider((type: type, tag: tag))),
         ),
-        data: (items) => items.isEmpty
-            ? const Empty(text: '暂无条目')
+        data: (data) => data.ids.isEmpty
+            ? const Empty(text: '此标签没有足够的列表数据')
             : ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: items.length,
-                itemBuilder: (_, i) => _SubjectRow(item: items[i]),
+                itemCount: data.items.length,
+                itemBuilder: (_, i) => _SubjectRow(item: data.items[i]),
               ),
       ),
     );

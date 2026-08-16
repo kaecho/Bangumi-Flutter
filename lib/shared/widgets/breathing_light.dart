@@ -6,6 +6,7 @@ import '../../core/api/api_endpoints.dart';
 import '../../core/status/server_status.dart';
 import '../../core/storage/settings_store.dart';
 import '../../design_system/design_system.dart';
+import 'bgm_button.dart';
 
 /// 服务可用性呼吸灯 (原项目 BreathingLight + notifyServerStatus)
 class ServerStatusLight extends ConsumerStatefulWidget {
@@ -51,7 +52,7 @@ class _ServerStatusLightState extends ConsumerState<ServerStatusLight>
       'down' => context.ds.error,
       _ => context.ds.textHint,
     };
-    return IconButton(
+    return BgmHeaderAction(
       tooltip: status.message.isEmpty ? '服务状态' : status.message,
       onPressed: () => context.push('/web/${Uri.encodeComponent(kStatusHost)}'),
       icon: AnimatedBuilder(

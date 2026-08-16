@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -50,6 +53,306 @@ double homeTitleFontSize(String text) {
   return 15;
 }
 
+/// 原项目 PAD_LEVEL_1（Android 528）+ 短边 600 的平板判定
+bool isPadLayout(Size size) {
+  final minSide = size.shortestSide;
+  final maxSide = size.longestSide;
+  return minSide >= 600 || (minSide >= 528 && maxSide <= minSide * 1.6);
+}
+
+/// 原项目 `_.isMobileLanscape`: 非平板且横屏
+bool isMobileLandscape(Size size) =>
+    !isPadLayout(size) && size.width > size.height;
+
+/// 原项目宫格列数: `_.isMobileLanscape ? 9 : _.device(4, 5)`
+int homeGridNumColumns(Size size) {
+  if (isMobileLandscape(size)) return 9;
+  return isPadLayout(size) ? 5 : 4;
+}
+
+/// 原项目 Header colors.Subject: `_.isDark || !fixed ? '#fff' : '#000'`
+Color subjectHeaderForeground({required bool fixed, required bool dark}) {
+  return (!fixed || dark) ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
+}
+
+/// 原项目 RATING_MAP / getRating: 1-10 分中文档位
+const kCollectionRatingLabels = <int, String>{
+  1: '不忍直视',
+  2: '很差',
+  3: '差',
+  4: '较差',
+  5: '不过不失',
+  6: '还行',
+  7: '推荐',
+  8: '力荐',
+  9: '神作',
+  10: '超神作',
+};
+
+String collectionRatingLabel(num score) {
+  if (score <= 0) return '';
+  final key = (score + 0.5).floor().clamp(1, 10);
+  return kCollectionRatingLabels[key] ?? '不忍直视';
+}
+
+/// 原项目 RATIO: 手机 1, 小平板 1.28, 大平板 1.44
+double deviceCoverRatio(Size size) {
+  if (!isPadLayout(size)) return 1;
+  return size.shortestSide >= 880 ? 1.44 : 1.28;
+}
+
+/// 原项目 IMG_WIDTH / IMG_HEIGHT (高 = 宽 * 1.4)
+int imgWidth(Size size) => (deviceCoverRatio(size) * 82).floor();
+
+int imgHeight(Size size) => (imgWidth(size) * 1.4).floor();
+
+/// 原项目 IMG_WIDTH_LG
+int imgWidthLg(Size size) => (imgWidth(size) * 1.34).floor();
+
+/// 原项目进度列表封面: 常规 IMG_WIDTH×IMG_HEIGHT, compact 正方形 IMG_WIDTH-8
+({double width, double height}) homeListCoverSize(
+  Size size, {
+  required bool compact,
+}) {
+  final w = imgWidth(size);
+  if (compact) {
+    final side = (w - 8).toDouble();
+    return (width: side, height: side);
+  }
+  return (width: w.toDouble(), height: imgHeight(size).toDouble());
+}
+
+/// 原项目条目 Head 封面: `(IMG_WIDTH_LG+16)*1.2`, 音乐正方形且不超过半屏
+({double width, double height}) subjectHeadCoverSize(
+  Size size, {
+  required bool music,
+}) {
+  final ratio = isPadLayout(size) ? 1.4 : 1.2;
+  final large = imgWidthLg(size);
+  if (music) {
+    final raw = (large * ratio * 1.4).floorToDouble();
+    final side = raw > size.width / 2 ? (size.width / 2).floorToDouble() : raw;
+    return (width: side, height: side);
+  }
+  final w = ((large + 16) * ratio).floorToDouble();
+  return (width: w, height: (w * 1.4).floorToDouble());
+}
+
+/// 原项目 Head 主标题: 视觉长度档 + (大平板 +4 / 其余 +2)
+double subjectHeadTitleSize(
+  String text, {
+  required Size size,
+  bool music = false,
+  bool hasRelation = false,
+}) {
+  final bump = size.shortestSide >= 880 ? 4 : 2;
+  var value =
+      visualFontSize(text, const [
+        (44, 10),
+        (32, 11),
+        (24, 12),
+        (16, 12),
+        (0, 15),
+      ]) +
+      bump;
+  if (hasRelation) value = value < 13 ? 11 : value - 2;
+  if (music) value -= 1;
+  return value;
+}
+
+/// 原项目 WEEK_DAY_MAP: 0/7=日, 1=一...6=六
+String weekdayShort(int weekday) {
+  const marks = ['日', '一', '二', '三', '四', '五', '六'];
+  if (weekday == 7) return '日';
+  if (weekday < 0) return '';
+  return marks[weekday % 7];
+}
+
+/// 原项目 Meta: `N 人在读/玩/看` + 未开 homeOnAir 时追加 ` · 周X`
+String homeDoingMetaText({
+  required int doing,
+  required String type,
+  int weekday = 0,
+  bool onAir = false,
+  bool homeOnAir = false,
+}) {
+  if (doing <= 0) return '';
+  final verb = type == 'book'
+      ? '读'
+      : type == 'game'
+      ? '玩'
+      : '看';
+  final text = '$doing 人在$verb';
+  if (!homeOnAir && onAir && weekday >= 0) {
+    final mark = weekdayShort(weekday);
+    if (mark.isNotEmpty) return '$text · 周$mark';
+  }
+  return text;
+}
+
+const kSeasonLabels = ['冬', '春', '夏', '秋'];
+
+/// 原项目 calcSeason: 分界日前 10 天归入下季
+({int year, int quarter}) calcHomeSeason(String airDate) {
+  final parsed = DateTime.tryParse(airDate);
+  if (parsed == null) return (year: 0, quarter: 1);
+  var year = parsed.year;
+  var adj = parsed.month;
+  if (parsed.day >= 22 && parsed.month % 3 == 0) adj = parsed.month + 1;
+  if (adj > 12) {
+    adj -= 12;
+    year += 1;
+  }
+  return (year: year, quarter: (adj / 3).ceil());
+}
+
+/// 原项目 getLeftText: `2026 春 · N 集未看` / 行内用两位年
+String homeLeftText({
+  required int seasonYear,
+  required int quarter,
+  required int airedUnwatched,
+  required String type,
+  bool hasNewEp = true,
+  bool sink = false,
+  bool twoDigitYear = false,
+}) {
+  if (seasonYear <= 0) return '';
+  final year = twoDigitYear ? seasonYear % 100 : seasonYear;
+  final isAnime = type == 'anime';
+  final q = quarter.clamp(1, 4);
+  var text = isAnime ? '$year ${kSeasonLabels[q - 1]}' : '$year';
+  if (airedUnwatched > 0) text += ' · $airedUnwatched 集未看';
+  if (isAnime && sink && !hasNewEp) text += ' · 已下沉';
+  return text;
+}
+
+/// 原项目 getNextInfo: `epN · YY-MM-DD` / 行内空格分隔 / 无下一集=完结
+String homeNextInfo({
+  required List<({int sort, String airdate})> eps,
+  DateTime? now,
+  bool showSplit = true,
+}) {
+  if (eps.isEmpty) return '';
+  final today = now ?? DateTime.now();
+  final todayDay = DateTime(today.year, today.month, today.day);
+  ({int sort, String airdate})? next;
+  for (final ep in eps) {
+    if (ep.airdate.isEmpty) continue;
+    final parsed = DateTime.tryParse(ep.airdate);
+    if (parsed == null) continue;
+    final day = DateTime(parsed.year, parsed.month, parsed.day);
+    if (day.isAfter(todayDay)) {
+      next = ep;
+      break;
+    }
+  }
+  if (next == null) return '完结';
+  final date = next.airdate.length >= 10
+      ? next.airdate.substring(2)
+      : next.airdate;
+  final parsed = DateTime.tryParse(next.airdate);
+  final days = parsed == null
+      ? 0
+      : DateTime(
+          parsed.year,
+          parsed.month,
+          parsed.day,
+        ).difference(todayDay).inDays;
+  final split = showSplit ? ' · ' : ' ';
+  var info = 'ep${next.sort}$split$date';
+  if (days > 0) info += ' ($days 天后)';
+  return info;
+}
+
+/// 行内 Meta: 人数 + 季度未看 + 下话
+String joinHomeMeta(String doing, {String left = '', String next = ''}) {
+  final extras = [left, next].where((e) => e.isNotEmpty);
+  if (doing.isEmpty) return extras.join(' · ');
+  if (extras.isEmpty) return doing;
+  return '$doing · ${extras.join(' · ')}';
+}
+
+/// 原项目 OnairProgress: 已看 / 已放送 / 分母
+({double watched, double aired}) onairProgressRatios({
+  required int watched,
+  required int aired,
+  required int total,
+  int defaultTotal = 12,
+}) {
+  final denom = (total > 0 ? total : defaultTotal).toDouble();
+  double ratio(int value) {
+    if (value <= 0) return 0;
+    return (value / denom).clamp(0.0, 1.0);
+  }
+
+  var watchedRatio = ratio(watched);
+  var airedRatio = ratio(aired);
+  if (watched > 0 && watchedRatio < 0.02) watchedRatio = 0.02;
+  if (aired > 0 && airedRatio < 0.02) airedRatio = 0.02;
+  return (watched: watchedRatio, aired: airedRatio);
+}
+
+/// 原项目 getCurrentOnAir: 倒序找最后一集已放送 sort; 第 0 集则 +1
+int currentOnAir({
+  required List<({int type, int sort, String status, String airdate})> eps,
+  DateTime? now,
+}) {
+  final regular = [
+    for (final ep in eps)
+      if (ep.type == 0) ep,
+  ];
+  if (regular.isEmpty) return 0;
+  final today = now ?? DateTime.now();
+  final day = DateTime(today.year, today.month, today.day);
+  ({int type, int sort, String status, String airdate})? last;
+  for (final ep in regular.reversed) {
+    if (_epIsAired(ep.status, ep.airdate, day)) {
+      last = ep;
+      break;
+    }
+  }
+  if (last == null) return 0;
+  final zeroBased = regular.first.sort == 0;
+  return zeroBased && last.sort > 0 ? last.sort + 1 : last.sort;
+}
+
+/// 已放送本篇数 (多季番 current > total 时的原版回退)
+int airedRegularCount({
+  required List<({int type, int sort, String status, String airdate})> eps,
+  DateTime? now,
+}) {
+  final today = now ?? DateTime.now();
+  final day = DateTime(today.year, today.month, today.day);
+  var count = 0;
+  for (final ep in eps) {
+    if (ep.type != 0) continue;
+    if (_epIsAired(ep.status, ep.airdate, day)) count++;
+  }
+  return count;
+}
+
+bool _epIsAired(String status, String airdate, DateTime day) {
+  if (status == 'Air') return true;
+  if (status == 'Today' || status == 'NA') return false;
+
+  if (airdate.isEmpty) return false;
+  final parsed = DateTime.tryParse(airdate);
+  if (parsed == null) return false;
+  final air = DateTime(parsed.year, parsed.month, parsed.day);
+  return !air.isAfter(day);
+}
+
+/// 原项目 Progress: current 与 total 取较大值作分母
+({int aired, int total}) onairProgressCounts({
+  required int aired,
+  required int total,
+}) {
+  return (aired: aired, total: aired > total ? aired : total);
+}
+
+/// 原项目 FlipBtn 高度: `_.device(44, 50)`
+double flipCollectBtnHeight(Size size) => isPadLayout(size) ? 50 : 44;
+
 /// 原项目 getSize(getVisualLength): 按阈值降字号, steps 从大到小
 double visualFontSize(String text, List<(int minLen, double size)> steps) {
   final length = getVisualLength(text);
@@ -92,7 +395,6 @@ bool isSensitiveSubject({
 ///
 /// v0 / 主站新图是 `/r/400/pic/cover/l/`. 旧逻辑把中间的 `l` 改成 `m`,
 /// CDN 会 400: please use `/r/{n}/pic/cover/l/` path instead.
-
 
 String applyCoverQuality(String url, String quality, {double? displayWidth}) {
   if (url.isEmpty) return url;
@@ -147,8 +449,6 @@ int coverTilePixelSize(double? width) {
   if (need <= 600) return 600;
   return 800;
 }
-
-
 
 /// 原项目章节热力图透明度: (comment - min/1.68) / max
 double heatMapOpacity(int comment, {required int min, required int max}) {
@@ -676,4 +976,63 @@ String subjectYearMonth({
       extractYearMonth(primary ?? '') ?? extractYearMonth(secondary ?? '');
   if (raw == null || raw.isEmpty) return year;
   return normalizeYearMonth(raw);
+}
+
+/// 原项目 calendarFlat 时刻: `HHMM` / `HH:MM` → 4 位数字, 非法为 0
+int airClockDigits(String raw) {
+  final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.length < 3) return 0;
+  return int.tryParse(digits.length >= 4 ? digits.substring(0, 4) : digits) ??
+      0;
+}
+
+/// 原项目 todayBangumi: 当前时刻前 10 条 + 后 1 条, 再反转
+///
+/// [stamps] 为周几*10000+HHMM (周一=1 … 周日=7)。未知 `2359` 应先过滤。
+List<T> todayOnAirWindow<T>({
+  required List<T> items,
+  required int Function(T item) stampOf,
+  DateTime? now,
+}) {
+  if (items.isEmpty) return const [];
+  final clock = now ?? DateTime.now();
+  final current = clock.weekday * 10000 + clock.hour * 100 + clock.minute;
+  var index = items.indexWhere((item) => current >= stampOf(item));
+  if (index < 0) index = 0;
+  final len = items.length;
+  final result = <T>[];
+  for (var i = index - 10; i <= index + 1; i++) {
+    result.add(items[((i % len) + len) % len]);
+  }
+  return result.reversed.toList();
+}
+
+String? _scTable;
+String? _tcTable;
+
+/// 原项目 cn-char t2s: 繁体转简体
+Future<void> loadCnCharTables() async {
+  if (_scTable != null && _tcTable != null) return;
+  _scTable =
+      jsonDecode(await rootBundle.loadString('assets/data/sc.json')) as String;
+  _tcTable =
+      jsonDecode(await rootBundle.loadString('assets/data/tc.json')) as String;
+}
+
+void seedCnCharTables({required String sc, required String tc}) {
+  _scTable = sc;
+  _tcTable = tc;
+}
+
+String t2s(String str) {
+  final sc = _scTable;
+  final tc = _tcTable;
+  if (sc == null || tc == null || sc.isEmpty || tc.isEmpty) return str;
+  final out = StringBuffer();
+  for (final rune in str.runes) {
+    final ch = String.fromCharCode(rune);
+    final idx = tc.indexOf(ch);
+    out.write(idx == -1 ? ch : sc[idx]);
+  }
+  return out.toString();
 }

@@ -7,6 +7,7 @@ import '../../core/utils/display.dart';
 import '../../design_system/design_system.dart';
 import '../../features/tinygrail/tinygrail_api.dart';
 import '../../features/tinygrail/tinygrail_models.dart';
+import 'loading.dart';
 
 /// 封面图 (带缓存 + 占位/错误处理)
 ///
@@ -91,13 +92,7 @@ class Cover extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
       ),
       child: skeleton
-          ? const Center(
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
+          ? const Center(child: BgmSpinner(size: 16))
           : placeholder ??
                 Icon(
                   Icons.movie_outlined,
@@ -184,7 +179,7 @@ class _TinygrailAssetsSheet extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             child: snap.connectionState != ConnectionState.done
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: Loading())
                 : user == null || (user.total == 0 && user.balance == 0)
                 ? Text('未找到 $userId 的小圣杯资产', style: context.ds.body)
                 : Column(

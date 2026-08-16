@@ -78,7 +78,8 @@ class TinygrailChara {
   factory TinygrailChara.fromJson(Map<String, dynamic> json) {
     final id = (json['CharacterId'] ?? json['Id'] ?? 0) as num;
     final fluctuation = (json['Fluctuation'] ?? 0) as num;
-    final monoId = (json['CharacterId'] ?? json['Id'] ?? json['MonoId'] ?? 0) as num;
+    final monoId =
+        (json['CharacterId'] ?? json['Id'] ?? json['MonoId'] ?? 0) as num;
     return TinygrailChara(
       id: id.toInt(),
       monoId: monoId.toInt(),
@@ -91,10 +92,11 @@ class TinygrailChara {
       state: (json['State'] as num?)?.toInt() ?? 0,
       change: (json['Change'] as num?)?.toInt() ?? 0,
       // 列表接口涨跌幅已是百分比, 详情接口为小数
-      fluctuation: (fluctuation >= -1 && fluctuation <= 1 && json['Fluctuation'] != null
-              ? fluctuation * 100
-              : fluctuation)
-          .toDouble(),
+      fluctuation:
+          (fluctuation >= -1 && fluctuation <= 1 && json['Fluctuation'] != null
+                  ? fluctuation * 100
+                  : fluctuation)
+              .toDouble(),
       asks: (json['Asks'] as num?)?.toInt() ?? 0,
       bids: (json['Bids'] as num?)?.toInt() ?? 0,
       bonus: (json['Bonus'] as num?)?.toInt() ?? 0,
@@ -145,15 +147,15 @@ class TinygrailUser {
   });
 
   factory TinygrailUser.fromJson(Map<String, dynamic> json) => TinygrailUser(
-        hash: json['Hash'] as String? ?? '',
-        nickname: json['Nickname'] as String? ?? '',
-        avatar: json['Avatar'] as String? ?? '',
-        balance: (json['Balance'] as num?)?.toInt() ?? 0,
-        principal: (json['Principal'] as num?)?.toInt() ?? 0,
-        amount: (json['Amount'] as num?)?.toInt() ?? 0,
-        total: (json['Total'] as num?)?.toInt() ?? 0,
-        lastIndex: (json['LastIndex'] as num?)?.toInt() ?? 0,
-      );
+    hash: json['Hash'] as String? ?? '',
+    nickname: json['Nickname'] as String? ?? '',
+    avatar: json['Avatar'] as String? ?? '',
+    balance: (json['Balance'] as num?)?.toInt() ?? 0,
+    principal: (json['Principal'] as num?)?.toInt() ?? 0,
+    amount: (json['Amount'] as num?)?.toInt() ?? 0,
+    total: (json['Total'] as num?)?.toInt() ?? 0,
+    lastIndex: (json['LastIndex'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 番市首富 / 富豪榜条目
@@ -184,7 +186,8 @@ class TinygrailRich {
     this.rank = 0,
   });
 
-  factory TinygrailRich.fromJson(Map<String, dynamic> json, {int rank = 0}) => TinygrailRich(
+  factory TinygrailRich.fromJson(Map<String, dynamic> json, {int rank = 0}) =>
+      TinygrailRich(
         avatar: json['Avatar'] as String? ?? '',
         nickname: json['Nickname'] as String? ?? '',
         userId: json['Name'] as String? ?? '',
@@ -207,7 +210,8 @@ class TinygrailDepthItem {
 
   const TinygrailDepthItem({this.price = 0, this.amount = 0, this.type = 0});
 
-  factory TinygrailDepthItem.fromJson(Map<String, dynamic> json) => TinygrailDepthItem(
+  factory TinygrailDepthItem.fromJson(Map<String, dynamic> json) =>
+      TinygrailDepthItem(
         price: (json['Price'] as num?)?.toDouble() ?? 0,
         amount: (json['Amount'] as num?)?.toInt() ?? 0,
         type: (json['Type'] as num?)?.toInt() ?? 0,
@@ -222,13 +226,13 @@ class TinygrailDepth {
   const TinygrailDepth({this.bids = const [], this.asks = const []});
 
   factory TinygrailDepth.fromJson(Map<String, dynamic> json) => TinygrailDepth(
-        bids: (json['Bids'] as List? ?? [])
-            .map((e) => TinygrailDepthItem.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        asks: (json['Asks'] as List? ?? [])
-            .map((e) => TinygrailDepthItem.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    bids: (json['Bids'] as List? ?? [])
+        .map((e) => TinygrailDepthItem.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    asks: (json['Asks'] as List? ?? [])
+        .map((e) => TinygrailDepthItem.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 /// K 线条目
@@ -252,14 +256,14 @@ class TinygrailKline {
   });
 
   factory TinygrailKline.fromJson(Map<String, dynamic> json) => TinygrailKline(
-        time: json['Time'] as String? ?? '',
-        begin: (json['Begin'] as num?)?.toInt() ?? 0,
-        end: (json['End'] as num?)?.toInt() ?? 0,
-        low: (json['Low'] as num?)?.toInt() ?? 0,
-        high: (json['High'] as num?)?.toInt() ?? 0,
-        amount: (json['Amount'] as num?)?.toInt() ?? 0,
-        price: (json['Price'] as num?)?.toInt() ?? 0,
-      );
+    time: json['Time'] as String? ?? '',
+    begin: (json['Begin'] as num?)?.toInt() ?? 0,
+    end: (json['End'] as num?)?.toInt() ?? 0,
+    low: (json['Low'] as num?)?.toInt() ?? 0,
+    high: (json['High'] as num?)?.toInt() ?? 0,
+    amount: (json['Amount'] as num?)?.toInt() ?? 0,
+    price: (json['Price'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 用户挂单 / 交易记录条目
@@ -281,13 +285,15 @@ class TinygrailLog {
   });
 
   factory TinygrailLog.fromJson(Map<String, dynamic> json) => TinygrailLog(
-        id: (json['Id'] as num?)?.toInt() ?? 0,
-        characterId: (json['CharacterId'] as num?)?.toInt() ?? 0,
-        amount: (json['Amount'] as num?)?.toInt() ?? 0,
-        price: (json['Price'] as num?)?.toInt() ?? 0,
-        type: (json['Type'] as num?)?.toInt() ?? 0,
-        time: (json['Begin'] ?? json['TradeTime'] ?? json['Time'] ?? '') as String? ?? '',
-      );
+    id: (json['Id'] as num?)?.toInt() ?? 0,
+    characterId: (json['CharacterId'] as num?)?.toInt() ?? 0,
+    amount: (json['Amount'] as num?)?.toInt() ?? 0,
+    price: (json['Price'] as num?)?.toInt() ?? 0,
+    type: (json['Type'] as num?)?.toInt() ?? 0,
+    time:
+        (json['Begin'] ?? json['TradeTime'] ?? json['Time'] ?? '') as String? ??
+        '',
+  );
 }
 
 /// 资金日志条目
@@ -308,7 +314,8 @@ class TinygrailBalance {
     this.desc = '',
   });
 
-  factory TinygrailBalance.fromJson(Map<String, dynamic> json) => TinygrailBalance(
+  factory TinygrailBalance.fromJson(Map<String, dynamic> json) =>
+      TinygrailBalance(
         id: (json['Id'] as num?)?.toInt() ?? 0,
         balance: (json['Balance'] as num?)?.toInt() ?? 0,
         change: (json['Change'] as num?)?.toInt() ?? 0,
@@ -331,6 +338,7 @@ class TinygrailAuctionItem {
   final int price;
   final int state;
   final String lastOrder;
+
   /// 当前拍卖状态: 人数 / 股数
   final int auctionState;
   final int auctionType;
@@ -397,7 +405,8 @@ class TinygrailInitial {
     this.end = '',
   });
 
-  factory TinygrailInitial.fromJson(Map<String, dynamic> json) => TinygrailInitial(
+  factory TinygrailInitial.fromJson(Map<String, dynamic> json) =>
+      TinygrailInitial(
         id: (json['InitialId'] as num?)?.toInt() ?? 0,
         avatar: json['Avatar'] as String? ?? '',
         userId: json['UserId'] as String? ?? '',
@@ -445,23 +454,25 @@ class TinygrailTopWeek {
     this.assets = 0,
   });
 
-  factory TinygrailTopWeek.fromJson(Map<String, dynamic> json, {int rank = 0}) =>
-      TinygrailTopWeek(
-        id: (json['CharacterId'] as num?)?.toInt() ?? 0,
-        name: (json['CharacterName'] ?? json['Name'] ?? '') as String? ?? '',
-        avatar: json['Avatar'] as String? ?? '',
-        level: (json['CharacterLevel'] as num?)?.toInt() ?? 0,
-        price: (json['Price'] as num?)?.toInt() ?? 0,
-        rate: (json['Rate'] as num?)?.toDouble() ?? 0,
-        sacrifices: (json['Sacrifices'] as num?)?.toInt() ?? 0,
-        extra: (json['Extra'] as num?)?.toInt() ?? 0,
-        type: (json['Type'] as num?)?.toInt() ?? 0,
-        rank: rank,
-        rankChange: 0,
-        extraChange: 0,
-        typeChange: 0,
-        assets: (json['Assets'] as num?)?.toInt() ?? 0,
-      );
+  factory TinygrailTopWeek.fromJson(
+    Map<String, dynamic> json, {
+    int rank = 0,
+  }) => TinygrailTopWeek(
+    id: (json['CharacterId'] as num?)?.toInt() ?? 0,
+    name: (json['CharacterName'] ?? json['Name'] ?? '') as String? ?? '',
+    avatar: json['Avatar'] as String? ?? '',
+    level: (json['CharacterLevel'] as num?)?.toInt() ?? 0,
+    price: (json['Price'] as num?)?.toInt() ?? 0,
+    rate: (json['Rate'] as num?)?.toDouble() ?? 0,
+    sacrifices: (json['Sacrifices'] as num?)?.toInt() ?? 0,
+    extra: (json['Extra'] as num?)?.toInt() ?? 0,
+    type: (json['Type'] as num?)?.toInt() ?? 0,
+    rank: rank,
+    rankChange: 0,
+    extraChange: 0,
+    typeChange: 0,
+    assets: (json['Assets'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 圣星记录
@@ -494,7 +505,8 @@ class TinygrailStarLog {
     this.time = '',
   });
 
-  factory TinygrailStarLog.fromJson(Map<String, dynamic> json) => TinygrailStarLog(
+  factory TinygrailStarLog.fromJson(Map<String, dynamic> json) =>
+      TinygrailStarLog(
         id: (json['Id'] as num?)?.toInt() ?? 0,
         monoId: (json['CharacterId'] as num?)?.toInt() ?? 0,
         name: json['CharacterName'] as String? ?? '',
@@ -529,13 +541,13 @@ class TinygrailItems {
   });
 
   factory TinygrailItems.fromJson(Map<String, dynamic> json) => TinygrailItems(
-        id: (json['Id'] as num?)?.toInt() ?? 0,
-        name: json['Name'] as String? ?? '',
-        icon: json['Icon'] as String? ?? '',
-        line: json['Line'] as String? ?? '',
-        amount: (json['Amount'] as num?)?.toInt() ?? 0,
-        last: (json['Last'] as num?)?.toInt() ?? 0,
-      );
+    id: (json['Id'] as num?)?.toInt() ?? 0,
+    name: json['Name'] as String? ?? '',
+    icon: json['Icon'] as String? ?? '',
+    line: json['Line'] as String? ?? '',
+    amount: (json['Amount'] as num?)?.toInt() ?? 0,
+    last: (json['Last'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 圣殿 / 角色圣殿条目
@@ -574,7 +586,8 @@ class TinygrailTemple {
     this.lastActive = '',
   });
 
-  factory TinygrailTemple.fromJson(Map<String, dynamic> json) => TinygrailTemple(
+  factory TinygrailTemple.fromJson(Map<String, dynamic> json) =>
+      TinygrailTemple(
         id: (json['CharacterId'] as num?)?.toInt() ?? 0,
         name: (json['CharacterName'] ?? json['Name'] ?? '') as String? ?? '',
         nickname: json['Nickname'] as String? ?? '',
@@ -587,7 +600,9 @@ class TinygrailTemple {
         sacrifices: (json['Sacrifices'] as num?)?.toInt() ?? 0,
         assets: (json['Assets'] as num?)?.toInt() ?? 0,
         stars: ((json['CharacterStars'] ?? json['Stars'] ?? 0) as num).toInt(),
-        starForces: ((json['CharacterStarForces'] ?? json['StarForces'] ?? 0) as num).toInt(),
+        starForces:
+            ((json['CharacterStarForces'] ?? json['StarForces'] ?? 0) as num)
+                .toInt(),
         userStarForces: (json['StarForces'] as num?)?.toInt() ?? 0,
         lastActive: json['LastActive'] as String? ?? '',
       );
@@ -613,7 +628,8 @@ class TinygrailUserBoard {
     this.lastActiveDate = '',
   });
 
-  factory TinygrailUserBoard.fromJson(Map<String, dynamic> json) => TinygrailUserBoard(
+  factory TinygrailUserBoard.fromJson(Map<String, dynamic> json) =>
+      TinygrailUserBoard(
         id: (json['Id'] as num?)?.toInt() ?? 0,
         nickName: json['Nickname'] as String? ?? '',
         avatar: json['Avatar'] as String? ?? '',
@@ -648,7 +664,8 @@ class TinygrailRefine {
     this.lastActive = '',
   });
 
-  factory TinygrailRefine.fromJson(Map<String, dynamic> json) => TinygrailRefine(
+  factory TinygrailRefine.fromJson(Map<String, dynamic> json) =>
+      TinygrailRefine(
         monoId: (json['CharacterId'] as num?)?.toInt() ?? 0,
         cover: json['Cover'] as String? ?? '',
         name: json['CharacterName'] as String? ?? '',
@@ -675,7 +692,8 @@ class TinygrailSearchItem {
     this.ico = false,
   });
 
-  factory TinygrailSearchItem.fromJson(Map<String, dynamic> json) => TinygrailSearchItem(
+  factory TinygrailSearchItem.fromJson(Map<String, dynamic> json) =>
+      TinygrailSearchItem(
         id: (json['Id'] as num?)?.toInt() ?? 0,
         name: json['Name'] as String? ?? '',
         level: (json['Level'] as num?)?.toInt() ?? 0,

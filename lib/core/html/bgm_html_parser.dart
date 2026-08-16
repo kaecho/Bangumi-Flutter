@@ -86,7 +86,6 @@ int? floorNumber(String raw) {
   return int.tryParse(m?.group(1) ?? '');
 }
 
-
 /// 匹配 attr 中的内容
 String matchAttr(Element? el, String attr, RegExp regex) {
   final v = cData(el, attr);
@@ -304,8 +303,7 @@ RakuenFloor _parseFloor(Element row) {
     source: split.source,
     floor: normalizeFloorLabel(info.isNotEmpty ? info[0] : ''),
     avatar: matchAvatar(row.querySelector('span.avatarNeue')),
-    userId:
-        matchUserIdFromHref(cData(avatarLink, 'href')).isNotEmpty
+    userId: matchUserIdFromHref(cData(avatarLink, 'href')).isNotEmpty
         ? matchUserIdFromHref(cData(avatarLink, 'href'))
         : matchUserIdFromHref(cData(name, 'href')),
     userName: htmlDecode(cText(name)),
@@ -338,8 +336,7 @@ RakuenFloor _parseSubFloor(Element row) {
     source: split.source,
     floor: normalizeFloorLabel(info.isNotEmpty ? info[0] : ''),
     avatar: matchAvatar(row.querySelector('span.avatarNeue')),
-    userId:
-        matchUserIdFromHref(cData(avatarLink, 'href')).isNotEmpty
+    userId: matchUserIdFromHref(cData(avatarLink, 'href')).isNotEmpty
         ? matchUserIdFromHref(cData(avatarLink, 'href'))
         : matchUserIdFromHref(cData(name, 'href')),
     userName: htmlDecode(cText(name)),
@@ -549,4 +546,174 @@ String parseFormhash(String html) {
   final doc = parseDom(removeCF(html));
   final input = doc.querySelector('input[name=formhash]');
   return input?.attributes['value'] ?? '';
+}
+
+/// 原版 cheerioUserSetting
+class UserSettingForm {
+  final String sign;
+  final String nickname;
+  final String signInput;
+  final String formhash;
+  final String timeoffsetnew;
+  final bool showNsfwSubject;
+
+  const UserSettingForm({
+    this.sign = '',
+    this.nickname = '',
+    this.signInput = '',
+    this.formhash = '',
+    this.timeoffsetnew = '8',
+    this.showNsfwSubject = false,
+  });
+}
+
+final _regBg = RegExp(r'\[bg\](.+?)\[/bg\]');
+final _regAvatar = RegExp(r'\[avatar\](.+?)\[/avatar\]');
+final _regFixed = RegExp(
+  r'(?:\[color=#444444\])?\[size=0\]\[avatar\]\[/avatar\]\[/size\](?:\[/color\])?'
+  r'|(?:\[color=#444444\])?\[size=0\]\[bg\]\[/bg\]\[/size\](?:\[/color\])?'
+  r'|\[avatar\]\[/avatar\]|\[bg\]\[/bg\]',
+);
+
+UserSettingForm parseUserSetting(String html) {
+  final chunk = htmlMatch(html, '<div id="columnSearchB', '<div id="footer');
+  final doc = parseDom(chunk.isEmpty ? html : chunk);
+  final selected =
+      doc.querySelector('select[name=timeoffsetnew] option[selected]') ??
+      doc.querySelector(
+        'select[name=timeoffsetnew] option[selected="selected"]',
+      );
+  return UserSettingForm(
+    sign: cText(doc.querySelector('#newbio')),
+    nickname: cData(doc.querySelector('input[name=nickname]'), 'value'),
+    signInput: cData(doc.querySelector('input[name=sign_input]'), 'value'),
+    formhash: cData(doc.querySelector('input[name=formhash]'), 'value'),
+    timeoffsetnew: cData(selected, 'value').isEmpty
+        ? '8'
+        : cData(selected, 'value'),
+    showNsfwSubject:
+        doc.querySelector('input[name=show_nsfw_subject][checked]') != null,
+  );
+}
+
+String extractSignTag(String sign, {required bool avatar}) {
+  final m = (avatar ? _regAvatar : _regBg).firstMatch(sign);
+  if (m == null) return '';
+  return htmlDecode(m.group(1)!.trim()).replaceAll(_regFixed, '');
+}
+
+({String newbio, String bg}) buildUserSettingSign(
+  String sign,
+  String avatar,
+  String bg,
+) {
+  var newbio = sign;
+  if (_regAvatar.hasMatch(newbio)) {
+    newbio = newbio.replaceFirst(_regAvatar, '[avatar]$avatar[/avatar]');
+  } else {
+    newbio += '[color=#444444][size=0][avatar]$avatar[/avatar][/size][/color]';
+  }
+  var savedBg = bg;
+  if (savedBg.contains('i.pixiv.re')) {
+    savedBg = savedBg.replaceAll('/c/540x540_70', '');
+  }
+  if (_regBg.hasMatch(newbio)) {
+    newbio = newbio.replaceFirst(_regBg, '[bg]$savedBg[/bg]');
+  } else {
+    newbio += '[color=#444444][size=0][bg]$savedBg[/bg][/size][/color]';
+  }
+  newbio = newbio.replaceAll(_regFixed, '');
+  newbio = newbio.replaceAllMapped(
+    RegExp(
+      r'(?<!\[color=#444444\])\[size=0\]\[(avatar|bg)\][\s\S]*?\[/\1\]\[/size\]',
+    ),
+    (m) => '[color=#444444]${m[0]}[/color]',
+  );
+  return (newbio: newbio, bg: savedBg);
+}
+
+/// 原项目 calendarStore.cheerioToday: `部。`→`部，`, 去掉「今日番组」和句号
+String parseDiscoveryToday(String html) {
+  final raw = htmlMatch(html, '<li class="tip">', '</li>');
+  if (raw.isEmpty) return '';
+  final text = htmlDecode(
+    raw
+        .replaceFirst('<li class="tip">', '')
+        .replaceAll(RegExp(r'<[^>]+>'), '')
+        .replaceAll(RegExp(r'\s+'), ' '),
+  ).trim();
+  if (text.isEmpty) return '';
+  return text.replaceAll('部。', '部，').replaceAll(RegExp(r'今日番组|。'), '');
+}
+
+/// 原项目 calendarStore.fetchHome 类型顺序
+const kDiscoveryHomeTypes = ['anime', 'game', 'book', 'music', 'real'];
+
+/// 主站 `#featuredItems` 分区封面项 (原项目 HomeItem)
+class DiscoveryHomeItem {
+  final int subjectId;
+  final String title;
+  final String cover;
+  final String info;
+  final String type;
+
+  const DiscoveryHomeItem({
+    required this.subjectId,
+    required this.title,
+    required this.cover,
+    required this.info,
+    required this.type,
+  });
+}
+
+String _featuredCover(String style) {
+  final url = RegExp(r'url\(([^)]+)\)').firstMatch(style)?.group(1) ?? '';
+  if (url.isEmpty) return '';
+  var abs = url;
+  if (abs.startsWith('//')) abs = 'https:$abs';
+  final id = RegExp(r'/cover/.+?/(.+?)\.jpg').firstMatch(abs)?.group(1);
+  if (id == null) return abs;
+  return 'https://lain.bgm.tv/pic/cover/l/$id.jpg';
+}
+
+/// 解析主站首页 `#featuredItems` (原项目 fetchHome)
+List<DiscoveryHomeItem> parseDiscoveryHome(String html) {
+  final fragment = htmlMatch(html, '<ul id="featuredItems"', '</ul>');
+  if (fragment.isEmpty) return const [];
+  final doc = parseDom(removeCF('$fragment</ul>'));
+  final result = <DiscoveryHomeItem>[];
+  for (final type in kDiscoveryHomeTypes) {
+    final section = doc.querySelector('li.$type');
+    if (section == null) continue;
+    for (final item in section.querySelectorAll('.mainItem')) {
+      final a = item.querySelector('a[href*="/subject/"]');
+      if (a == null) continue;
+      final href = a.attributes['href'] ?? '';
+      final id =
+          int.tryParse(
+            RegExp(r'/subject/(\d+)').firstMatch(href)?.group(1) ?? '',
+          ) ??
+          0;
+      final rawTitle = a.attributes['title']?.trim() ?? '';
+      final title = htmlDecode(
+        rawTitle.isNotEmpty ? rawTitle : cText(a.querySelector('.title')),
+      );
+
+      if (title.isEmpty) continue;
+      final style =
+          item.querySelector('.image')?.attributes['style'] ??
+          a.attributes['style'] ??
+          '';
+      result.add(
+        DiscoveryHomeItem(
+          subjectId: id,
+          title: title,
+          cover: _featuredCover(style),
+          info: htmlDecode(cText(item.querySelector('small'))).trim(),
+          type: type,
+        ),
+      );
+    }
+  }
+  return result;
 }

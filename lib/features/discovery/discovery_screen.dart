@@ -7,25 +7,32 @@ import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/storage/settings_store.dart';
 import '../../core/utils/display.dart';
-import '../../core/utils/format.dart';
+import '../../core/html/bgm_html_parser.dart';
+
 import '../../shared/models/subject.dart';
 import '../../shared/models/timeline.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/horizontal_mask.dart';
 import '../../shared/widgets/loading.dart';
-import '../../shared/widgets/tab_title.dart';
+import '../../shared/widgets/bgm_button.dart';
+
+import '../../shared/widgets/menu_mark.dart';
+
 import '../../design_system/design_system.dart';
+
 import '../subject/collection_sheet.dart';
 import 'calendar_screen.dart';
 import 'channel_screen.dart';
 import 'clipboard_sheet.dart';
 import 'widgets/discovery_html.dart';
+import 'widgets/award_banner.dart';
 
 /// 发现页菜单项 (移植自原项目 constants/constants/data.ts MENU_MAP)
 class DiscoveryMenuItem {
   final String key;
   final String name;
   final IconData icon;
+  final IconData? badge;
   final String? route;
   final bool login;
   final String? text;
@@ -34,6 +41,7 @@ class DiscoveryMenuItem {
     required this.key,
     required this.name,
     required this.icon,
+    this.badge,
     this.route,
     this.login = false,
     this.text,
@@ -45,37 +53,37 @@ const List<DiscoveryMenuItem> kDiscoveryMenus = [
   DiscoveryMenuItem(
     key: 'Rank',
     name: '排行榜',
-    icon: Icons.leaderboard_outlined,
+    icon: Icons.equalizer,
     route: '/rank',
   ),
   DiscoveryMenuItem(
     key: 'Anime',
     name: '找条目',
-    icon: Icons.live_tv_outlined,
+    icon: Icons.live_tv,
     route: '/anime',
   ),
   DiscoveryMenuItem(
     key: 'Calendar',
     name: '每日放送',
-    icon: Icons.calendar_month_outlined,
+    icon: Icons.calendar_today,
     route: '/calendar',
   ),
   DiscoveryMenuItem(
     key: 'Browser',
     name: '索引',
-    icon: Icons.data_usage_outlined,
+    icon: Icons.data_usage,
     route: '/browser',
   ),
   DiscoveryMenuItem(
     key: 'Catalog',
     name: '目录',
-    icon: Icons.folder_open_outlined,
+    icon: Icons.folder_open,
     route: '/catalog',
   ),
   DiscoveryMenuItem(
     key: 'Staff',
     name: '新番',
-    icon: Icons.play_circle_outline,
+    icon: Icons.local_play,
     route: '/staff',
   ),
   DiscoveryMenuItem(
@@ -95,10 +103,10 @@ const List<DiscoveryMenuItem> kDiscoveryMenus = [
   DiscoveryMenuItem(
     key: 'DiscoveryBlog',
     name: '日志',
-    icon: Icons.edit_outlined,
+    icon: Icons.edit,
     route: '/blogs',
   ),
-  DiscoveryMenuItem(key: 'Open', name: '自定义', icon: Icons.tune),
+  DiscoveryMenuItem(key: 'Open', name: '自定义', icon: Icons.more_horiz),
   DiscoveryMenuItem(
     key: 'Search',
     name: '搜索',
@@ -108,13 +116,13 @@ const List<DiscoveryMenuItem> kDiscoveryMenus = [
   DiscoveryMenuItem(
     key: 'Like',
     name: '猜你喜欢',
-    icon: Icons.favorite_outline,
+    icon: Icons.looks,
     route: '/like',
   ),
   DiscoveryMenuItem(
     key: 'Anitama',
     name: '资讯',
-    icon: Icons.article_outlined,
+    icon: Icons.text_format,
     route: '/anitama',
   ),
   DiscoveryMenuItem(
@@ -127,19 +135,19 @@ const List<DiscoveryMenuItem> kDiscoveryMenus = [
   DiscoveryMenuItem(
     key: 'DiscoveryUsers',
     name: '社区项目',
-    icon: Icons.whatshot_outlined,
+    icon: Icons.whatshot,
     route: '/users',
   ),
   DiscoveryMenuItem(
     key: 'Tinygrail',
     name: '小圣杯',
-    icon: Icons.emoji_events_outlined,
+    icon: BgmIcons.trophy,
     route: '/tinygrail',
   ),
   DiscoveryMenuItem(
     key: 'Milestone',
     name: '照片墙',
-    icon: Icons.photo_library_outlined,
+    icon: Icons.image_aspect_ratio,
     route: '/my-milestone',
   ),
   DiscoveryMenuItem(
@@ -152,7 +160,7 @@ const List<DiscoveryMenuItem> kDiscoveryMenus = [
   DiscoveryMenuItem(
     key: 'UserTimeline',
     name: '时间线',
-    icon: Icons.timeline_outlined,
+    icon: Icons.timeline,
     route: '/my-timeline',
     login: true,
   ),
@@ -165,64 +173,73 @@ const List<DiscoveryMenuItem> kDiscoveryMenus = [
   DiscoveryMenuItem(
     key: 'Yearbook',
     name: '年鉴',
-    icon: Icons.auto_stories_outlined,
+    icon: Icons.menu_book_outlined,
     route: '/yearbook',
   ),
   DiscoveryMenuItem(
     key: 'BilibiliSync',
     name: 'bilibili 同步',
-    icon: Icons.sync_outlined,
+    icon: Icons.sync,
     route: '/sync/bilibili',
   ),
   DiscoveryMenuItem(
     key: 'DoubanSync',
     name: '豆瓣同步',
-    icon: Icons.sync_outlined,
+    icon: Icons.sync,
     route: '/sync/douban',
   ),
   DiscoveryMenuItem(
     key: 'Backup',
     name: '本地备份',
-    icon: Icons.inbox_outlined,
+    icon: Icons.inbox,
     route: '/settings/backup',
     login: true,
   ),
   DiscoveryMenuItem(
     key: 'Smb',
     name: '本地管理',
-    icon: Icons.folder_outlined,
+    icon: Icons.folder,
     route: '/settings/smb',
   ),
   DiscoveryMenuItem(
     key: 'Character',
     name: '我的人物',
-    icon: Icons.person_outline,
+    icon: Icons.folder,
+    badge: Icons.favorite,
     route: '/my-mono',
     login: true,
   ),
   DiscoveryMenuItem(
     key: 'Catalogs',
     name: '我的目录',
-    icon: Icons.folder_special_outlined,
+    icon: Icons.folder_special,
     route: '/my-catalogs',
     login: true,
   ),
   DiscoveryMenuItem(
     key: 'Blogs',
     name: '我的日志',
-    icon: Icons.edit_note_outlined,
+    icon: Icons.folder,
+    badge: Icons.edit,
     route: '/my-blogs',
     login: true,
   ),
   DiscoveryMenuItem(
     key: 'Friends',
     name: '我的好友',
-    icon: Icons.group_outlined,
+    icon: Icons.folder_shared,
     route: '/my-friends',
     login: true,
   ),
-  DiscoveryMenuItem(key: 'Link', name: '剪贴板', icon: Icons.link_outlined),
+  DiscoveryMenuItem(key: 'Link', name: '剪贴板', icon: Icons.link),
 ];
+
+DiscoveryMenuItem? discoveryMenuByKey(String key) {
+  for (final item in kDiscoveryMenus) {
+    if (item.key == key) return item;
+  }
+  return null;
+}
 
 /// 自定义菜单 (设置中开启的菜单 key)
 ///
@@ -249,33 +266,65 @@ List<DiscoveryMenuItem> getDiscoveryMenus(WidgetRef ref) {
   return result;
 }
 
-/// 今日放送数据
-final todayOnAirProvider = FutureProvider<List<Subject>>((ref) async {
+/// 发现页今日放送扁平行 (原项目 todayBangumi)
+class TodayBangumiItem {
+  final Subject subject;
+  final int weekday;
+  final String timeLocal;
+
+  const TodayBangumiItem({
+    required this.subject,
+    required this.weekday,
+    required this.timeLocal,
+  });
+}
+
+/// 今日放送: 按当前时刻取窗口 (原项目 todayBangumi)
+final todayOnAirProvider = FutureProvider<List<TodayBangumiItem>>((ref) async {
   ref.watch(settingsStoreProvider.select((s) => s.filter18x));
   final client = ref.watch(apiClientProvider);
   final data = await client.get(apiCalendar());
   final days = (data as List)
       .map((e) => CalendarDay.fromJson(e as Map<String, dynamic>))
       .toList();
-  final today =
-      DateTime.now().weekday % 7; // weekday: 1=Mon..7=Sun; bgm: 0=Sun..6=Sat
-  final day = days.firstWhere(
-    (d) => d.weekday == today,
-    orElse: () => days.first,
-  );
-  return [
-    for (final item in day.items)
-      if (!SettingsStore.instance.filter18x ||
-          !isSensitiveSubject(
+  final times = await ref.watch(onAirTimeProvider.future);
+  final filter18x = SettingsStore.instance.filter18x;
+  final flat = <TodayBangumiItem>[];
+  for (final day in days) {
+    final weekday = day.weekday == 0 ? 7 : day.weekday;
+    final items = <TodayBangumiItem>[];
+    for (final item in day.items) {
+      if (filter18x &&
+          isSensitiveSubject(
             nsfw: item.nsfw,
             name: item.name,
             nameCn: item.nameCn,
-          ))
-        item,
-  ];
+          )) {
+        continue;
+      }
+      final digits = (times[item.id] ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.isEmpty || digits == '2359') continue;
+      items.add(
+        TodayBangumiItem(
+          subject: item,
+          weekday: weekday,
+          timeLocal: digits.length >= 4 ? digits.substring(0, 4) : digits,
+        ),
+      );
+    }
+    items.sort(
+      (a, b) =>
+          airClockDigits(b.timeLocal).compareTo(airClockDigits(a.timeLocal)),
+    );
+    flat.addAll(items);
+  }
+  return todayOnAirWindow(
+    items: flat.reversed.toList(),
+    stampOf: (item) => item.weekday * 10000 + airClockDigits(item.timeLocal),
+  );
 });
 
-/// 本周放送按类型分组 (原项目发现页 anime/book/game/real 横滑)
+/// 本周放送按类型分组 (featured 失败时的回退)
 final weeklyTypedOnAirProvider = FutureProvider<Map<String, List<Subject>>>((
   ref,
 ) async {
@@ -289,6 +338,7 @@ final weeklyTypedOnAirProvider = FutureProvider<Map<String, List<Subject>>>((
     'anime': [],
     'book': [],
     'game': [],
+    'music': [],
     'real': [],
   };
   for (final day in days) {
@@ -307,164 +357,58 @@ final weeklyTypedOnAirProvider = FutureProvider<Map<String, List<Subject>>>((
   return map;
 });
 
-/// 主站在线人数 (原项目 fetchOnline: 抓主站首页正则提取 online: N)
+/// 主站首页聚合: 今日上映文案 + 在线人数 + featuredItems
+class DiscoveryHomeData {
+  final String today;
+  final int? online;
+  final List<DiscoveryHomeItem> featured;
 
-/// 主站在线人数 (原项目 fetchOnline: 抓主站首页正则提取 online: N)
-final onlineUsersProvider = FutureProvider<int?>((ref) async {
+  const DiscoveryHomeData({
+    this.today = '',
+    this.online,
+    this.featured = const [],
+  });
+}
+
+final discoveryHomeProvider = FutureProvider<DiscoveryHomeData>((ref) async {
   final client = ref.watch(apiClientProvider);
   try {
     final html = await client.fetchHtml('$kHost/');
     final match = RegExp(
       r'<small class="grey rr">online: (\d+)</small>',
     ).firstMatch(html);
-    return match == null ? null : int.tryParse(match.group(1)!);
+    return DiscoveryHomeData(
+      today: parseDiscoveryToday(html),
+      online: match == null ? null : int.tryParse(match.group(1)!),
+      featured: parseDiscoveryHome(html),
+    );
   } catch (_) {
-    return null;
+    return const DiscoveryHomeData();
   }
 });
 
-/// 年度评选横幅 (移植自原项目 discovery/index component/award)
-class _AwardBanner extends StatefulWidget {
-  const _AwardBanner();
-
-  @override
-  State<_AwardBanner> createState() => _AwardBannerState();
-}
-
-class _AwardBannerState extends State<_AwardBanner> {
-  bool _scrolled = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final year = DateTime.now().year;
-    return NotificationListener<ScrollNotification>(
-      onNotification: (n) {
-        if (!_scrolled &&
-            n is ScrollUpdateNotification &&
-            n.metrics.pixels >= 20) {
-          setState(() => _scrolled = true);
-        }
-        return false;
-      },
-      child: SizedBox(
-        height: 92,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(
-            AppGap.x6,
-            AppGap.x5,
-            0,
-            AppGap.x2,
-          ),
-          children: [
-            for (final y in [year, year - 1, year - 2])
-              GestureDetector(
-                onTap: () => context.push('/award/$y'),
-                child: Container(
-                  width: y == year ? 240 : 150,
-                  margin: const EdgeInsets.only(right: AppGap.x4),
-                  padding: const EdgeInsets.all(AppGap.x6),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: y == year
-                          ? const [Color(0xFF1A1A2E), Color(0xFF16213E)]
-                          : y == year - 1
-                          ? const [Color(0xFF2B1B17), Color(0xFF3D2A22)]
-                          : const [Color(0xFF1B2430), Color(0xFF243044)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(AppGap.x5),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '^_ // Bangumi $y',
-                        style: context.ds.caption.copyWith(
-                          color: Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(height: AppGap.x3),
-                      Text(
-                        '$y 年度动画大赏',
-                        style: context.ds.bodyStrong.copyWith(
-                          color: Colors.white,
-                          fontSize: y == year ? 16 : 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: AppGap.x2),
-                      Text(
-                        'open /award/$y · rank anime',
-                        style: context.ds.tiny.copyWith(color: Colors.white38),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            if (_scrolled)
-              GestureDetector(
-                onTap: () => context.push('/yearbook'),
-                child: Container(
-                  width: 110,
-                  margin: const EdgeInsets.only(right: AppGap.x4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2A2A2A),
-                    borderRadius: BorderRadius.circular(AppGap.x5),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '更多',
-                        style: context.ds.bodyStrong.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        '年鉴',
-                        style: context.ds.bodyStrong.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 在线状态 + 今日日期 (原项目 dashboard 行)
+/// 在线状态 + 今日上映 (原项目 dashboard)
 class _OnlineStatusRow extends ConsumerWidget {
   const _OnlineStatusRow();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final online = ref.watch(onlineUsersProvider);
-    final now = DateTime.now();
-    String week(int w) =>
-        const ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][w - 1];
+    final home = ref.watch(discoveryHomeProvider).valueOrNull;
+    final today = home?.today ?? '';
+    final online = home?.online;
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppGap.x8, AppGap.x2, AppGap.x8, 0),
       child: Row(
         children: [
-          online.when(
-            data: (n) => n == null
-                ? const SizedBox.shrink()
-                : Text('online $n', style: context.ds.caption),
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
-          const Spacer(),
-          Text(
-            '${now.month}月${now.day}日 ${week(now.weekday)}',
-            style: context.ds.caption,
+          if (online != null) Text('online $online', style: context.ds.caption),
+          Expanded(
+            child: Text(
+              today,
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.ds.caption,
+            ),
           ),
         ],
       ),
@@ -481,68 +425,60 @@ class DiscoveryScreen extends ConsumerWidget {
     final menus = getDiscoveryMenus(ref);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const TabLogoTitle('发现'),
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(todayOnAirProvider);
+            ref.invalidate(discoveryHomeProvider);
+            ref.invalidate(weeklyTypedOnAirProvider);
+            ref.invalidate(onAirTimeProvider);
+          },
 
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.link),
-            tooltip: '剪贴板',
-            onPressed: () => showClipboardModal(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.tune),
-            tooltip: '自定义菜单',
-            onPressed: () => showDiscoveryMenuDialog(context, menus),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(todayOnAirProvider);
-          ref.invalidate(onlineUsersProvider);
-          ref.invalidate(weeklyTypedOnAirProvider);
-        },
-        child: ListView(
-          padding: AppGap.listBottom,
-          children: [
-            const _AwardBanner(),
-            GridView.count(
-              crossAxisCount: ref.watch(settingsStoreProvider).discoveryMenuNum,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppGap.x4,
-                vertical: AppGap.x4,
+          child: ListView(
+            padding: AppGap.listBottom,
+            children: [
+              const AwardBanner(),
+              GridView.count(
+                crossAxisCount: ref
+                    .watch(settingsStoreProvider)
+                    .discoveryMenuNum,
+                childAspectRatio: 1,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppGap.x4,
+                  vertical: AppGap.x2,
+                ),
+
+                children: [
+                  for (final menu in menus)
+                    _MenuCell(
+                      menu: menu,
+                      onTap: () {
+                        if (menu.login && !ref.read(isLoggedInProvider)) {
+                          context.push('/login');
+                          return;
+                        }
+                        if (menu.key == 'Open') {
+                          showDiscoveryMenuDialog(context, menus);
+                          return;
+                        }
+                        if (menu.key == 'Link') {
+                          showClipboardModal(context);
+                          return;
+                        }
+                        if (menu.route != null) context.push(menu.route!);
+                      },
+                    ),
+                ],
               ),
-              children: [
-                for (final menu in menus)
-                  _MenuCell(
-                    menu: menu,
-                    onTap: () {
-                      if (menu.login && !ref.read(isLoggedInProvider)) {
-                        context.push('/login');
-                        return;
-                      }
-                      if (menu.key == 'Open') {
-                        showDiscoveryMenuDialog(context, menus);
-                        return;
-                      }
-                      if (menu.key == 'Link') {
-                        showClipboardModal(context);
-                        return;
-                      }
-                      if (menu.route != null) context.push(menu.route!);
-                    },
-                  ),
-              ],
-            ),
-            const _OnlineStatusRow(),
-            if (ref.watch(settingsStoreProvider).discoveryTodayOnair) ...[
-              const _TodaySection(),
+              const _OnlineStatusRow(),
+              if (ref.watch(settingsStoreProvider).discoveryTodayOnair)
+                const _TodaySection(),
               const _TypedOnAirRails(),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -557,35 +493,21 @@ class _MenuCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final ds = context.ds;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      borderRadius: AppRadius.lAll,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: context.ds.accentSoft,
-              borderRadius: BorderRadius.circular(AppGap.x5),
-            ),
-            child: menu.text != null
-                ? Center(
-                    child: Text(
-                      menu.text!,
-                      style: context.ds.display.copyWith(
-                        fontSize: 18,
-                        color: context.ds.accent,
-                      ),
-                    ),
-                  )
-                : Icon(menu.icon, size: 22, color: context.ds.accent),
-          ),
-          const SizedBox(height: AppGap.x2),
+          BgmMenuMark(icon: menu.icon, badge: menu.badge, text: menu.text),
+          const SizedBox(height: 6),
           Text(
             menu.name,
-            style: context.ds.meta,
+            style: ds.caption.copyWith(
+              color: ds.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -601,131 +523,109 @@ class _TodaySection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final today = ref.watch(todayOnAirProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppGap.x7,
-            AppGap.x6,
-            AppGap.x7,
-            AppGap.x2,
-          ),
-          child: Row(
-            children: [
-              Text(
-                '今日放送 (${kWeekdayCn[DateTime.now().weekday % 7]})',
-                style: context.ds.section,
+    return today.when(
+      loading: () =>
+          const SizedBox(height: 148, child: Center(child: Loading())),
+      error: (_, _) => const SizedBox(height: 8),
+      data: (items) {
+        if (items.isEmpty) return const SizedBox(height: 8);
+        return SizedBox(
+          height: 148,
+          child: HorizontalMask(
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(
+                AppGap.x7,
+                AppGap.x4,
+                AppGap.x4,
+                AppGap.x2,
               ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => context.push('/calendar'),
-                child: Text(
-                  '全部',
-                  style: context.ds.caption.copyWith(color: context.ds.accent),
-                ),
-              ),
-            ],
-          ),
-        ),
-        today.when(
-          data: (subjects) => SizedBox(
-            height: 170,
-            child: HorizontalMask(
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: AppGap.pageH,
-                itemCount: subjects.length + (subjects.length > 2 ? 1 : 0),
-                separatorBuilder: (_, _) => const SizedBox(width: AppGap.x5),
-                itemBuilder: (context, index) {
-                  if (subjects.length > 2 && index == 2) {
-                    return const _NowSplit();
-                  }
-                  final i = subjects.length > 2 && index > 2
-                      ? index - 1
-                      : index;
-                  return _TodayCard(subject: subjects[i]);
-                },
-              ),
+              itemCount: items.length + (items.length > 2 ? 1 : 0),
+              separatorBuilder: (_, _) => const SizedBox(width: AppGap.x5),
+              itemBuilder: (context, index) {
+                if (items.length > 2 && index == 2) {
+                  return const _NowSplit();
+                }
+                final i = items.length > 2 && index > 2 ? index - 1 : index;
+                return _TodayCard(item: items[i]);
+              },
             ),
           ),
-
-          loading: () =>
-              const SizedBox(height: 170, child: Center(child: Loading())),
-          error: (_, _) => const SizedBox(height: 100),
-        ),
-      ],
+        );
+      },
     );
   }
 }
 
-class _TodayCard extends ConsumerWidget {
-  final Subject subject;
+class _TodayCard extends StatelessWidget {
+  final TodayBangumiItem item;
 
-  const _TodayCard({required this.subject});
+  const _TodayCard({required this.item});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final raw = ref.watch(onAirTimeProvider).valueOrNull?[subject.id] ?? '';
-    final clock = raw.length >= 4
-        ? '${raw.substring(0, 2)}:${raw.substring(2, 4)}'
+  Widget build(BuildContext context) {
+    final subject = item.subject;
+    final digits = item.timeLocal;
+    final clock = digits.length >= 4
+        ? '${digits.substring(0, 2)}:${digits.substring(2, 4)}'
         : '';
-    final weekday = kWeekdayCn[DateTime.now().weekday % 7];
+    final weekday = '周${weekdayShort(item.weekday)}';
     return GestureDetector(
       onTap: () => context.push('/subject/${subject.id}'),
       onLongPress: () => showCollectionSheet(context, subject.id),
-
       child: SizedBox(
         width: 100,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.m),
-          child: Stack(
-            children: [
-              Cover(
-                url: subject.images.common,
-                width: 100,
-                height: 130,
-                radius: 0,
-              ),
-              const Positioned.fill(
-                child: DecoratedBox(
+          child: AspectRatio(
+            aspectRatio: 1 / 1.38,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Cover(
+                  url: subject.images.common,
+                  width: 100,
+                  height: 138,
+                  radius: 0,
+                ),
+                const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.topCenter,
+                      begin: Alignment.center,
                       end: Alignment.bottomCenter,
                       colors: [Color(0x00000000), Color(0xCC000000)],
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                left: 6,
-                right: 6,
-                bottom: 6,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (clock.isNotEmpty)
+                Positioned(
+                  left: 6,
+                  right: 6,
+                  bottom: 6,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (clock.isNotEmpty)
+                        Text(
+                          '$clock · $weekday',
+                          style: context.ds.tiny.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       Text(
-                        '$clock · $weekday',
+                        subject.displayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: context.ds.tiny.copyWith(
                           color: Colors.white,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    Text(
-                      subject.displayName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.ds.tiny.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -740,11 +640,35 @@ class _TypedOnAirRails extends ConsumerWidget {
     ('anime', '动画'),
     ('book', '书籍'),
     ('game', '游戏'),
+    ('music', '音乐'),
     ('real', '三次元'),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final featured = ref.watch(discoveryHomeProvider).valueOrNull?.featured;
+    if (featured != null && featured.isNotEmpty) {
+      return Column(
+        children: [
+          for (final (type, title) in _rails)
+            if (featured.any((item) => item.type == type))
+              _TypeRail(
+                type: type,
+                title: title,
+                items: [
+                  for (final item in featured)
+                    if (item.type == type)
+                      (
+                        id: item.subjectId,
+                        cover: item.cover,
+                        title: item.title,
+                        info: item.info,
+                      ),
+                ],
+              ),
+        ],
+      );
+    }
     final async = ref.watch(weeklyTypedOnAirProvider);
     return async.when(
       loading: () => const SizedBox.shrink(),
@@ -753,7 +677,21 @@ class _TypedOnAirRails extends ConsumerWidget {
         children: [
           for (final (type, title) in _rails)
             if ((map[type] ?? const <Subject>[]).isNotEmpty)
-              _TypeRail(type: type, title: title, items: map[type]!),
+              _TypeRail(
+                type: type,
+                title: title,
+                items: [
+                  for (final item in map[type]!)
+                    (
+                      id: item.id,
+                      cover: item.images.large.isEmpty
+                          ? item.images.common
+                          : item.images.large,
+                      title: item.displayName,
+                      info: '',
+                    ),
+                ],
+              ),
         ],
       ),
     );
@@ -763,7 +701,7 @@ class _TypedOnAirRails extends ConsumerWidget {
 class _TypeRail extends ConsumerWidget {
   final String type;
   final String title;
-  final List<Subject> items;
+  final List<({int id, String cover, String title, String info})> items;
 
   const _TypeRail({
     required this.type,
@@ -773,6 +711,7 @@ class _TypeRail extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (items.isEmpty) return const SizedBox.shrink();
     final first = items.first;
     final rest = items.skip(1).take(19).toList();
     final friends =
@@ -790,27 +729,28 @@ class _TypeRail extends ConsumerWidget {
               AppGap.x7,
               AppGap.x2,
             ),
-            child: Row(
-              children: [
-                Expanded(child: Text(title, style: context.ds.section)),
-                IconButton(
-                  tooltip: '$title频道',
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.navigate_next),
-                  onPressed: () => context.push(
-                    '/channel?type=${Uri.encodeComponent(type)}',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () =>
+                  context.push('/channel?type=${Uri.encodeComponent(type)}'),
+              child: Row(
+                children: [
+                  Expanded(child: Text(title, style: context.ds.section)),
+                  Icon(
+                    Icons.navigate_next,
+                    size: 20,
+                    color: context.ds.textPrimary,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-
-          _CoverLg(subject: first, typeLabel: title),
+          _CoverCard(item: first, typeLabel: title, large: true),
           if (rest.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: AppGap.x4),
               child: SizedBox(
-                height: 170,
+                height: title == '音乐' ? 140 : 170,
                 child: HorizontalMask(
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
@@ -819,7 +759,7 @@ class _TypeRail extends ConsumerWidget {
                     separatorBuilder: (_, _) =>
                         const SizedBox(width: AppGap.x5),
                     itemBuilder: (context, index) =>
-                        _CoverSm(subject: rest[index], typeLabel: title),
+                        _CoverCard(item: rest[index], typeLabel: title),
                   ),
                 ),
               ),
@@ -848,6 +788,102 @@ class _TypeRail extends ConsumerWidget {
   }
 }
 
+class _CoverCard extends StatelessWidget {
+  final ({int id, String cover, String title, String info}) item;
+  final String typeLabel;
+  final bool large;
+
+  const _CoverCard({
+    required this.item,
+    required this.typeLabel,
+    this.large = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isMusic = typeLabel == '音乐';
+    final info = item.info.isNotEmpty ? item.info : typeLabel;
+    final card = ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.m),
+      child: AspectRatio(
+        aspectRatio: isMusic ? 1 : 1 / 1.38,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Cover(
+              url: item.cover,
+              width: large ? double.infinity : 100,
+              height: large ? double.infinity : (isMusic ? 100 : 138),
+              radius: 0,
+            ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: large ? Alignment.topCenter : Alignment.center,
+                  end: Alignment.bottomCenter,
+                  colors: large
+                      ? const [
+                          Color(0x00000000),
+                          Color(0xA3000000),
+                          Color(0xD6000000),
+                        ]
+                      : const [Color(0x00000000), Color(0xCC000000)],
+                ),
+              ),
+            ),
+            Positioned(
+              left: large ? 12 : 6,
+              right: large ? 12 : 6,
+              bottom: large ? 12 : 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    info,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: (large ? context.ds.caption : context.ds.tiny)
+                        .copyWith(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  if (large) const SizedBox(height: 4),
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: large
+                        ? context.ds.title.copyWith(
+                            color: Colors.white,
+                            fontSize: 22,
+                          )
+                        : context.ds.tiny.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    final child = GestureDetector(
+      onTap: () => context.push('/subject/${item.id}'),
+      onLongPress: () => showCollectionSheet(context, item.id),
+      child: large ? card : SizedBox(width: 100, child: card),
+    );
+    if (!large) return child;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppGap.x7),
+      child: child,
+    );
+  }
+}
+
 class _FriendCover extends StatelessWidget {
   final ChannelFriendItem item;
   final String typeLabel;
@@ -868,7 +904,6 @@ class _FriendCover extends StatelessWidget {
           GestureDetector(
             onTap: () => context.push('/subject/${item.id}'),
             onLongPress: () => showCollectionSheet(context, item.id),
-
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.s),
               child: Stack(
@@ -950,163 +985,10 @@ class _NowSplit extends StatelessWidget {
   }
 }
 
-class _CoverLg extends StatelessWidget {
-  final Subject subject;
-  final String typeLabel;
-
-  const _CoverLg({required this.subject, required this.typeLabel});
-
-  @override
-  Widget build(BuildContext context) {
-    final isMusic = typeLabel == '音乐';
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppGap.x7),
-      child: GestureDetector(
-        onTap: () => context.push('/subject/${subject.id}'),
-        onLongPress: () => showCollectionSheet(context, subject.id),
-
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.m),
-          child: AspectRatio(
-            aspectRatio: isMusic ? 1 : 1 / 1.38,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Cover(
-                  url: subject.images.large.isEmpty
-                      ? subject.images.common
-                      : subject.images.large,
-                  width: double.infinity,
-                  height: double.infinity,
-                  radius: 0,
-                ),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Color(0x00000000),
-                        Color(0xA3000000),
-                        Color(0xD6000000),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 12,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        typeLabel,
-                        style: context.ds.caption.copyWith(
-                          color: Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subject.displayName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.ds.title.copyWith(
-                          color: Colors.white,
-                          fontSize: 22,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CoverSm extends StatelessWidget {
-  final Subject subject;
-  final String typeLabel;
-
-  const _CoverSm({required this.subject, required this.typeLabel});
-
-  @override
-  Widget build(BuildContext context) {
-    final isMusic = typeLabel == '音乐';
-    return GestureDetector(
-      onTap: () => context.push('/subject/${subject.id}'),
-      onLongPress: () => showCollectionSheet(context, subject.id),
-
-      child: SizedBox(
-        width: 100,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.m),
-          child: AspectRatio(
-            aspectRatio: isMusic ? 1 : 100 / 130,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Cover(
-                  url: subject.images.common,
-                  width: 100,
-                  height: isMusic ? 100 : 130,
-                  radius: 0,
-                ),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0x00000000), Color(0xCC000000)],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 6,
-                  right: 6,
-                  bottom: 6,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        typeLabel,
-                        maxLines: 1,
-                        style: context.ds.tiny.copyWith(
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        subject.displayName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.ds.tiny.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// 剪贴板识别弹窗 (原项目 Link 入口): 粘贴 bgm.tv 链接 → 打开对应页面
 Future<void> showClipboardModal(BuildContext context) {
-  return showModalBottomSheet<void>(
+  return showBgmSheet<void>(
     context: context,
-    isScrollControlled: true,
     builder: (_) => const ClipboardSheet(),
   );
 }
@@ -1116,7 +998,7 @@ Future<void> showDiscoveryMenuDialog(
   BuildContext context,
   List<DiscoveryMenuItem> menus,
 ) {
-  return showModalBottomSheet(
+  return showBgmSheet(
     context: context,
     builder: (context) => const _MenuSettingSheet(),
   );
@@ -1144,13 +1026,11 @@ class _MenuSettingSheetState extends ConsumerState<_MenuSettingSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(14),
-            child: Text(
-              '自定义菜单',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Text('自定义菜单', style: context.ds.section),
           ),
+
           Flexible(
             child: GridView.count(
               crossAxisCount: 4,
@@ -1158,14 +1038,15 @@ class _MenuSettingSheetState extends ConsumerState<_MenuSettingSheet> {
               padding: AppGap.pageH,
               children: [
                 for (final menu in kDiscoveryMenus)
-                  FilterChip(
-                    label: Text(
-                      menu.name,
-                      style: const TextStyle(fontSize: 12),
-                    ),
+                  BgmFilterChip(
+                    label: menu.name,
                     selected: _enabled.contains(menu.key),
-                    onSelected: (v) => setState(() {
-                      v ? _enabled.add(menu.key) : _enabled.remove(menu.key);
+                    onTap: () => setState(() {
+                      if (_enabled.contains(menu.key)) {
+                        _enabled.remove(menu.key);
+                      } else {
+                        _enabled.add(menu.key);
+                      }
                     }),
                   ),
               ],
@@ -1175,25 +1056,32 @@ class _MenuSettingSheetState extends ConsumerState<_MenuSettingSheet> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                TextButton(
-                  onPressed: () async {
+                GestureDetector(
+                  onTap: () async {
                     setState(
                       () =>
                           _enabled = kDiscoveryMenus.map((m) => m.key).toSet(),
                     );
                     await ref.read(settingsStoreProvider).resetDiscoveryMenu();
                   },
-                  child: const Text('重置'),
+                  child: Text(
+                    '重置',
+                    style: context.ds.caption.copyWith(
+                      color: context.ds.accent,
+                    ),
+                  ),
                 ),
+
                 const Spacer(),
-                FilledButton(
+                BgmButton(
+                  '完成',
+                  expand: false,
                   onPressed: () async {
                     await ref
                         .read(settingsStoreProvider)
                         .setDiscoveryMenu(_enabled.toList());
                     if (context.mounted) Navigator.of(context).pop();
                   },
-                  child: const Text('完成'),
                 ),
               ],
             ),

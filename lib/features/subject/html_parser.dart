@@ -5,7 +5,12 @@
 library;
 
 import '../../shared/models/subject.dart';
+import '../../shared/models/mono.dart';
+
 import 'subject_models.dart';
+import 'package:html/parser.dart' as parser;
+
+import '../../core/html/bgm_html_parser.dart';
 
 /// 去除 HTML 标签, 还原实体
 String stripHtmlTags(String html) {
@@ -566,4 +571,241 @@ SubjectRatingPage parseSubjectRatingHtml(String html) {
     dropped: dropped,
     items: items,
   );
+}
+
+String _absCover(String url) {
+  if (url.isEmpty) return '';
+  final clean = url.split('?').first;
+  if (clean == '/img/info_only_m.png') return '';
+  if (clean.startsWith('//')) return 'https:$clean';
+  if (clean.startsWith('http://')) {
+    return clean.replaceFirst('http://', 'https://');
+  }
+
+  return clean;
+}
+
+int _idFromHref(String href, String prefix) {
+  final m = RegExp('$prefix(\\d+)').firstMatch(href);
+  return int.tryParse(m?.group(1) ?? '') ?? 0;
+}
+
+/// 解析人物角色页: /person/{id}/works/voice
+/// 结构对齐原项目 cheerioMonoVoices
+MonoVoicesPage parseMonoVoices(String html) {
+  final fragment = htmlMatch(html, '<div id="columnCrtB', '<div id="footer');
+  final doc = parser.parse(fragment.isEmpty ? html : fragment);
+  final list = <MonoVoiceItem>[];
+  for (final row in doc.querySelectorAll('ul.browserList > li.item')) {
+    final left = row.querySelector('div.innerLeftItem');
+    final a = left?.querySelector('h3 > a.l');
+    if (a == null) continue;
+    final subjects = <MonoVoiceSubject>[];
+    for (final li in row.querySelectorAll('ul.innerRightList > li')) {
+      final sa = li.querySelector('h3 > a.l');
+      if (sa == null) continue;
+      subjects.add(
+        MonoVoiceSubject(
+          id: _idFromHref(sa.attributes['href'] ?? '', '/subject/'),
+          name: htmlDecode(sa.text.trim()),
+          nameCn: htmlDecode(
+            li.querySelector('div.inner small.grey')?.text.trim() ?? '',
+          ),
+          cover: _absCover(
+            li.querySelector('img.cover')?.attributes['src'] ?? '',
+          ),
+          staff: htmlDecode(
+            li.querySelector('span.badge_job')?.text.trim() ?? '',
+          ),
+          tip: htmlDecode(
+            li.querySelector('span.badge_job_tip')?.text.trim() ?? '',
+          ),
+        ),
+      );
+    }
+    list.add(
+      MonoVoiceItem(
+        id: _idFromHref(a.attributes['href'] ?? '', '/character/'),
+        name: htmlDecode(a.text.trim()),
+        nameCn: htmlDecode(
+          left?.querySelector('h3 > p.tip')?.text.trim() ?? '',
+        ),
+        cover: _absCover(
+          left?.querySelector('img.avatar')?.attributes['src'] ?? '',
+        ),
+        subjects: subjects,
+      ),
+    );
+  }
+  final filters = <MonoVoiceFilter>[];
+  for (final group in doc.querySelectorAll('div.subjectFilter > ul.grouped')) {
+    final title = htmlDecode(
+      group.querySelector('li.title')?.text.trim() ?? '',
+    );
+    if (title.isEmpty) continue;
+    filters.add(
+      MonoVoiceFilter(
+        title: title,
+        options: [
+          for (final a in group.querySelectorAll('a.l'))
+            (
+              (a.attributes['href'] ?? '').split('/works/voice').last,
+              htmlDecode(a.text.trim()),
+            ),
+        ],
+      ),
+    );
+  }
+  return MonoVoicesPage(list: list, filters: filters);
+}
+
+/// 解析人物详情页「最近演出角色」预览
+List<MonoVoiceItem> parsePersonRecentVoices(String html) {
+  final m = RegExp(
+    r'<h2 class="subtitle">最近演出角色</h2><ul class="browserList([\s\S]+?)</ul><a href=',
+  ).firstMatch(html.replaceAll('\n', ''));
+  if (m == null) return const [];
+  return parseMonoVoices(
+    '<div id="columnCrtB"><ul class="browserList${m.group(1)}</ul></div><div id="footer">',
+  ).list;
+}
+
+/// 解析人物作品: /person/{id}/works 或 /character/{id}/works
+/// 结构对齐原项目 cheerioMonoWorks
+MonoWorksPage parseMonoWorks(String html) {
+  final fragment = htmlMatch(html, '<div id="columnCrtB', '<div id="footer');
+  final doc = parser.parse(fragment.isEmpty ? html : fragment);
+  final list = <MonoWorkItem>[];
+  for (final row in doc.querySelectorAll('ul#browserItemList > li.item')) {
+    final coverA = row.querySelector('a.cover');
+    final titleA = row.querySelector('h3 a.l');
+    if (coverA == null && titleA == null) continue;
+    final href = coverA?.attributes['href'] ?? titleA?.attributes['href'] ?? '';
+    final typeClass =
+        row.querySelector('span.ico_subject_type')?.attributes['class'] ?? '';
+    final typeKey = typeClass
+        .replaceAll('ico_subject_type', '')
+        .replaceAll('subject_type_', '')
+        .replaceAll('ll', '')
+        .trim();
+    list.add(
+      MonoWorkItem(
+        id: _idFromHref(href, '/subject/'),
+        cover: _absCover(
+          row.querySelector('img.cover')?.attributes['src'] ?? '',
+        ),
+        name: htmlDecode(row.querySelector('small.grey')?.text.trim() ?? ''),
+        nameCn: htmlDecode(titleA?.text.trim() ?? ''),
+        tip: htmlDecode(row.querySelector('p.tip')?.text.trim() ?? ''),
+        positions: [
+          for (final job in row.querySelectorAll('span.badge_job'))
+            htmlDecode(job.text.trim()),
+        ],
+        score:
+            double.tryParse(
+              row.querySelector('small.fade')?.text.trim() ?? '',
+            ) ??
+            0,
+        total: htmlDecode(row.querySelector('span.tip_j')?.text.trim() ?? ''),
+        rank:
+            int.tryParse(
+              (row.querySelector('span.rank')?.text.trim() ?? '').replaceFirst(
+                'Rank ',
+                '',
+              ),
+            ) ??
+            0,
+        collected: row.querySelector('p.collectModify') != null,
+        type: typeKey,
+      ),
+    );
+  }
+  final filters = <MonoVoiceFilter>[];
+  for (final group in doc.querySelectorAll('div.subjectFilter > ul.grouped')) {
+    final title = htmlDecode(
+      group.querySelector('li.title')?.text.trim() ?? '',
+    );
+    if (title.isEmpty) continue;
+    filters.add(
+      MonoVoiceFilter(
+        title: title,
+        options: [
+          for (final a in group.querySelectorAll('a.l'))
+            (
+              (a.attributes['href'] ?? '').split('/works').last,
+              htmlDecode(a.text.trim()),
+            ),
+        ],
+      ),
+    );
+  }
+  return MonoWorksPage(list: list, filters: filters);
+}
+
+/// 解析条目更多制作人员: /subject/{id}/persons
+/// 结构对齐原项目 cheerioPersons
+List<PersonVo> parseSubjectPersons(String html) {
+  final fragment = htmlMatch(
+    html,
+    '<div id="columnInSubjectA',
+    '<div id="columnInSubjectB',
+  );
+  final doc = parser.parse(fragment.isEmpty ? html : fragment);
+  final list = <PersonVo>[];
+  for (final row in doc.querySelectorAll('div.light_odd')) {
+    final a = row.querySelector('h2 > a');
+    if (a == null) continue;
+    final href = a.attributes['href'] ?? '';
+    final id = _idFromHref(href, '/person/');
+    if (id == 0) continue;
+    final cover = _absCover(
+      row.querySelector('img.avatar')?.attributes['src'] ?? '',
+    );
+    final jobs = [
+      for (final job in row.querySelectorAll('span.badge_job'))
+        if (htmlDecode(job.text.trim()).isNotEmpty) htmlDecode(job.text.trim()),
+    ];
+    final tip = htmlDecode(a.querySelector('.tip')?.text.trim() ?? '');
+    var name = htmlDecode(a.text.trim());
+    if (tip.isNotEmpty) name = name.replaceFirst(tip, '').trim();
+    list.add(
+      PersonVo(
+        id: id,
+        name: name,
+        nameCn: tip,
+        relation: jobs.isEmpty ? '' : jobs.first,
+        positions: jobs,
+        info: htmlDecode(
+          row.querySelectorAll('div.prsn_info').isEmpty
+              ? ''
+              : row.querySelectorAll('div.prsn_info').last.text.trim(),
+        ),
+        images: MonoImages(
+          large: cover,
+          medium: cover,
+          small: cover,
+          grid: cover,
+        ),
+      ),
+    );
+  }
+  return list;
+}
+
+/// 解析人物收藏动作: `.collect.action a.icon` + `.ico_like`
+/// 对齐原项目 cheerioMono collectUrl / eraseCollectUrl
+({String collectUrl, String eraseCollectUrl}) parseMonoCollect(String html) {
+  final fragment = htmlMatch(
+    html,
+    '<div id="headerSubject',
+    '<div class="crtCommentList',
+  );
+  final doc = parser.parse(fragment.isEmpty ? html : fragment);
+  final action = doc.querySelector('.collect.action a.icon');
+  final href = action?.attributes['href'] ?? '';
+  if (href.isEmpty) return (collectUrl: '', eraseCollectUrl: '');
+  final collected = doc.querySelector('.collect.action .ico_like') != null;
+  return collected
+      ? (collectUrl: '', eraseCollectUrl: href)
+      : (collectUrl: href, eraseCollectUrl: '');
 }

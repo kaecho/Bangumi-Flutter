@@ -7,7 +7,8 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/site_cookies.dart';
 import '../../design_system/design_system.dart';
-
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 站点 Cookie 设置页
 ///
@@ -46,9 +47,7 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
       await store.clear();
       if (!mounted) return;
       setState(() => _saved = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已清除站点 Cookie')),
-      );
+      showBgmToast(context, '已清除站点 Cookie');
       return;
     }
     // 支持浏览器导出的 JSON cookie 数组
@@ -61,9 +60,7 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
         await store.setFromJson(decoded);
       } catch (_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('JSON 格式不正确, 请检查后重试')),
-        );
+        showBgmToast(context, 'JSON 格式不正确, 请检查后重试');
         return;
       }
     } else {
@@ -72,9 +69,7 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
 
     if (!mounted) return;
     setState(() => _saved = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('站点 Cookie 已保存')),
-    );
+    showBgmToast(context, '站点 Cookie 已保存');
   }
 
   /// 用保存的 cookie 请求 /settings/privacy, 验证登录态
@@ -110,7 +105,7 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
     final theme = Theme.of(context);
     final hasCookies = ref.watch(siteCookiesProvider).hasCookies;
     return Scaffold(
-      appBar: AppBar(title: const Text('站点 Cookie 登录')),
+      appBar: BgmAppBar(title: '站点 Cookie 登录'),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -124,31 +119,40 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          TextField(
+          BgmField(
             controller: _controller,
             maxLines: 6,
-            decoration: const InputDecoration(
-              hintText:
-                  '支持两种格式:\n1. Cookie header: chii_sid=xxx; chii_auth=yyy\n2. 浏览器导出 JSON: [{"name":"chii_auth","value":"..."}]',
-              border: OutlineInputBorder(),
-            ),
+            hintText:
+                '支持两种格式:\n1. Cookie header: chii_sid=xxx; chii_auth=yyy\n2. 浏览器导出 JSON: [{"name":"chii_auth","value":"..."}]',
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              FilledButton(onPressed: _save, child: const Text('保存')),
+              BgmButton('保存', expand: false, onPressed: _save),
               const SizedBox(width: 8),
-              OutlinedButton(onPressed: _test, child: const Text('检测登录态')),
+              BgmButton(
+                '检测登录态',
+                type: BgmButtonType.plain,
+                expand: false,
+                onPressed: _test,
+              ),
               const Spacer(),
-              TextButton(
-                onPressed: hasCookies || _saved
+              GestureDetector(
+                onTap: hasCookies || _saved
                     ? () async {
                         await ref.read(siteCookiesProvider).clear();
                         _controller.clear();
                         setState(() => _saved = false);
                       }
                     : null,
-                child: const Text('清除'),
+                child: Text(
+                  '清除',
+                  style: context.ds.caption.copyWith(
+                    color: (hasCookies || _saved)
+                        ? context.ds.error
+                        : context.ds.textHint,
+                  ),
+                ),
               ),
             ],
           ),
@@ -156,27 +160,25 @@ class _CookieSettingScreenState extends ConsumerState<CookieSettingScreen> {
           if (_statusText.isNotEmpty)
             Text(_statusText, style: const TextStyle(fontSize: 13)),
           const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Icon(
-                    hasCookies ? Icons.check_circle : Icons.info_outline,
-                    size: 20,
-                    color: hasCookies
-                        ? context.ds.success
-                        : theme.colorScheme.onSurfaceVariant,
+          BgmCard(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(
+                  hasCookies ? Icons.check_circle : Icons.info_outline,
+                  size: 20,
+                  color: hasCookies
+                      ? context.ds.success
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    hasCookies ? '已保存站点 Cookie' : '未保存站点 Cookie',
+                    style: const TextStyle(fontSize: 13),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      hasCookies ? '已保存站点 Cookie' : '未保存站点 Cookie',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],

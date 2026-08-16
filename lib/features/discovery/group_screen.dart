@@ -10,6 +10,7 @@ import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import 'widgets/discovery_html.dart';
 import 'widgets/paged.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 class GroupList extends PagedNotifier<Group, int> {
   @override
@@ -36,11 +37,7 @@ class GroupScreen extends ConsumerWidget {
         title: '小组',
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl('$kHost/group/browser'),
-          ),
+          BgmHeaderMore.browser(() => openExternalUrl('$kHost/group/browser')),
         ],
       ),
       body: PagedGridView<Group, int>(

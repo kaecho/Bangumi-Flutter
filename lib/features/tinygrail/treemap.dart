@@ -30,8 +30,8 @@ List<TreemapRect?> squarify(List<double> weights, double width, double height) {
 
   double worst(double s, double min, double max, double w) =>
       (w * w * max) / (s * s) > (s * s) / (w * w * min)
-          ? (w * w * max) / (s * s)
-          : (s * s) / (w * w * min);
+      ? (w * w * max) / (s * s)
+      : (s * s) / (w * w * min);
 
   var vertical = height < width;
   var w = vertical ? height : width;
@@ -64,7 +64,9 @@ List<TreemapRect?> squarify(List<double> weights, double width, double height) {
     var rx = x, ry = y;
     for (final i in row) {
       final d = (weights[order[i]] * scale) / z;
-      rects[order[i]] = vertical ? TreemapRect(rx, ry, z, d) : TreemapRect(rx, ry, d, z);
+      rects[order[i]] = vertical
+          ? TreemapRect(rx, ry, z, d)
+          : TreemapRect(rx, ry, d, z);
       if (vertical) {
         ry += d;
       } else {

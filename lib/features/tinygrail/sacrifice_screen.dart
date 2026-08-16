@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
@@ -16,7 +18,7 @@ class TinygrailSacrificeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(tinygrailUserProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('献祭')),
+      appBar: const BgmAppBar(title: '资产重组'),
       body: userAsync.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -28,9 +30,10 @@ class TinygrailSacrificeScreen extends ConsumerWidget {
                 children: [
                   const Text('请先授权登录小圣杯'),
                   const SizedBox(height: 8),
-                  FilledButton(
+                  BgmButton(
+                    '去授权',
+                    expand: false,
                     onPressed: () => context.push('/tinygrail/login'),
-                    child: const Text('去授权'),
                   ),
                 ],
               ),
@@ -60,7 +63,7 @@ class _SacrificeBody extends ConsumerWidget {
             ? const Empty(text: '暂无持仓角色')
             : ListView.separated(
                 itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const BgmHairline(),
                 itemBuilder: (context, index) {
                   final c = list[index];
                   return CharaTile(

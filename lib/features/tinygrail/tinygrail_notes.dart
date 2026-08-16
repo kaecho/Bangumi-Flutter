@@ -23,6 +23,69 @@ String tinygrailAdvanceAskNotePath() {
   );
 }
 
+String tinygrailAdvanceBidNotePath() {
+  return extraNotePath(
+    title: '卖出推荐',
+    message: const [
+      '当前计算方式',
+      '从持仓列表里面查找',
+      '第一买单股数 > 0',
+      '第一买单价 / Math.min(500, rank) 时的实际股息 = 分数',
+    ],
+  );
+}
+
+String tinygrailAdvanceAuctionNotePath() {
+  return extraNotePath(
+    title: '拍卖推荐',
+    message: const [
+      '当前计算方式',
+      '从英灵殿里面查找前 2000 条',
+      '可竞拍数量 > 80',
+      '实时股息 / 竞拍底价 * 100 = 分数',
+    ],
+  );
+}
+
+String tinygrailAdvanceAuction2NotePath() {
+  return extraNotePath(
+    title: '拍卖推荐 B',
+    message: const [
+      '当前计算方式',
+      '从英灵殿里面查找前 2000 条',
+      '数量 > 80',
+      '若当前 rank > 500 按 500 时的实际股息 / 竞拍底价 * 100 = 分数',
+    ],
+  );
+}
+
+String tinygrailAdvanceStateNotePath() {
+  return extraNotePath(
+    title: '低价股',
+    message: const ['当前计算方式', '在英灵殿里面查找当前价 <= 16 的角色, 获取卖一价'],
+  );
+}
+
+String tinygrailAdvanceSacrificeNotePath() {
+  return extraNotePath(
+    title: '献祭推荐',
+    message: const ['当前计算方式', '从持仓列表里面查找', '圣殿股息 - 流动股息 = 分数'],
+  );
+}
+
+String tinygrailTreeNotePath() {
+  return extraNotePath(
+    title: '小圣杯助手',
+    message: const [
+      '1. 单击方格展开功能菜单, 长按隐藏方格',
+      '2. 本功能处于实验性阶段, 不保证能正常渲染, 不正常请尝试刷新或者在讨论组等联系作者',
+      '3. 计算的数据只供参考, 不排除会出现不准确丢失的情况',
+      '4. 因角色数量可能导致流量变大, 页面当有缓存数据不会自动刷新, 请点击旁边的按钮刷新',
+      '5. 部分数据可能毫无意义, 只是顺便调出来, 还请自己把握(bgm38)',
+    ],
+  );
+}
+
 const kTinygrailItemNoteNames = ['混沌魔方', '虚空道标', '星光碎片', '闪光结晶', '鲤鱼之眼'];
 
 String tinygrailItemNotePath(String name) {

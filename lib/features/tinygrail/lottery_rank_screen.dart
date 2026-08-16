@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 import 'tinygrail_api.dart';
 
 /// 环保刮刮乐 (抽奖榜入口)
@@ -19,6 +21,8 @@ class _TinygrailLotteryRankScreenState
   bool _loading = false;
   dynamic _result;
   int _count = 0;
+  bool _public = true;
+
 
   @override
   void initState() {
@@ -43,9 +47,7 @@ class _TinygrailLotteryRankScreenState
       await _loadCount();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('刮奖失败: $e')));
+      showBgmToast(context, '刮奖失败: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -59,9 +61,7 @@ class _TinygrailLotteryRankScreenState
       setState(() => _result = result);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$label失败: $e')));
+      showBgmToast(context, '$label失败: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -72,103 +72,117 @@ class _TinygrailLotteryRankScreenState
     final theme = Theme.of(context);
     final api = ref.read(tinygrailApiProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('刮刮乐日榜')),
+      appBar: BgmAppBar(
+        title: '刮刮乐日榜',
+        actions: [
+          BgmHeaderAction(
+            tooltip: '公开状态',
+            icon: Text(
+              _public ? '公开中' : '匿名中',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+            onPressed: () async {
+              final ok = await showBgmConfirm(
+                context,
+                title: '小圣杯助手',
+                message: '是否切换你的刮刮乐用户公开状态?',
+              );
+              if (ok == true && mounted) setState(() => _public = !_public);
+            },
+          ),
+        ],
+      ),
 
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const Text(
-                    '每日刮刮乐',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '今日已刮 $_count 次',
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: _loading ? null : () => _scratch(),
-                        icon: const Icon(Icons.celebration_outlined),
-                        label: _loading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('环保刮刮乐'),
-                      ),
-                      OutlinedButton(
-                        onPressed: _loading
-                            ? null
-                            : () => _scratch(fantasy: true),
-                        child: const Text('幻想乡刮刮乐'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          BgmCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Text(
+                  '每日刮刮乐',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '今日已刮 $_count 次',
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    BgmButton(
+                      '环保刮刮乐',
+                      expand: false,
+                      loading: _loading,
+                      onPressed: _loading ? null : () => _scratch(),
+                    ),
+                    BgmButton(
+                      '幻想乡',
+                      type: BgmButtonType.plain,
+                      expand: false,
+                      onPressed: _loading
+                          ? null
+                          : () => _scratch(fantasy: true),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '签到 / 分红',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.tonal(
-                        onPressed: _loading
-                            ? null
-                            : () => _run('每日签到', api.doBonusDaily),
-                        child: const Text('每日签到'),
-                      ),
-                      FilledButton.tonal(
-                        onPressed: _loading
-                            ? null
-                            : () => _run('每周分红', api.doBonus),
-                        child: const Text('每周分红'),
-                      ),
-                      FilledButton.tonal(
-                        onPressed: _loading
-                            ? null
-                            : () => _run('节日奖励', api.doBonusHoliday),
-                        child: const Text('节日奖励'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          BgmCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '签到 / 分红',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    BgmButton(
+                      '每日签到',
+                      type: BgmButtonType.ghost,
+                      expand: false,
+                      onPressed: _loading
+                          ? null
+                          : () => _run('每日签到', api.doBonusDaily),
+                    ),
+                    BgmButton(
+                      '每周分红',
+                      type: BgmButtonType.ghost,
+                      expand: false,
+                      onPressed: _loading
+                          ? null
+                          : () => _run('每周分红', api.doBonus),
+                    ),
+                    BgmButton(
+                      '节日奖励',
+                      type: BgmButtonType.ghost,
+                      expand: false,
+                      onPressed: _loading
+                          ? null
+                          : () => _run('节日奖励', api.doBonusHoliday),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           if (_result != null) ...[
             const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: _ResultView(result: _result),
-              ),
+            BgmCard(
+              padding: const EdgeInsets.all(16),
+              child: _ResultView(result: _result),
             ),
           ],
         ],

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'advance_list.dart';
+import 'tinygrail_notes.dart';
+
 
 /// 卖出推荐
 class TinygrailAdvanceBidScreen extends StatelessWidget {
@@ -12,6 +14,7 @@ class TinygrailAdvanceBidScreen extends StatelessWidget {
       title: '卖出推荐',
       provider: advanceBidProvider,
       valueLabel: '评分',
+      notePath: tinygrailAdvanceBidNotePath(),
     );
   }
 }

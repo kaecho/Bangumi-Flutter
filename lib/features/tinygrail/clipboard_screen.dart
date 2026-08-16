@@ -7,6 +7,8 @@ import '../../shared/widgets/loading.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 剪贴板 (粘贴角色 ID 批量直达)
 class TinygrailClipboardScreen extends ConsumerStatefulWidget {
@@ -49,23 +51,21 @@ class _TinygrailClipboardScreenState
   Widget build(BuildContext context) {
     final async = ref.watch(clipboardProvider(_ids));
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('粘贴板'),
+      appBar: BgmAppBar(
+        title: '粘贴板',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '刷新',
             icon: const Icon(Icons.refresh),
             onPressed: _paste,
           ),
-          IconButton(
+          BgmHeaderAction(
             tooltip: '分享',
             icon: const Icon(Icons.ios_share),
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: _ids.join(',')));
               if (!context.mounted) return;
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('已复制角色 ID')));
+              showBgmToast(context, '已复制角色 ID');
             },
           ),
         ],
@@ -78,11 +78,7 @@ class _TinygrailClipboardScreenState
                 children: [
                   const Text('从剪贴板粘贴角色 ID 列表'),
                   const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed: _paste,
-                    icon: const Icon(Icons.paste),
-                    label: const Text('读取剪贴板'),
-                  ),
+                  BgmButton('读取剪贴板', expand: false, onPressed: _paste),
                 ],
               ),
             )
@@ -93,7 +89,7 @@ class _TinygrailClipboardScreenState
               error: (_, _) => const Center(child: Text('加载失败')),
               data: (list) => ListView.separated(
                 itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const BgmHairline(),
                 itemBuilder: (context, index) => CharaTile(
                   chara: list[index],
                   onTap: () =>

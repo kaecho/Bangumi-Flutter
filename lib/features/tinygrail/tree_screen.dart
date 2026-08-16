@@ -8,6 +8,10 @@ import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'treemap.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
+import 'tinygrail_notes.dart';
+
 
 /// 资产分析 (股票树) — 移植自原项目 screens/tinygrail/tree
 ///
@@ -19,7 +23,8 @@ class TinygrailTreeScreen extends ConsumerStatefulWidget {
   const TinygrailTreeScreen({super.key, this.userName = ''});
 
   @override
-  ConsumerState<TinygrailTreeScreen> createState() => _TinygrailTreeScreenState();
+  ConsumerState<TinygrailTreeScreen> createState() =>
+      _TinygrailTreeScreenState();
 }
 
 /// 范围: 所有 / 流动股 / 圣殿股
@@ -27,7 +32,16 @@ const kTreeTypes = ['所有', '流动股', '圣殿股'];
 
 /// 计算类型 (面积权重口径)
 const kTreeCaculateTypes = [
-  '周股息', '持仓价值', '股息', '持股数', '市场价', '发行量', '当前价', '交易量', '当前涨跌', '新番奖励',
+  '周股息',
+  '持仓价值',
+  '股息',
+  '持股数',
+  '市场价',
+  '发行量',
+  '当前价',
+  '交易量',
+  '当前涨跌',
+  '新番奖励',
 ];
 
 /// 英灵殿底价兜底 (原项目 VALHALL_PRICE 为空 map, 默认 10)
@@ -66,29 +80,29 @@ class TreeItem {
   });
 
   factory TreeItem.fromChara(TinygrailChara c) => TreeItem(
-        id: c.id,
-        name: c.name,
-        icon: c.icon,
-        state: c.state,
-        current: c.current,
-        rate: c.rate,
-        level: c.level,
-        marketValue: c.marketValue,
-        total: c.total,
-        change: c.change,
-        fluctuation: c.fluctuation,
-        bonus: c.bonus,
-        sacrifices: c.sacrifices,
-      );
+    id: c.id,
+    name: c.name,
+    icon: c.icon,
+    state: c.state,
+    current: c.current,
+    rate: c.rate,
+    level: c.level,
+    marketValue: c.marketValue,
+    total: c.total,
+    change: c.change,
+    fluctuation: c.fluctuation,
+    bonus: c.bonus,
+    sacrifices: c.sacrifices,
+  );
 
   factory TreeItem.fromTemple(TinygrailTemple t) => TreeItem(
-        id: t.id,
-        name: t.name,
-        icon: t.cover,
-        level: t.level,
-        rate: t.rate,
-        sacrifices: t.sacrifices,
-      );
+    id: t.id,
+    name: t.name,
+    icon: t.cover,
+    level: t.level,
+    rate: t.rate,
+    sacrifices: t.sacrifices,
+  );
 }
 
 /// 按范围合并角色与圣殿数据 (原项目 charaAssets computed)
@@ -116,8 +130,11 @@ double caculateTreeValue(TreeItem item, String label, {bool isTemple = false}) {
     case '持仓价值':
       if (isTemple) return item.sacrifices * _valhallPrice * 0.5;
       if (item.sacrifices > 0) {
-        return (item.state) * (item.current <= 0 ? _valhallPrice : item.current) +
-            item.sacrifices * (item.current <= 0 ? _valhallPrice : item.current) * 0.5;
+        return (item.state) *
+                (item.current <= 0 ? _valhallPrice : item.current) +
+            item.sacrifices *
+                (item.current <= 0 ? _valhallPrice : item.current) *
+                0.5;
       }
       return item.state * item.current.toDouble();
     case '周股息':
@@ -150,8 +167,15 @@ double caculateTreeValue(TreeItem item, String label, {bool isTemple = false}) {
   }
 }
 
-double caculateTreeTotal(List<TreeItem> list, String label, {bool isTemple = false}) {
-  return list.fold<double>(0, (a, b) => a + caculateTreeValue(b, label, isTemple: isTemple));
+double caculateTreeTotal(
+  List<TreeItem> list,
+  String label, {
+  bool isTemple = false,
+}) {
+  return list.fold<double>(
+    0,
+    (a, b) => a + caculateTreeValue(b, label, isTemple: isTemple),
+  );
 }
 
 /// 树图节点
@@ -184,7 +208,11 @@ List<TreeNode> buildTreeNodes(
   final isTemple = false;
   final total = caculateTreeTotal(list, caculateType, isTemple: isTemple);
   final visible = list.where((i) => !hiddenIds.contains(i.id)).toList();
-  final currentTotal = caculateTreeTotal(visible, caculateType, isTemple: isTemple);
+  final currentTotal = caculateTreeTotal(
+    visible,
+    caculateType,
+    isTemple: isTemple,
+  );
 
   final filterRate = (0.0072 - hiddenIds.length * 0.0002).clamp(0.005, 1.0);
   var filterCount = 0;
@@ -197,47 +225,56 @@ List<TreeNode> buildTreeNodes(
       filterTotal += value;
       continue;
     }
-    nodes.add(TreeNode(
-      id: item.id,
-      name: item.name,
-      icon: item.icon,
-      weight: value,
-      price: value,
-      percent: total > 0 ? value / total : 0,
-      fluctuation: item.fluctuation,
-    ));
+    nodes.add(
+      TreeNode(
+        id: item.id,
+        name: item.name,
+        icon: item.icon,
+        weight: value,
+        price: value,
+        percent: total > 0 ? value / total : 0,
+        fluctuation: item.fluctuation,
+      ),
+    );
   }
   if (filterCount > 0) {
-    nodes.add(TreeNode(
-      id: 0,
-      name: '其他$filterCount个角色',
-      icon: '',
-      // 其他的占比不会大于 5%
-      weight: filterTotal / currentTotal > 0.05 ? currentTotal * 0.05 : filterTotal,
-      price: filterTotal,
-      percent: total > 0 ? filterTotal / total : 0,
-    ));
+    nodes.add(
+      TreeNode(
+        id: 0,
+        name: '其他$filterCount个角色',
+        icon: '',
+        // 其他的占比不会大于 5%
+        weight: filterTotal / currentTotal > 0.05
+            ? currentTotal * 0.05
+            : filterTotal,
+        price: filterTotal,
+        percent: total > 0 ? filterTotal / total : 0,
+      ),
+    );
   }
   return nodes;
 }
 
 /// 资产分析数据
-final treeAssetsProvider = FutureProvider.family<
-    ({List<TinygrailChara> chara, List<TinygrailTemple> temple}), String>((ref, userName) async {
-  final api = ref.watch(tinygrailApiProvider);
-  if (userName == 'valhalla@tinygrail.com') {
-    final list = await api.fetchValhalla(limit: 1600);
-    return (chara: list, temple: const <TinygrailTemple>[]);
-  }
-  final results = await Future.wait([
-    api.fetchCharaAll(userName),
-    api.fetchMyTemple(userName),
-  ]);
-  return (
-    chara: results[0] as List<TinygrailChara>,
-    temple: results[1] as List<TinygrailTemple>,
-  );
-});
+final treeAssetsProvider =
+    FutureProvider.family<
+      ({List<TinygrailChara> chara, List<TinygrailTemple> temple}),
+      String
+    >((ref, userName) async {
+      final api = ref.watch(tinygrailApiProvider);
+      if (userName == 'valhalla@tinygrail.com') {
+        final list = await api.fetchValhalla(limit: 1600);
+        return (chara: list, temple: const <TinygrailTemple>[]);
+      }
+      final results = await Future.wait([
+        api.fetchCharaAll(userName),
+        api.fetchMyTemple(userName),
+      ]);
+      return (
+        chara: results[0] as List<TinygrailChara>,
+        temple: results[1] as List<TinygrailTemple>,
+      );
+    });
 
 class _TinygrailTreeScreenState extends ConsumerState<TinygrailTreeScreen> {
   String _type = '所有';
@@ -248,13 +285,19 @@ class _TinygrailTreeScreenState extends ConsumerState<TinygrailTreeScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(treeAssetsProvider(widget.userName));
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('资产分析'),
+      appBar: BgmAppBar(
+        title: widget.userName.isEmpty ? '资产分析' : widget.userName,
         actions: [
-          IconButton(
+          BgmHeaderAction(
             icon: const Icon(Icons.refresh),
             tooltip: '刷新',
-            onPressed: () => ref.invalidate(treeAssetsProvider(widget.userName)),
+            onPressed: () =>
+                ref.invalidate(treeAssetsProvider(widget.userName)),
+          ),
+          BgmHeaderAction(
+            icon: const Icon(Icons.info_outline),
+            tooltip: '说明',
+            onPressed: () => context.push(tinygrailTreeNotePath()),
           ),
         ],
       ),
@@ -273,7 +316,7 @@ class _TinygrailTreeScreenState extends ConsumerState<TinygrailTreeScreen> {
             }),
             onReset: () => setState(_hidden.clear),
           ),
-          const Divider(height: 1),
+          const BgmHairline(),
           Expanded(
             child: async.when(
               loading: () => const Loading(),
@@ -281,7 +324,11 @@ class _TinygrailTreeScreenState extends ConsumerState<TinygrailTreeScreen> {
               data: (data) {
                 final items = mergeTreeItems(data.chara, data.temple, _type);
                 if (items.isEmpty) return const Center(child: Text('暂无数据'));
-                final nodes = buildTreeNodes(items, _caculateType, hiddenIds: _hidden);
+                final nodes = buildTreeNodes(
+                  items,
+                  _caculateType,
+                  hiddenIds: _hidden,
+                );
                 return LayoutBuilder(
                   builder: (context, constraints) {
                     final rects = squarify(
@@ -301,7 +348,9 @@ class _TinygrailTreeScreenState extends ConsumerState<TinygrailTreeScreen> {
                                 onTap: () => _onCellTap(context, nodes[i]),
                                 onLongPress: nodes[i].id == 0
                                     ? null
-                                    : () => setState(() => _hidden.add(nodes[i].id)),
+                                    : () => setState(
+                                        () => _hidden.add(nodes[i].id),
+                                      ),
                               ),
                         ],
                       ),
@@ -327,19 +376,19 @@ class _TinygrailTreeScreenState extends ConsumerState<TinygrailTreeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(title: Text(node.name, style: context.ds.bodyStrong)),
-            const Divider(height: 1),
-            ListTile(
+            BgmActionRow(title: node.name),
+            const BgmHairline(),
+            BgmActionRow(
               leading: const Icon(Icons.show_chart),
-              title: const Text('角色详情 (K线/买卖/献祭)'),
+              title: '角色详情 (K线/买卖/献祭)',
               onTap: () {
                 Navigator.of(ctx).pop();
                 context.push('/tinygrail/chara/${node.id}');
               },
             ),
-            ListTile(
+            BgmActionRow(
               leading: const Icon(Icons.visibility_off_outlined),
-              title: const Text('隐藏'),
+              title: '隐藏',
               onTap: () {
                 Navigator.of(ctx).pop();
                 setState(() => _hidden.add(node.id));
@@ -373,17 +422,13 @@ class _ToolBar extends StatelessWidget {
       height: 44,
       child: Row(
         children: [
-          _PopupButton(
-            label: type,
-            items: kTreeTypes,
-            onSelected: onType,
-          ),
+          _PopupButton(label: type, items: kTreeTypes, onSelected: onType),
           _PopupButton(
             label: caculateType,
             items: kTreeCaculateTypes,
             onSelected: onCaculate,
           ),
-          IconButton(
+          BgmHeaderAction(
             icon: const Icon(Icons.restart_alt, size: 18),
             tooltip: '重置隐藏',
             onPressed: onReset,
@@ -399,22 +444,23 @@ class _PopupButton extends StatelessWidget {
   final List<String> items;
   final ValueChanged<String> onSelected;
 
-  const _PopupButton({required this.label, required this.items, required this.onSelected});
+  const _PopupButton({
+    required this.label,
+    required this.items,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
       initialValue: label,
       onSelected: onSelected,
-      itemBuilder: (context) => [for (final s in items) PopupMenuItem(value: s, child: Text(s))],
+      itemBuilder: (context) => [
+        for (final s in items) PopupMenuItem(value: s, child: Text(s)),
+      ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppGap.x6),
-        child: Row(
-          children: [
-            Text(label, style: context.ds.bodyStrong),
-            const Icon(Icons.arrow_drop_down, size: 18),
-          ],
-        ),
+        child: Row(children: [Text(label, style: context.ds.bodyStrong)]),
       ),
     );
   }
@@ -450,8 +496,8 @@ class _TreeCell extends StatelessWidget {
             color: isOther
                 ? context.ds.surfaceBase
                 : showAvatar
-                    ? context.ds.surfaceCard
-                    : context.ds.surfaceBase,
+                ? context.ds.surfaceCard
+                : context.ds.surfaceBase,
             border: Border.all(color: context.ds.border, width: 0.5),
             borderRadius: BorderRadius.circular(2),
           ),
@@ -480,7 +526,9 @@ class _TreeCell extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: context.ds.tiny.copyWith(
-                            color: isOther ? context.ds.textSecondary : Colors.white,
+                            color: isOther
+                                ? context.ds.textSecondary
+                                : Colors.white,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -492,7 +540,9 @@ class _TreeCell extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: context.ds.tiny.copyWith(
                             fontSize: 9,
-                            color: isOther ? context.ds.textSecondary : Colors.white70,
+                            color: isOther
+                                ? context.ds.textSecondary
+                                : Colors.white70,
                           ),
                         ),
                     ],
@@ -507,7 +557,9 @@ class _TreeCell extends StatelessWidget {
   }
 
   static String _price(double fen) {
-    if (fen.abs() >= 100000000) return '${(fen / 100000000).toStringAsFixed(1)}亿';
+    if (fen.abs() >= 100000000) {
+      return '${(fen / 100000000).toStringAsFixed(1)}亿';
+    }
     if (fen.abs() >= 10000) return '${(fen / 10000).toStringAsFixed(1)}万';
     return fen.toStringAsFixed(fen == fen.roundToDouble() ? 0 : 2);
   }

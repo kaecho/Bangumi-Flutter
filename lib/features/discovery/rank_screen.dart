@@ -12,6 +12,7 @@ import '../../shared/widgets/cover.dart';
 import '../subject/collection_sheet.dart';
 import 'widgets/discovery_html.dart';
 import 'widgets/paged.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 // ---------------------------------------------------------------------------
 // 常量 (移植自原项目 src/constants/{model,data}/index.ts 的 RANK 相关列表)
@@ -312,6 +313,23 @@ const kRankMonths = [
 // 状态 / 查询
 // ---------------------------------------------------------------------------
 
+/// 原版排行榜 HeaderV2Popover: 浏览器查看 + 网页版查看 + toolBar
+List<(String, String)> rankMoreItems({
+  required bool fixed,
+  required bool pagination,
+  required bool list,
+  required bool collected,
+  required bool fixedPagination,
+}) => [
+  ('browser', '浏览器查看'),
+  ('spa', '网页版查看'),
+  ('toolbar', '工具栏〔${fixed ? '锁定' : '浮动'}〕'),
+  ('loaded', '加　载〔${pagination ? '分页加载' : '到底加载'}〕'),
+  ('layout', '布　局〔${list ? '列表' : '网格'}〕'),
+  ('favor', '收　藏〔${collected ? '显示' : '不显示'}〕'),
+  if (pagination) ('pager', '分页器〔${fixedPagination ? '锁定' : '浮动'}〕'),
+];
+
 /// 排行榜工具栏状态 (对照 rank/store/ds.ts STATE; '全部' 统一映射为 '')
 class RankState {
   final String type; // label: anime|book|game|music|real
@@ -330,6 +348,8 @@ class RankState {
   final bool list; // 列表布局?
   final bool pagination; // 分页模式?
   final bool collected; // 显示收藏?
+  final bool fixed; // 工具栏锁定?
+  final bool fixedPagination; // 分页器锁定?
 
   const RankState({
     this.type = 'anime',
@@ -348,6 +368,8 @@ class RankState {
     this.list = true,
     this.pagination = true,
     this.collected = true,
+    this.fixed = true,
+    this.fixedPagination = true,
   });
 
   String get typeCn =>
@@ -402,6 +424,8 @@ class RankState {
     bool? list,
     bool? pagination,
     bool? collected,
+    bool? fixed,
+    bool? fixedPagination,
   }) => RankState(
     type: type ?? this.type,
     sort: sort ?? this.sort,
@@ -419,6 +443,8 @@ class RankState {
     list: list ?? this.list,
     pagination: pagination ?? this.pagination,
     collected: collected ?? this.collected,
+    fixed: fixed ?? this.fixed,
+    fixedPagination: fixedPagination ?? this.fixedPagination,
   );
 }
 
@@ -582,84 +608,90 @@ class _RankScreenState extends ConsumerState<RankScreen> {
   @override
   Widget build(BuildContext context) {
     final query = RankQuery.fromState(_s);
+    final toolBar = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _PrimaryBar(state: _s, onSelect: _setState),
+        if (_s.typeCn != '音乐' && _s.typeCn != '全部' && _s.expand)
+          _ExpandedBar(state: _s, onSelect: _setState),
+      ],
+    );
+    final pager = _s.pagination ? _RankPagination(query: query) : null;
+    final list = _s.list
+        ? PagedListView<RankSubject, RankQuery>(
+            provider: rankResultsProvider,
+            arg: query,
+            emptyText: '暂无数据',
+            autoLoadMore: !_s.pagination,
+            header: _s.fixed ? null : toolBar,
+            footer: _s.pagination && !_s.fixedPagination ? pager : null,
+            itemBuilder: (context, item, index) => _RankListRow(
+              item: item,
+              rank: item.rank > 0 ? item.rank : index + 1,
+            ),
+          )
+        : PagedGridView<RankSubject, RankQuery>(
+            provider: rankResultsProvider,
+            arg: query,
+            childAspectRatio: 0.58,
+            emptyText: '暂无数据',
+            autoLoadMore: !_s.pagination,
+            header: _s.fixed ? null : toolBar,
+            footer: _s.pagination && !_s.fixedPagination ? pager : null,
+            itemBuilder: (context, item, index) => _RankGridCard(
+              item: item,
+              rank: item.rank > 0 ? item.rank : index + 1,
+            ),
+          );
+
     return Scaffold(
       appBar: BgmAppBar(
         title: '排行榜',
         showBackButton: true,
         actions: [
-          PopupMenuButton<_MoreAction>(
-            tooltip: '更多',
-            icon: const Icon(Icons.more_vert),
+          BgmHeaderMore(
+            items: rankMoreItems(
+              fixed: _s.fixed,
+              pagination: _s.pagination,
+              list: _s.list,
+              collected: _s.collected,
+              fixedPagination: _s.fixedPagination,
+            ),
             onSelected: _onMore,
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: _MoreAction.toggleLayout,
-                child: Text(_s.list ? '宫格布局' : '列表布局'),
-              ),
-              PopupMenuItem(
-                value: _MoreAction.togglePagination,
-                child: Text(_s.pagination ? '滚动加载' : '分页模式'),
-              ),
-              PopupMenuItem(
-                value: _MoreAction.toggleCollected,
-                child: Text(_s.collected ? '隐藏收藏条目' : '显示收藏条目'),
-              ),
-              const PopupMenuItem(
-                value: _MoreAction.browser,
-                child: Text('浏览器查看'),
-              ),
-            ],
           ),
         ],
       ),
       body: Column(
         children: [
-          _PrimaryBar(state: _s, onSelect: _setState),
-          if (_s.typeCn != '音乐' && _s.typeCn != '全部' && _s.expand)
-            _ExpandedBar(state: _s, onSelect: _setState),
-          Expanded(
-            child: _s.list
-                ? PagedListView<RankSubject, RankQuery>(
-                    provider: rankResultsProvider,
-                    arg: query,
-                    emptyText: '暂无数据',
-                    itemBuilder: (context, item, index) => _RankListRow(
-                      item: item,
-                      rank: item.rank > 0 ? item.rank : index + 1,
-                    ),
-                  )
-                : PagedGridView<RankSubject, RankQuery>(
-                    provider: rankResultsProvider,
-                    arg: query,
-                    childAspectRatio: 0.58,
-                    emptyText: '暂无数据',
-                    itemBuilder: (context, item, index) => _RankGridCard(
-                      item: item,
-                      rank: item.rank > 0 ? item.rank : index + 1,
-                    ),
-                  ),
-          ),
+          if (_s.fixed) toolBar,
+          Expanded(child: list),
+          if (_s.pagination && _s.fixedPagination) pager!,
         ],
       ),
     );
   }
 
-  void _onMore(_MoreAction a) {
-    switch (a) {
-      case _MoreAction.toggleLayout:
-        _setState((s) => s.copyWith(list: !s.list));
-      case _MoreAction.togglePagination:
-        // 滚动加载 (false) 等价不分页; 当前 PagedNotifier 恒为分页, 这里仅切 UI 显示
+  void _onMore(String value) {
+    switch (value) {
+      case 'browser':
+        openExternalUrl(
+          '$kHost${htmlRankBrowserV2(type: _s.type == 'all' ? 'anime' : _s.type, filter: _s.filter, filterSub: _s.filterSub, source: _s.sourceValue, theme: _s.themeValue, tag: _s.tagValue, area: _s.areaValue, target: _s.targetValue, classification: _s.classificationValue, airtime: _s.airtimeSegment, order: _s.sort)}',
+        );
+      case 'spa':
+        openExternalUrl(htmlSpa('Rank'));
+      case 'toolbar':
+        _setState((s) => s.copyWith(fixed: !s.fixed));
+      case 'loaded':
         _setState((s) => s.copyWith(pagination: !s.pagination));
-      case _MoreAction.toggleCollected:
+      case 'layout':
+        _setState((s) => s.copyWith(list: !s.list));
+      case 'favor':
         _setState((s) => s.copyWith(collected: !s.collected));
-      case _MoreAction.browser:
-        openExternalUrl('https://bgm.tv/anime/browser');
+      case 'pager':
+        _setState((s) => s.copyWith(fixedPagination: !s.fixedPagination));
     }
   }
 }
-
-enum _MoreAction { toggleLayout, togglePagination, toggleCollected, browser }
 
 // ---------------------------------------------------------------------------
 // 工具栏
@@ -729,7 +761,7 @@ class _PrimaryBar extends StatelessWidget {
             onSelected: (m) => onSelect((s) => s.copyWith(month: m)),
           ),
         if (state.typeCn != '音乐' && state.typeCn != '全部')
-          IconButton(
+          BgmHeaderAction(
             icon: Icon(
               state.expand
                   ? Icons.keyboard_arrow_up
@@ -939,29 +971,25 @@ class _PopoverChip extends StatelessWidget {
           ),
       ],
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 30),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: active ? ds.accentSoft : ds.surfaceCard,
-          borderRadius: BorderRadius.circular(999),
-          border: active ? null : Border.all(color: ds.border, width: 0.5),
+          color: ds.surfaceCard.withValues(alpha: 0.8),
+          borderRadius: BorderRadius.circular(28),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 14, color: active ? ds.accent : ds.textHint),
+              Icon(icon, size: 18, color: ds.textPrimary),
               const SizedBox(width: 4),
             ],
             Text(
               text,
               style: ds.caption.copyWith(
-                color: active ? ds.accent : ds.textPrimary,
+                color: active ? ds.textPrimary : ds.textSecondary,
+                fontWeight: FontWeight.w700,
               ),
-            ),
-            Icon(
-              Icons.arrow_drop_down,
-              size: 16,
-              color: active ? ds.accent : ds.textHint,
             ),
           ],
         ),
@@ -1062,9 +1090,8 @@ class _RankListRow extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
+            BgmHeaderAction(
               tooltip: item.collected ? '修改收藏' : '收藏',
-              visualDensity: VisualDensity.compact,
               icon: Icon(
                 item.collected ? Icons.bookmark : Icons.bookmark_add_outlined,
                 size: 18,
@@ -1166,6 +1193,86 @@ class _RankGridCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// 原版 Pagination: 上一页 / 页码输入 / 下一页
+class _RankPagination extends ConsumerStatefulWidget {
+  final RankQuery query;
+
+  const _RankPagination({required this.query});
+
+  @override
+  ConsumerState<_RankPagination> createState() => _RankPaginationState();
+}
+
+class _RankPaginationState extends ConsumerState<_RankPagination> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: '1');
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  int get _page => int.tryParse(_ctrl.text.trim()) ?? 1;
+
+  Future<void> _go(int page) async {
+    if (page < 1) return;
+    _ctrl.text = '$page';
+    await ref.read(rankResultsProvider(widget.query).notifier).loadPage(page);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final page =
+        ref.watch(rankResultsProvider(widget.query)).valueOrNull?.page ?? 1;
+    if (_ctrl.text != '$page' && !_ctrl.value.composing.isValid) {
+      _ctrl.text = '$page';
+    }
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: BgmHeaderAction(
+                tooltip: '上一页',
+                icon: const Icon(Icons.navigate_before, size: 22),
+                onPressed: page <= 1 ? null : () => _go(page - 1),
+              ),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: '页',
+                  border: InputBorder.none,
+                ),
+                onSubmitted: (_) => _go(_page),
+              ),
+            ),
+            Expanded(
+              child: BgmHeaderAction(
+                tooltip: '下一页',
+                icon: const Icon(Icons.navigate_next, size: 22),
+                onPressed: () => _go(page + 1),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

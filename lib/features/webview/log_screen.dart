@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 
 import '../../core/storage/cache.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 调试日志存储 (持久化于 hive settings box, 最多保留 200 条)
 class LogStore {
@@ -23,7 +25,8 @@ class LogStore {
     await box.put(_kKey, logs);
   }
 
-  static List<String> read() => (_box().get(_kKey) as List?)?.cast<String>() ?? const [];
+  static List<String> read() =>
+      (_box().get(_kKey) as List?)?.cast<String>() ?? const [];
 
   static Future<void> clear() => _box().delete(_kKey);
 }
@@ -50,19 +53,17 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     await LogStore.clear();
     setState(() => _logs = const []);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('日志已清空')),
-      );
+      showBgmToast(context, '日志已清空');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('日志'),
+      appBar: BgmAppBar(
+        title: '日志',
         actions: [
-          IconButton(
+          BgmHeaderAction(
             tooltip: '清空日志',
             icon: const Icon(Icons.delete_sweep_outlined),
             onPressed: _logs.isEmpty ? null : _clear,
@@ -77,7 +78,11 @@ class _LogScreenState extends ConsumerState<LogScreen> {
               separatorBuilder: (_, _) => const SizedBox(height: 4),
               itemBuilder: (context, index) => Text(
                 _logs[index],
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace', height: 1.4),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  height: 1.4,
+                ),
               ),
             ),
     );

@@ -16,6 +16,12 @@ import '../../shared/models/ep.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/tab_title.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/menu_mark.dart';
+import '../../shared/widgets/mesume.dart';
+
+import 'progress_empty.dart';
+import 'progress_filter.dart';
 
 import '../rakuen/rakuen_providers.dart';
 import '../discovery/discovery_screen.dart';
@@ -26,6 +32,9 @@ import '../subject/ep_menu.dart';
 import '../subject/subject_providers.dart';
 
 import '../user/origin_setting_screen.dart';
+import '../user/pm_screen.dart';
+import '../user/user_models.dart';
+
 import '../user/origin_utils.dart';
 
 /// 首页 Tab 类型 (与原项目 TABS_ITEM 一致)
@@ -42,12 +51,40 @@ class ProgressData {
   final List<CollectionItem> items;
   final int page;
   final bool hasMore;
+  final Set<int> fetchingIds;
+  final bool prefetching;
+  final int prefetchCurrent;
+  final int prefetchTotal;
 
   const ProgressData({
     this.items = const [],
     this.page = 1,
     this.hasMore = true,
+    this.fetchingIds = const {},
+    this.prefetching = false,
+    this.prefetchCurrent = 0,
+    this.prefetchTotal = 0,
   });
+
+  ProgressData copyWith({
+    List<CollectionItem>? items,
+    int? page,
+    bool? hasMore,
+    Set<int>? fetchingIds,
+    bool? prefetching,
+    int? prefetchCurrent,
+    int? prefetchTotal,
+  }) {
+    return ProgressData(
+      items: items ?? this.items,
+      page: page ?? this.page,
+      hasMore: hasMore ?? this.hasMore,
+      fetchingIds: fetchingIds ?? this.fetchingIds,
+      prefetching: prefetching ?? this.prefetching,
+      prefetchCurrent: prefetchCurrent ?? this.prefetchCurrent,
+      prefetchTotal: prefetchTotal ?? this.prefetchTotal,
+    );
+  }
 }
 
 final progressProvider =
@@ -59,7 +96,9 @@ class ProgressNotifier extends FamilyAsyncNotifier<ProgressData, String> {
   @override
   Future<ProgressData> build(String type) async {
     ref.watch(settingsStoreProvider.select((s) => s.showGame));
-    return _fetch(1, type);
+    final data = await _fetch(1, type);
+    unawaited(_prefetch(data));
+    return data.copyWith(prefetching: true, prefetchCurrent: 0);
   }
 
   Future<ProgressData> _fetch(int page, String type) async {
@@ -96,18 +135,65 @@ class ProgressNotifier extends FamilyAsyncNotifier<ProgressData, String> {
     );
   }
 
+  Future<void> _prefetch(ProgressData seed) async {
+    final ids = [
+      for (final item in seed.items)
+        if (item.subject.type != 'book' && item.subject.type != 'game')
+          item.subject.id,
+    ].take(24).toList();
+    final now = state.valueOrNull ?? seed;
+    state = AsyncData(
+      now.copyWith(
+        prefetching: ids.isNotEmpty,
+        prefetchCurrent: 0,
+        prefetchTotal: ids.length,
+      ),
+    );
+    if (ids.isEmpty) return;
+    var cursor = 0;
+    var done = 0;
+    Future<void> worker() async {
+      while (cursor < ids.length) {
+        final id = ids[cursor++];
+        try {
+          await ref.read(epListProvider(id).future);
+        } catch (_) {}
+        try {
+          await ref.read(epStatusProvider(id).future);
+        } catch (_) {}
+        done += 1;
+        final latest = state.valueOrNull;
+        if (latest != null) {
+          state = AsyncData(latest.copyWith(prefetchCurrent: done));
+        }
+      }
+    }
+
+    try {
+      await Future.wait([worker(), worker()]);
+    } finally {
+      final latest = state.valueOrNull;
+      if (latest != null) {
+        state = AsyncData(
+          latest.copyWith(prefetching: false, prefetchCurrent: ids.length),
+        );
+      }
+    }
+  }
+
   Future<void> loadMore() async {
     final current = state.valueOrNull;
     if (current == null || !current.hasMore) return;
     try {
       final next = await _fetch(current.page + 1, arg);
-      state = AsyncData(
-        ProgressData(
-          items: [...current.items, ...next.items],
-          page: next.page,
-          hasMore: next.hasMore,
-        ),
+      final merged = current.copyWith(
+        items: [...current.items, ...next.items],
+        page: next.page,
+        hasMore: next.hasMore,
+        prefetching: true,
       );
+      state = AsyncData(merged);
+      unawaited(_prefetch(next));
     } catch (_) {}
   }
 
@@ -125,6 +211,12 @@ class ProgressNotifier extends FamilyAsyncNotifier<ProgressData, String> {
     final client = ref.read(apiClientProvider);
     final subject = item.subject;
     if (subject.id <= 0) return false;
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncData(
+        current.copyWith(fetchingIds: {...current.fetchingIds, subject.id}),
+      );
+    }
     try {
       await client.post(
         apiSubjectUpdateWatched(subject.id),
@@ -133,6 +225,12 @@ class ProgressNotifier extends FamilyAsyncNotifier<ProgressData, String> {
       ref.invalidate(progressProvider(arg));
       return true;
     } catch (_) {
+      final now = state.valueOrNull;
+      if (now != null) {
+        state = AsyncData(
+          now.copyWith(fetchingIds: {...now.fetchingIds}..remove(subject.id)),
+        );
+      }
       return false;
     }
   }
@@ -163,9 +261,8 @@ class ProgressScreen extends ConsumerStatefulWidget {
   ConsumerState<ProgressScreen> createState() => _ProgressScreenState();
 }
 
-class _ProgressScreenState extends ConsumerState<ProgressScreen>
-    with SingleTickerProviderStateMixin {
-  TabController? _tabController;
+class _ProgressScreenState extends ConsumerState<ProgressScreen> {
+  int _tab = 0;
 
   List<(String, String)> get _tabs {
     final settings = ref.watch(settingsStoreProvider);
@@ -177,102 +274,94 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen>
     return tabs.isEmpty ? const [('全部', 'all')] : tabs;
   }
 
-  void _syncTabs(int length) {
-    final current = _tabController;
-    if (current != null && current.length == length) return;
-    current?.dispose();
-    _tabController = TabController(length: length, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController?.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final isLogin = ref.watch(isLoggedInProvider);
     final unread = ref.watch(notifyCountProvider).valueOrNull ?? 0;
+    final hasPm = hasNewPm(ref.watch(pmInboxProvider).valueOrNull ?? const []);
+
     final store = ref.watch(settingsStoreProvider);
     final tabs = _tabs;
-    _syncTabs(tabs.length);
+    if (_tab >= tabs.length) _tab = 0;
+    final searchType = tabs.length >= 2 && tabs[_tab].$2 != 'all'
+        ? tabs[_tab].$1
+        : '';
+    if (!isLogin) {
+      return const Scaffold(body: _ProgressLoginGate());
+    }
     return Scaffold(
-      appBar: AppBar(
-        title: const TabLogoTitle('进度'),
-        leadingWidth: isLogin ? 112 : null,
-        leading: isLogin
-            ? Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: '电波提醒',
-                    onPressed: () => context.push('/rakuen/notify'),
-                    icon: Badge(
-                      isLabelVisible: unread > 0,
-                      label: Text('$unread'),
-                      child: const Icon(Icons.notifications_outlined),
-                    ),
-                  ),
-                  ..._homeHeaderActions(context, store.homeTopExtraCustom),
-                ],
-              )
-            : null,
-        actions: [
-          if (isLogin)
-            IconButton(
-              tooltip: store.progressGrid ? '列表布局' : '宫格布局',
-              icon: Icon(
-                store.progressGrid
-                    ? Icons.view_list_outlined
-                    : Icons.grid_view_outlined,
+      appBar: LogoHeader(
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            BgmHeaderAction(
+              tooltip: '电波提醒',
+              onPressed: () => context.push(
+                hasPm ? '/rakuen/notify?type=pm' : '/rakuen/notify',
               ),
-              onPressed: () {
-                store.setProgressGrid(!store.progressGrid);
-              },
+              icon: BgmNotifyMark(unread: unread > 0 || hasPm),
             ),
-          if (isLogin) ..._homeHeaderActions(context, store.homeTopLeftCustom),
-          if (isLogin) ..._homeHeaderActions(context, store.homeTopRightCustom),
-        ],
-        bottom: isLogin
-            ? TabBar(
-                controller: _tabController,
-                tabs: [for (final t in _tabs) Tab(text: t.$1)],
-              )
-            : null,
+            ..._homeHeaderActions(context, store.homeTopExtraCustom, searchType),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ..._homeHeaderActions(context, store.homeTopLeftCustom, searchType),
+            ..._homeHeaderActions(context, store.homeTopRightCustom, searchType),
+          ],
+        ),
       ),
-      body: isLogin
-          ? TabBarView(
-              controller: _tabController,
-              children: [for (final t in tabs) _ProgressList(type: t.$2)],
-            )
-          : const _ProgressLoginGate(),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              if (tabs.length >= 2)
+                BgmTabStrip(
+                  index: _tab,
+                  onSelect: (i) => setState(() => _tab = i),
+                  tabs: [for (final t in tabs) Text(t.$1)],
+                ),
+              Expanded(child: _ProgressList(type: tabs[_tab].$2)),
+            ],
+          ),
+          const _ProgressTips(),
+        ],
+      ),
     );
   }
 }
 
-List<Widget> _homeHeaderActions(BuildContext context, String key) {
+List<Widget> _homeHeaderActions(
+  BuildContext context,
+  String key, [
+  String searchType = '',
+]) {
   if (key.isEmpty) return const [];
-  DiscoveryMenuItem? item;
-  for (final e in kDiscoveryMenus) {
-    if (e.key == key) {
-      item = e;
-      break;
-    }
+  final item = discoveryMenuByKey(key);
+  if (item == null || item.key == 'Open' || item.key == 'Netabare') {
+    return const [];
   }
-  if (item == null || item.key == 'Open') return const [];
   return [
-    IconButton(
+    BgmHeaderAction(
       tooltip: item.name,
-      icon: item.text != null
-          ? Text(
-              item.text!,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            )
-          : Icon(item.icon),
+      icon: BgmMenuMark(
+        icon: item.icon,
+        badge: item.badge,
+        text: item.text,
+        wrap: false,
+        size: (item.text != null ? 16 : 24).toDouble(),
+      ),
       onPressed: () {
-        if (item!.key == 'Link') {
+        if (item.key == 'Link') {
           showClipboardModal(context);
+          return;
+        }
+        if (item.key == 'Search') {
+          final q = searchType.isEmpty
+              ? '/search'
+              : '/search?type=${Uri.encodeQueryComponent(searchType)}';
+          context.push(q);
           return;
         }
         final route = item.route;
@@ -297,6 +386,28 @@ class _ProgressListState extends ConsumerState<_ProgressList> {
   final _filterController = TextEditingController();
   CollectionItem? _selected;
   String _filter = '';
+  final _expandedIds = <int>{};
+
+  void _toggleExpand(int id) {
+    setState(() {
+      if (!_expandedIds.remove(id)) _expandedIds.add(id);
+    });
+  }
+
+  void _expandAll(Iterable<CollectionItem> items) {
+    setState(() {
+      for (final item in items) {
+        final type = item.subject.type;
+        if (type != 'book' && type != 'game') {
+          _expandedIds.add(item.subject.id);
+        }
+      }
+    });
+  }
+
+  void _collapseAll() {
+    setState(() => _expandedIds.clear());
+  }
 
   @override
   void initState() {
@@ -321,18 +432,10 @@ class _ProgressListState extends ConsumerState<_ProgressList> {
     final async = ref.watch(progressProvider(widget.type));
     return async.when(
       loading: () => const Loading(),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('加载失败'),
-            TextButton(
-              onPressed: () => ref.invalidate(progressProvider(widget.type)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      error: (e, _) => BgmRetry(
+        onRetry: () => ref.invalidate(progressProvider(widget.type)),
       ),
+
       data: (data) {
         final store = ref.watch(settingsStoreProvider);
         final q = store.homeFilter ? _filter.trim() : '';
@@ -377,38 +480,31 @@ class _ProgressListState extends ConsumerState<_ProgressList> {
           return as.compareTo(bs);
         });
 
-        if (data.items.isEmpty) {
-          return _ProgressEmpty(
-            type: widget.type,
-            filter: q,
-            filteredEmpty: false,
-          );
-        }
-        if (items.isEmpty) {
-          return _ProgressEmpty(
-            type: widget.type,
-            filter: q,
-            filteredEmpty: true,
+        final filterBar = store.homeFilter
+            ? ProgressFilterBar(
+                controller: _filterController,
+                length: items.length,
+                fetching: data.prefetching,
+                onChanged: (v) => setState(() => _filter = v.trim()),
+              )
+            : const SizedBox.shrink();
+        if (data.items.isEmpty || items.isEmpty) {
+          return Column(
+            children: [
+              filterBar,
+              Expanded(
+                child: Center(
+                  child: ProgressEmpty(
+                    type: widget.type,
+                    filter: q,
+                    length: items.length,
+                  ),
+                ),
+              ),
+            ],
           );
         }
 
-        final filterBar = store.homeFilter
-            ? Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: TextField(
-                  controller: _filterController,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    hintText: items.isEmpty && q.isEmpty
-                        ? '筛选'
-                        : '${items.length}',
-                    border: const OutlineInputBorder(),
-                  ),
-                  onChanged: (v) => setState(() => _filter = v.trim()),
-                ),
-              )
-            : const SizedBox.shrink();
         if (store.progressGrid) {
           return RefreshIndicator(
             onRefresh: () async =>
@@ -425,31 +521,77 @@ class _ProgressListState extends ConsumerState<_ProgressList> {
                   onPin: _selected == null
                       ? null
                       : () => store.toggleProgressPinned(_selected!.subject.id),
+                  onExpandAll: () => _expandAll(items),
+                  onCollapseAll: _collapseAll,
                 ),
                 Expanded(
-                  child: GridView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(8),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      childAspectRatio: store.homeGridCoverLayout == 'square'
-                          ? (store.homeGridTitle ? 0.72 : 0.92)
-                          : (store.homeGridTitle ? 0.58 : 0.68),
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return _ProgressGridCard(
-                        item: item,
-                        selected: _selected?.subject.id == item.subject.id,
-                        pinned: pinned.contains(item.subject.id),
-                        onPin: () =>
-                            store.toggleProgressPinned(item.subject.id),
-                        onSelect: () => setState(() => _selected = item),
-                      );
-                    },
+                  child: Stack(
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columns = homeGridNumColumns(
+                            MediaQuery.sizeOf(context),
+                          );
+                          final square = store.homeGridCoverLayout == 'square';
+                          final titled = store.homeGridTitle;
+
+                          return GridView.builder(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.all(10),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  childAspectRatio: square
+                                      ? (titled ? 0.62 : 0.82)
+                                      : (titled ? 0.50 : 0.60),
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                ),
+                            itemCount: items.length,
+                            itemBuilder: (context, index) {
+                              final item = items[index];
+                              return _ProgressGridCard(
+                                item: item,
+                                selected:
+                                    _selected?.subject.id == item.subject.id,
+                                pinned: pinned.contains(item.subject.id),
+                                onPin: () =>
+                                    store.toggleProgressPinned(item.subject.id),
+                                onSelect: () =>
+                                    setState(() => _selected = item),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                      if (Theme.of(context).brightness == Brightness.dark)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: 0,
+                          height: 24,
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    context.ds.surfaceBase,
+                                    context.ds.surfaceBase.withValues(
+                                      alpha: 0.8,
+                                    ),
+                                    context.ds.surfaceBase.withValues(
+                                      alpha: 0.24,
+                                    ),
+                                    context.ds.surfaceBase.withValues(alpha: 0),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ],
@@ -465,8 +607,15 @@ class _ProgressListState extends ConsumerState<_ProgressList> {
                 child: ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: items.length,
+                  itemCount: items.length + 1,
                   itemBuilder: (context, index) {
+                    if (index == items.length) {
+                      return ProgressEmpty(
+                        type: widget.type,
+                        filter: q,
+                        length: items.length,
+                      );
+                    }
                     final item = items[index];
                     return _ProgressItemView(
                       item: item,
@@ -474,6 +623,10 @@ class _ProgressListState extends ConsumerState<_ProgressList> {
                       pinned: pinned.contains(item.subject.id),
                       onPin: () => store.toggleProgressPinned(item.subject.id),
                       filter: q,
+                      expanded: _expandedIds.contains(item.subject.id),
+                      onToggleExpand: () => _toggleExpand(item.subject.id),
+                      onExpandAll: () => _expandAll(items),
+                      onCollapseAll: _collapseAll,
                     );
                   },
                 ),
@@ -491,16 +644,22 @@ class _ProgressItemView extends ConsumerStatefulWidget {
   final String type;
   final bool pinned;
   final VoidCallback onPin;
-  final bool initiallyExpanded;
   final String filter;
+  final bool expanded;
+  final VoidCallback onToggleExpand;
+  final VoidCallback onExpandAll;
+  final VoidCallback onCollapseAll;
 
   const _ProgressItemView({
     required this.item,
     required this.type,
     required this.pinned,
     required this.onPin,
-    this.initiallyExpanded = false,
     this.filter = '',
+    required this.expanded,
+    required this.onToggleExpand,
+    required this.onExpandAll,
+    required this.onCollapseAll,
   });
 
   @override
@@ -508,8 +667,6 @@ class _ProgressItemView extends ConsumerStatefulWidget {
 }
 
 class _ProgressItemViewState extends ConsumerState<_ProgressItemView> {
-  late bool _expanded = widget.initiallyExpanded;
-
   CollectionItem get item => widget.item;
   String get type => widget.type;
 
@@ -520,229 +677,220 @@ class _ProgressItemViewState extends ConsumerState<_ProgressItemView> {
     final isGame = subject.type == 'game';
     final store = ref.watch(settingsStoreProvider);
     final compact = store.homeListCompact;
+    final fetching =
+        ref
+            .watch(progressProvider(type))
+            .valueOrNull
+            ?.fetchingIds
+            .contains(subject.id) ??
+        false;
+    final loadingEps =
+        !isBook && !isGame && ref.watch(epListProvider(subject.id)).isLoading;
+    final bar = _onAirBar(ref, item);
 
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 10 : 12,
         vertical: compact ? 4 : 8,
       ),
-
-      child: Column(
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          InkWell(
-            onTap: () => context.push('/subject/${subject.id}'),
-            onLongPress: () => _editProgress(context, ref),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Stack(
+          Column(
+            children: [
+              InkWell(
+                onTap: () => context.push('/subject/${subject.id}'),
+                onLongPress: () => _editProgress(context, ref),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Cover(
-                      url: subject.images.common,
-                      width: 60,
-                      height: 80,
-                      radius: 4,
-                      type: subject.type,
+                    Builder(
+                      builder: (context) {
+                        final cover = homeListCoverSize(
+                          MediaQuery.sizeOf(context),
+                          compact: compact,
+                        );
+                        return Cover(
+                          url: subject.images.common,
+                          width: cover.width,
+                          height: cover.height,
+                          radius: 4,
+                          type: subject.type,
+                        );
+                      },
                     ),
-
-                    if (widget.pinned)
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        child: GestureDetector(
-                          onTap: widget.onPin,
-                          child: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: context.ds.accent,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(4),
-                                bottomRight: Radius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text.rich(
-                              _highlightTitle(
-                                subject.displayName,
-                                widget.filter,
-                                fontSize: homeTitleFontSize(
-                                  subject.displayName,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text.rich(
+                                  _highlightTitle(
+                                    subject.displayName,
+                                    widget.filter,
+                                    fontSize: homeTitleFontSize(
+                                      subject.displayName,
+                                    ),
+                                  ),
+                                  maxLines:
+                                      compact || store.homeAnimeInfoInline == 2
+                                      ? 2
+                                      : 3,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              maxLines:
-                                  compact || store.homeAnimeInfoInline == 2
-                                  ? 2
-                                  : 3,
-                              overflow: TextOverflow.ellipsis,
+                              if (fetching || loadingEps)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: BgmSpinner(
+                                    size: 16,
+                                    color: context.ds.textSecondary,
+                                  ),
+                                ),
+                              if (!isBook && !isGame)
+                                _OnAirLabel(
+                                  weekday: subject.airWeekday,
+                                  subjectId: subject.id,
+                                  current: bar.aired,
+                                  total: bar.total,
+                                ),
+                            ],
+                          ),
+                          if (!compact)
+                            _ProgressMetaLine(item: item, store: store),
+                          const SizedBox(height: 2),
+                          SizedBox(
+                            height: compact ? 32 : 40,
+                            child: Row(
+                              children: [
+                                if (isBook)
+                                  Text(
+                                    'Chap. ${item.epStatus}${subject.eps > 0 ? ' / ${subject.eps}' : ''}   Vol. ${item.volStatus}',
+                                    style: context.ds.caption,
+                                  )
+                                else if (!isGame)
+                                  InkWell(
+                                    onTap: widget.onToggleExpand,
+                                    child: Text(
+                                      homeCountText(
+                                        current: item.epStatus,
+                                        total: subject.eps,
+                                        style: store.homeCountView,
+                                      ),
+                                      style: context.ds.caption.copyWith(
+                                        color: context.ds.accent,
+                                      ),
+                                    ),
+                                  ),
+
+                                const Spacer(),
+                                if (store.homeOrigin != 'hide')
+                                  _OriginButton(
+                                    item: item,
+                                    onPin: widget.onPin,
+                                    pinned: widget.pinned,
+                                    showOrigins: store.homeOrigin == 'all',
+                                    onExpandAll: widget.onExpandAll,
+                                    onCollapseAll: widget.onCollapseAll,
+                                  ),
+                                if (isBook) ...[
+                                  _IconAction(
+                                    tooltip: 'Chap +1',
+                                    icon: Icons.check_circle_outline,
+                                    onTap: () =>
+                                        _bump(context, ref, item.epStatus + 1),
+                                  ),
+                                  _IconAction(
+                                    tooltip: 'Vol +1',
+                                    icon: Icons.menu_book_outlined,
+                                    onTap: () => _bump(
+                                      context,
+                                      ref,
+                                      item.epStatus,
+                                      vols: item.volStatus + 1,
+                                    ),
+                                  ),
+                                ] else if (!isGame)
+                                  _NextEpAction(
+                                    item: item,
+                                    type: type,
+                                    onBump: () =>
+                                        _bump(context, ref, item.epStatus + 1),
+                                  ),
+                                _IconAction(
+                                  tooltip: '收藏管理',
+                                  icon: Icons.star_outline,
+                                  onTap: () =>
+                                      showBgmSheet<void>(
+                                        context: context,
+                                        builder: (_) => CollectionSheet(
+                                          subjectId: subject.id,
+                                        ),
+                                      ).then((_) {
+                                        ref.invalidate(progressProvider(type));
+                                      }),
+                                ),
+                              ],
                             ),
                           ),
-
-                          if (!isBook && !isGame)
-                            _OnAirLabel(
-                              weekday: subject.airWeekday,
-                              subjectId: subject.id,
-                              current: item.epStatus,
-                              total: subject.eps > 0
-                                  ? subject.eps
-                                  : subject.epsCount,
+                          if (isGame)
+                            Padding(
+                              padding: EdgeInsets.only(top: compact ? 4 : 8),
+                              child: Text(
+                                item.updatedAt.isEmpty
+                                    ? '在玩'
+                                    : '${friendlyTime(item.updatedAt)} 在玩',
+                                style: context.ds.caption,
+                              ),
+                            )
+                          else if (!isBook)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: _OnAirProgress(
+                                watched: item.epStatus,
+                                aired: bar.aired,
+                                total: bar.total,
+                                compact: compact,
+                              ),
                             ),
                         ],
                       ),
-
-                      if (!SettingsStore.instance.hideScore &&
-                          subject.rating != null &&
-                          subject.rating!.score > 0)
-                        Row(
-                          children: [
-                            Icon(Icons.star, size: 13, color: context.ds.star),
-                            const SizedBox(width: 2),
-                            Text(
-                              subject.rating!.score.toStringAsFixed(1),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: context.ds.star,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                      if (!compact && (subject.collection?.doing ?? 0) > 0)
-                        Text(
-                          '${subject.collection!.doing} 人在${isBook
-                              ? '读'
-                              : isGame
-                              ? '玩'
-                              : '看'}',
-                          style: context.ds.tiny,
-                        ),
-
-                      const SizedBox(height: 2),
-                      if (isBook)
-                        Text(
-                          'Chap. ${item.epStatus}${subject.eps > 0 ? ' / ${subject.eps}' : ''}   Vol. ${item.volStatus}',
-                          style: context.ds.caption,
-                        )
-                      else if (isGame)
-                        Text(
-                          item.updatedAt.isEmpty
-                              ? '在玩'
-                              : '${friendlyTime(item.updatedAt)} 在玩',
-                          style: context.ds.caption,
-                        )
-                      else
-                        InkWell(
-                          onTap: () => setState(() => _expanded = !_expanded),
-                          child: Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8,
-                            children: [
-                              Text(
-                                homeCountText(
-                                  current: item.epStatus,
-                                  total: subject.eps,
-                                  style: store.homeCountView,
-                                ),
-                                style: context.ds.caption.copyWith(
-                                  color: context.ds.accent,
-                                ),
-                              ),
-                              if (store.homeAnimeInfoInline == 2) ...[
-                                _SeasonLeftInfo(
-                                  item: item,
-                                  isAnime: subject.type == 'anime',
-                                ),
-                                _NextAirInfo(subjectId: subject.id),
-                              ],
-                            ],
-                          ),
-                        ),
-                      if (!isBook &&
-                          !isGame &&
-                          store.homeAnimeInfoInline == 1) ...[
-                        _SeasonLeftInfo(
+                    ),
+                  ],
+                ),
+              ),
+              if (!isBook && !isGame && store.homeAnimeInfoInline == 1)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 9, 0, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _SeasonLeftInfo(
                           item: item,
                           isAnime: subject.type == 'anime',
                         ),
-                        _NextAirInfo(subjectId: subject.id),
-                      ],
-
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          if (store.homeOrigin != 'hide')
-                            _OriginButton(
-                              item: item,
-                              onPin: widget.onPin,
-                              pinned: widget.pinned,
-                              showOrigins: store.homeOrigin == 'all',
-                            ),
-
-                          if (isBook) ...[
-                            _IconAction(
-                              tooltip: 'Chap +1',
-                              icon: Icons.check_circle_outline,
-                              onTap: () =>
-                                  _bump(context, ref, item.epStatus + 1),
-                            ),
-                            _IconAction(
-                              tooltip: 'Vol +1',
-                              icon: Icons.menu_book_outlined,
-                              onTap: () => _bump(
-                                context,
-                                ref,
-                                item.epStatus,
-                                vols: item.volStatus + 1,
-                              ),
-                            ),
-                          ] else if (!isGame)
-                            _NextEpAction(
-                              item: item,
-                              type: type,
-                              onBump: () =>
-                                  _bump(context, ref, item.epStatus + 1),
-                            ),
-
-                          _IconAction(
-                            tooltip: '收藏管理',
-                            icon: Icons.star_outline,
-                            onTap: () =>
-                                showModalBottomSheet<void>(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  useSafeArea: true,
-                                  builder: (_) =>
-                                      CollectionSheet(subjectId: subject.id),
-                                ).then((_) {
-                                  ref.invalidate(progressProvider(type));
-                                }),
-                          ),
-                        ],
                       ),
+                      _NextAirInfo(subjectId: subject.id),
                     ],
                   ),
                 ),
-              ],
-            ),
+
+              if (widget.expanded && !isBook && !isGame)
+                _ProgressEpGrid(
+                  subjectId: subject.id,
+                  type: type,
+                  compact: store.progressGrid,
+                ),
+            ],
           ),
-          if (_expanded && !isBook && !isGame)
-            _ProgressEpGrid(
-              subjectId: subject.id,
-              type: type,
-              compact: store.progressGrid,
+          if (widget.pinned)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: _ProgressPinCorner(onUnpin: widget.onPin),
             ),
         ],
       ),
@@ -759,9 +907,7 @@ class _ProgressItemViewState extends ConsumerState<_ProgressItemView> {
         .read(progressProvider(type).notifier)
         .setWatched(item, eps, watchedVols: vols);
     if (context.mounted && !ok) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('更新进度失败')));
+      showBgmToast(context, '更新进度失败');
     }
   }
 
@@ -770,42 +916,42 @@ class _ProgressItemViewState extends ConsumerState<_ProgressItemView> {
     final epsCtrl = TextEditingController(text: '${item.epStatus}');
     final volCtrl = TextEditingController(text: '${item.volStatus}');
     final isBook = subject.type == 'book';
-    final saved = await showDialog<bool>(
+    final saved = await showBgmDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('设置观看进度'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: epsCtrl,
+      title: '设置观看进度',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          BgmField(
+            controller: epsCtrl,
+            keyboardType: TextInputType.number,
+            hintText: isBook
+                ? 'Chap.${subject.eps > 0 ? ' / ${subject.eps}' : ''}'
+                : '看到第几话${subject.eps > 0 ? ' / ${subject.eps}' : ''}',
+          ),
+          if (isBook) ...[
+            const SizedBox(height: 8),
+            BgmField(
+              controller: volCtrl,
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: isBook ? 'Chap.' : '看到第几话',
-                suffixText: subject.eps > 0 ? '/ ${subject.eps}' : null,
-              ),
+              hintText: 'Vol.',
             ),
-            if (isBook) ...[
-              const SizedBox(height: 8),
-              TextField(
-                controller: volCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Vol.'),
-              ),
-            ],
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('保存'),
-          ),
         ],
       ),
+      actions: (ctx) => [
+        BgmButton(
+          '取消',
+          type: BgmButtonType.plain,
+          expand: false,
+          onPressed: () => Navigator.pop(ctx, false),
+        ),
+        BgmButton(
+          '保存',
+          expand: false,
+          onPressed: () => Navigator.pop(ctx, true),
+        ),
+      ],
     );
     if (saved != true) {
       epsCtrl.dispose();
@@ -896,73 +1042,70 @@ class _OnAirLabel extends ConsumerWidget {
       hour = parts[0].padLeft(2, '0');
       minute = parts.length > 1 ? parts[1].padLeft(2, '0') : '00';
     }
-    final saved = await showDialog<bool>(
+    final saved = await showBgmDialog<bool>(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) => AlertDialog(
-            title: const Text('自定义放送'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
+      title: '自定义放送',
+      content: StatefulBuilder(
+        builder: (ctx, setLocal) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: BgmSelect<int>(
+                value: wd,
+                items: [for (var i = 0; i < 7; i++) (i, kWeekdayCn[i])],
+                onChanged: (v) => setLocal(() => wd = v),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
               children: [
-                DropdownButton<int>(
-                  value: wd,
-                  isExpanded: true,
+                BgmSelect<String>(
+                  value: hour,
                   items: [
-                    for (var i = 0; i < 7; i++)
-                      DropdownMenuItem(value: i, child: Text(kWeekdayCn[i])),
+                    for (var h = 0; h < 24; h++)
+                      (
+                        h.toString().padLeft(2, '0'),
+                        h.toString().padLeft(2, '0'),
+                      ),
                   ],
-                  onChanged: (v) => setLocal(() => wd = v ?? wd),
+                  onChanged: (v) => setLocal(() => hour = v),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButton<String>(
-                        value: hour,
-                        isExpanded: true,
-                        items: [
-                          for (var h = 0; h < 24; h++)
-                            DropdownMenuItem(
-                              value: h.toString().padLeft(2, '0'),
-                              child: Text(h.toString().padLeft(2, '0')),
-                            ),
-                        ],
-                        onChanged: (v) => setLocal(() => hour = v ?? hour),
-                      ),
-                    ),
-                    const Text(' : '),
-                    Expanded(
-                      child: DropdownButton<String>(
-                        value: minute,
-                        isExpanded: true,
-                        items: [
-                          for (final m in const ['00', '15', '30', '45'])
-                            DropdownMenuItem(value: m, child: Text(m)),
-                        ],
-                        onChanged: (v) => setLocal(() => minute = v ?? minute),
-                      ),
-                    ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(':'),
+                ),
+                BgmSelect<String>(
+                  value: minute,
+                  items: const [
+                    ('00', '00'),
+                    ('15', '15'),
+                    ('30', '30'),
+                    ('45', '45'),
                   ],
+                  onChanged: (v) => setLocal(() => minute = v),
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  ref.read(settingsStoreProvider).clearCustomOnAir(subjectId);
-                  Navigator.pop(ctx, false);
-                },
-                child: const Text('恢复默认'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('保存'),
-              ),
-            ],
-          ),
-        );
-      },
+          ],
+        ),
+      ),
+      actions: (ctx) => [
+        BgmButton(
+          '恢复默认',
+          type: BgmButtonType.plain,
+          expand: false,
+          onPressed: () {
+            ref.read(settingsStoreProvider).clearCustomOnAir(subjectId);
+            Navigator.pop(ctx, false);
+          },
+        ),
+        BgmButton(
+          '保存',
+          expand: false,
+          onPressed: () => Navigator.pop(ctx, true),
+        ),
+      ],
     );
     if (saved == true) {
       await ref
@@ -990,13 +1133,7 @@ class _ProgressEpGrid extends ConsumerWidget {
     return epsAsync.when(
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
-        child: Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
+        child: Center(child: BgmSpinner()),
       ),
       error: (_, _) => const Padding(
         padding: EdgeInsets.symmetric(vertical: 8),
@@ -1061,9 +1198,7 @@ class _ProgressEpGrid extends ConsumerWidget {
                           ref.invalidate(progressProvider(type));
                         } catch (_) {
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('更新章节失败')),
-                            );
+                            showBgmToast(context, '更新章节失败');
                           }
                         }
                       },
@@ -1176,12 +1311,16 @@ class _OriginButton extends ConsumerWidget {
   final bool pinned;
   final VoidCallback onPin;
   final bool showOrigins;
+  final VoidCallback? onExpandAll;
+  final VoidCallback? onCollapseAll;
 
   const _OriginButton({
     required this.item,
     required this.pinned,
     required this.onPin,
     this.showOrigins = true,
+    this.onExpandAll,
+    this.onCollapseAll,
   });
 
   @override
@@ -1192,45 +1331,67 @@ class _OriginButton extends ConsumerWidget {
             item.subjectType.isEmpty ? item.subject.type : item.subjectType,
           )
         : const <OriginItem>[];
+    final type = item.subject.type;
+    final isAnime = type == 'anime' || type == 'real';
+    final eps =
+        ref.watch(epListProvider(item.subject.id)).valueOrNull?.eps ??
+        const <Ep>[];
+    final status = ref.watch(epStatusProvider(item.subject.id)).valueOrNull;
+    final hasUnaired =
+        isAnime &&
+        eps.any(
+          (ep) => canAddEpCalendar(
+            type: ep.type,
+            airdate: ep.airdate,
+            watched: status?.isWatched(ep.id) ?? false,
+          ),
+        );
     return PopupMenuButton<String>(
       tooltip: showOrigins ? '源头' : '更多',
+      padding: EdgeInsets.zero,
+      iconSize: 20,
+      splashRadius: 18,
       icon: Icon(
-        showOrigins && origins.length > 1 ? Icons.cast : Icons.more_horiz,
-        size: 20,
+        origins.length > 1 ? Icons.cast : Icons.menu,
+        size: origins.length > 1 ? 17 : 21,
       ),
       onSelected: (value) async {
-        if (value == 'pin') {
-          onPin();
-          return;
-        }
-        if (value == 'manage') {
-          if (context.mounted) await context.push('/settings/origin');
-          return;
-        }
-        if (value == 'ics') {
-          final eps =
-              ref.read(epListProvider(item.subject.id)).valueOrNull?.eps ??
-              const <Ep>[];
-          final custom = SettingsStore.instance.customOnAirOf(item.subject.id);
-          final clock = custom != null && custom.contains('|')
-              ? custom.split('|').last
-              : '2000';
-          await shareSubjectIcs(
-            subjectId: item.subject.id,
-            title: item.subject.displayName,
-            clock: clock,
-            eps: [
-              for (final ep in eps)
-                if (ep.type == 0)
-                  (
-                    id: ep.id,
-                    sort: ep.sort,
-                    name: ep.displayName,
-                    airdate: ep.airdate,
-                  ),
-            ],
-          );
-          return;
+        switch (value) {
+          case 'pin':
+            onPin();
+            return;
+          case 'expandAll':
+            onExpandAll?.call();
+            return;
+          case 'collapseAll':
+            onCollapseAll?.call();
+            return;
+          case 'remind':
+            await _addUnairedReminders(context, ref, item);
+            return;
+          case 'ics':
+            final custom = SettingsStore.instance.customOnAirOf(
+              item.subject.id,
+            );
+            final clock = custom != null && custom.contains('|')
+                ? custom.split('|').last
+                : '2000';
+            await shareSubjectIcs(
+              subjectId: item.subject.id,
+              title: item.subject.displayName,
+              clock: clock,
+              eps: [
+                for (final ep in eps)
+                  if (ep.type == 0)
+                    (
+                      id: ep.id,
+                      sort: ep.sort,
+                      name: ep.displayName,
+                      airdate: ep.airdate,
+                    ),
+              ],
+            );
+            return;
         }
         final origin = origins.cast<OriginItem?>().firstWhere(
           (e) => e?.uuid == value,
@@ -1251,9 +1412,7 @@ class _OriginButton extends ConsumerWidget {
         );
         if (url.isEmpty) return;
         if (context.mounted && SettingsStore.instance.openInfo) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('已复制地址，即将跳转')));
+          showBgmToast(context, '已复制地址，即将跳转');
         }
         await openExternalUrl(url);
       },
@@ -1262,13 +1421,67 @@ class _OriginButton extends ConsumerWidget {
           for (final o in origins)
             PopupMenuItem(value: o.uuid, child: Text(o.name)),
         PopupMenuItem(value: 'pin', child: Text(pinned ? '取消置顶' : '置顶')),
-        if (SettingsStore.instance.exportICS)
-          const PopupMenuItem(value: 'ics', child: Text('导出日程')),
-        if (showOrigins)
-          const PopupMenuItem(value: 'manage', child: Text('源头管理')),
+        if (isAnime) ...[
+          const PopupMenuItem(value: 'expandAll', child: Text('全部展开')),
+          const PopupMenuItem(value: 'collapseAll', child: Text('全部收起')),
+          if (hasUnaired)
+            const PopupMenuItem(value: 'remind', child: Text('一键添加提醒')),
+          if (SettingsStore.instance.exportICS && eps.isNotEmpty)
+            const PopupMenuItem(value: 'ics', child: Text('导出放送日程ICS')),
+        ],
       ],
     );
   }
+}
+
+class _ProgressPinCorner extends StatelessWidget {
+  final VoidCallback onUnpin;
+
+  const _ProgressPinCorner({required this.onUnpin});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        final ok = await showBgmConfirm(context, title: '确定取消置顶?');
+        if (ok) onUnpin();
+      },
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: Align(
+          alignment: Alignment.topRight,
+          child: Opacity(
+            opacity: 0.8,
+            child: CustomPaint(
+              size: const Size(16, 16),
+              painter: _PinCornerPainter(color: context.ds.textSecondary),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PinCornerPainter extends CustomPainter {
+  final Color color;
+
+  const _PinCornerPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, 0)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PinCornerPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _IconAction extends StatelessWidget {
@@ -1283,23 +1496,34 @@ class _IconAction extends StatelessWidget {
     required this.onTap,
     this.label,
   });
-
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      visualDensity: VisualDensity.compact,
-      icon: label == null
-          ? Icon(icon, size: 20)
-          : Row(
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          height: 34,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 18),
-                const SizedBox(width: 2),
-                Text(label!, style: context.ds.caption),
+                Icon(
+                  icon,
+                  size: label == null ? 20 : 19,
+                  color: context.ds.textSecondary,
+                ),
+                if (label != null) ...[
+                  const SizedBox(width: 2),
+                  Text(label!, style: context.ds.caption),
+                ],
               ],
             ),
-      onPressed: onTap,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1344,43 +1568,19 @@ class _NextAirInfo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final eps = ref.watch(epListProvider(subjectId)).valueOrNull?.eps;
-    if (eps == null || eps.isEmpty) return const SizedBox.shrink();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    Ep? next;
-    for (final ep in eps) {
-      if (ep.airdate.isEmpty) continue;
-      final parsed = DateTime.tryParse(ep.airdate);
-      if (parsed == null) continue;
-      final day = DateTime(parsed.year, parsed.month, parsed.day);
-      if (day.isAfter(today)) {
-        next = ep;
-        break;
-      }
-    }
-    if (next == null) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Text('完结', style: context.ds.tiny),
-      );
-    }
-    final parsed = DateTime.tryParse(next.airdate);
-    final days = parsed == null
-        ? 0
-        : DateTime(
-            parsed.year,
-            parsed.month,
-            parsed.day,
-          ).difference(today).inDays;
-    final date = next.airdate.length >= 10
-        ? next.airdate.substring(2)
-        : next.airdate;
-    final text = days > 0
-        ? 'ep${next.sort} · $date ($days 天后)'
-        : 'ep${next.sort} · $date';
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Text(text, style: context.ds.tiny),
+    final text = homeNextInfo(
+      eps: [
+        for (final ep in eps ?? const <Ep>[])
+          (sort: ep.sort, airdate: ep.airdate),
+      ],
+    );
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Text(
+      text,
+      style: context.ds.tiny.copyWith(
+        color: context.ds.textSecondary,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 }
@@ -1391,325 +1591,127 @@ class _SeasonLeftInfo extends ConsumerWidget {
 
   const _SeasonLeftInfo({required this.item, required this.isAnime});
 
-  static const _seasons = ['冬', '春', '夏', '秋'];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subject = item.subject;
-    final season = _calcSeason(subject.airDate);
-    final eps =
-        ref.watch(epListProvider(subject.id)).valueOrNull?.eps ?? const [];
-    final status = ref.watch(epStatusProvider(subject.id)).valueOrNull;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    var leftover = 0;
-    for (final ep in eps) {
-      if (ep.airdate.isEmpty) continue;
-      final parsed = DateTime.tryParse(ep.airdate);
-      if (parsed == null) continue;
-      final day = DateTime(parsed.year, parsed.month, parsed.day);
-      if (!day.isAfter(today) && !(status?.isWatched(ep.id) ?? false)) {
-        leftover++;
-      }
-    }
-    final parts = <String>[];
-    if (season.$1 > 0) {
-      parts.add(
-        isAnime ? '${season.$1} ${_seasons[season.$2 - 1]}' : '${season.$1}',
-      );
-    }
-    if (leftover > 0) parts.add('$leftover 集未看');
-    if (parts.isEmpty) return const SizedBox.shrink();
+    final leftover = _unwatchedAiredCount(ref, item);
+    final season = calcHomeSeason(item.subject.airDate);
+    final text = homeLeftText(
+      seasonYear: season.year,
+      quarter: season.quarter,
+      airedUnwatched: leftover < 0 ? 0 : leftover,
+      type: item.subject.type,
+      hasNewEp: leftover != 0,
+      sink: SettingsStore.instance.homeSortSink,
+    );
+    if (text.isEmpty) return const SizedBox.shrink();
     const colors = [
       Color(0xFF7EC8E8),
       Color(0xFFF09CB0),
       Color(0xFF8CD4B8),
       Color(0xFFF5C898),
     ];
-    final barColor = isAnime && season.$2 >= 1 && season.$2 <= 4
-        ? colors[season.$2 - 1]
+    final barColor = isAnime && season.quarter >= 1 && season.quarter <= 4
+        ? colors[season.quarter - 1]
         : context.ds.border;
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 8,
-            margin: const EdgeInsets.only(right: 7),
-            decoration: BoxDecoration(
-              color: barColor,
-              borderRadius: BorderRadius.circular(4),
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 8,
+          margin: const EdgeInsets.only(right: 7, top: 1),
+          decoration: BoxDecoration(
+            color: barColor,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            text,
+            style: context.ds.tiny.copyWith(
+              color: context.ds.textSecondary,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          Expanded(child: Text(parts.join(' · '), style: context.ds.tiny)),
-        ],
-      ),
-    );
-  }
-
-  (int, int) _calcSeason(String airDate) {
-    final parsed = DateTime.tryParse(airDate);
-    if (parsed == null) return (0, 1);
-    var year = parsed.year;
-    var adj = parsed.month;
-    if (parsed.day >= 22 && parsed.month % 3 == 0) adj = parsed.month + 1;
-    if (adj > 12) {
-      adj -= 12;
-      year += 1;
-    }
-    return (year, (adj / 3).ceil());
-  }
-}
-
-int _unwatchedAiredCount(WidgetRef ref, CollectionItem item) {
-  final eps = ref.watch(epListProvider(item.subject.id)).valueOrNull?.eps;
-  if (eps == null || eps.isEmpty) return -1;
-  final status = ref.watch(epStatusProvider(item.subject.id)).valueOrNull;
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  var leftover = 0;
-  for (final ep in eps) {
-    if (ep.airdate.isEmpty) continue;
-    final parsed = DateTime.tryParse(ep.airdate);
-    if (parsed == null) continue;
-    final day = DateTime(parsed.year, parsed.month, parsed.day);
-    if (!day.isAfter(today) && !(status?.isWatched(ep.id) ?? false)) {
-      leftover++;
-    }
-  }
-  return leftover;
-}
-
-class _ProgressEmpty extends StatelessWidget {
-  final String type;
-  final String filter;
-  final bool filteredEmpty;
-
-  const _ProgressEmpty({
-    required this.type,
-    required this.filter,
-    required this.filteredEmpty,
-  });
-
-  static const _emptyText = {
-    'all': '当前没有可管理的条目哦',
-    'anime': '当前没有在追的番组哦',
-    'book': '当前没有在读的书籍哦',
-    'real': '当前没有在追的电视剧哦',
-    'game': '当前没有在玩的游戏哦',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final searchType = switch (type) {
-      'book' => '书籍',
-      'real' => '三次元',
-      'game' => '游戏',
-      'all' => '条目',
-      _ => '动画',
-    };
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.inbox_outlined, size: 56, color: context.ds.textHint),
-            const SizedBox(height: 12),
-            Text(
-              filteredEmpty ? '没有匹配的条目' : (_emptyText[type] ?? '当前没有可管理的条目哦'),
-              style: context.ds.caption,
-              textAlign: TextAlign.center,
-            ),
-            if (SettingsStore.instance.speech && !filteredEmpty) ...[
-              const SizedBox(height: 8),
-              Text('Bangumi 娘: 列表到底啦', style: context.ds.tiny),
-            ],
-            if (filteredEmpty && filter.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              FilledButton.tonal(
-                onPressed: () => context.push(
-                  '/search?q=${Uri.encodeQueryComponent(filter)}&type=${Uri.encodeQueryComponent(searchType)}',
-                ),
-                child: const Text('前往搜索'),
-              ),
-            ],
-          ],
         ),
-      ),
+      ],
     );
   }
 }
 
-class _ProgressLoginGate extends ConsumerWidget {
-  const _ProgressLoginGate();
+class _ProgressMetaLine extends ConsumerWidget {
+  final CollectionItem item;
+  final SettingsStore store;
+
+  const _ProgressMetaLine({required this.item, required this.store});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.manage_search, size: 48, color: context.ds.textHint),
-          const SizedBox(height: 12),
-          const Text('登录后管理你的追番进度'),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: () => context.push('/login'),
-            child: const Text('登录'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProgressGridPanel extends StatelessWidget {
-  final CollectionItem? item;
-  final String type;
-  final bool pinned;
-  final VoidCallback? onPin;
-
-  const _ProgressGridPanel({
-    required this.item,
-    required this.type,
-    required this.pinned,
-    required this.onPin,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = item;
-    if (selected == null) {
-      return Container(
-        height: 88,
-        alignment: Alignment.center,
-        child: Text('请先点击下方封面', style: context.ds.caption),
-      );
-    }
-    return _ProgressItemView(
-      item: selected,
-      type: type,
-      pinned: pinned,
-      onPin: onPin ?? () {},
-      initiallyExpanded: true,
-    );
-  }
-}
-
-class _ProgressGridCard extends StatelessWidget {
-  final CollectionItem item;
-  final bool selected;
-  final bool pinned;
-  final VoidCallback onPin;
-  final VoidCallback onSelect;
-
-  const _ProgressGridCard({
-    required this.item,
-    required this.selected,
-    required this.pinned,
-    required this.onPin,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
     final subject = item.subject;
-    final isGame = subject.type == 'game';
-    final store = SettingsStore.instance;
-    final square = store.homeGridCoverLayout == 'square';
-    final total = subject.eps > 0 ? subject.eps : subject.epsCount;
-    final ratio = total > 0 ? (item.epStatus / total).clamp(0.0, 1.0) : 0.0;
-    return InkWell(
-      onTap: onSelect,
-      onLongPress: () => context.push('/subject/${subject.id}'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(square ? 4 : 6),
-                border: Border.all(
-                  color: selected ? context.ds.accent : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Cover(
-                      url: subject.images.common,
-                      width: double.infinity,
-                      height: double.infinity,
-                      radius: square ? 4 : 6,
-                      type: subject.type,
-                    ),
-                  ),
+    final inline = store.homeAnimeInfoInline == 2;
+    final weekday =
+        int.tryParse(store.customOnAirOf(subject.id)?.split('|').first ?? '') ??
+        subject.airWeekday;
 
-                  if (pinned)
-                    const Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Icon(
-                        Icons.push_pin,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                  if (!isGame && total > 0)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          bottom: Radius.circular(6),
-                        ),
-                        child: LinearProgressIndicator(
-                          value: ratio,
-                          minHeight: 3,
-                          backgroundColor: Colors.black26,
-                          color: context.ds.accent,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          if (store.homeGridTitle) ...[
-            const SizedBox(height: 4),
-            Text(
-              subject.displayName,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: context.ds.caption,
-            ),
-          ],
-
-          if (!isGame)
-            _OnAirLabel(
-              weekday: subject.airWeekday,
-              subjectId: subject.id,
-              current: item.epStatus,
-              total: total,
-            ),
-          Text(
-            isGame
-                ? SubjectType.statusText(item.type, item.subject.type)
-                : homeCountText(
-                    current: item.epStatus,
-                    total: total,
-                    style: SettingsStore.instance.homeCountView,
-                  ),
-            style: context.ds.tiny,
-          ),
-        ],
+    final doing = homeDoingMetaText(
+      doing: subject.collection?.doing ?? 0,
+      type: subject.type,
+      weekday: weekday,
+      onAir:
+          subject.type != 'book' &&
+          subject.type != 'game' &&
+          (subject.airWeekday > 0 || store.customOnAirOf(subject.id) != null),
+      homeOnAir: store.homeOnAir,
+    );
+    var left = '';
+    var next = '';
+    if (inline && subject.type != 'book' && subject.type != 'game') {
+      final leftover = _unwatchedAiredCount(ref, item);
+      final season = calcHomeSeason(subject.airDate);
+      left = homeLeftText(
+        seasonYear: season.year,
+        quarter: season.quarter,
+        airedUnwatched: leftover < 0 ? 0 : leftover,
+        type: subject.type,
+        hasNewEp: leftover != 0,
+        sink: store.homeSortSink,
+        twoDigitYear: true,
+      );
+      final eps = ref.watch(epListProvider(subject.id)).valueOrNull?.eps;
+      if (eps != null) {
+        next = homeNextInfo(
+          eps: [for (final ep in eps) (sort: ep.sort, airdate: ep.airdate)],
+          showSplit: false,
+        );
+      }
+    }
+    final text = joinHomeMeta(doing, left: left, next: next);
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        text,
+        style: context.ds.caption.copyWith(fontSize: inline ? 11 : 12),
       ),
     );
   }
+}
+
+({int aired, int total}) _onAirBar(WidgetRef ref, CollectionItem item) {
+  final subject = item.subject;
+  final total = subject.eps > 0 ? subject.eps : subject.epsCount;
+  final eps = ref.watch(epListProvider(subject.id)).valueOrNull?.eps;
+  if (eps == null || eps.isEmpty) {
+    return onairProgressCounts(aired: 0, total: total);
+  }
+  final mapped = [
+    for (final ep in eps)
+      (type: ep.type, sort: ep.sort, status: ep.status, airdate: ep.airdate),
+  ];
+  var aired = currentOnAir(eps: mapped);
+  if (aired > total && total > 0) {
+    aired = airedRegularCount(eps: mapped);
+  }
+  return onairProgressCounts(aired: aired, total: total);
 }
 
 TextSpan _highlightTitle(
@@ -1732,5 +1734,557 @@ TextSpan _highlightTitle(
       ),
       TextSpan(text: text.substring(index + hit.length)),
     ],
+  );
+}
+
+int _unwatchedAiredCount(WidgetRef ref, CollectionItem item) {
+  final eps = ref.watch(epListProvider(item.subject.id)).valueOrNull?.eps;
+  if (eps == null || eps.isEmpty) return -1;
+  final status = ref.watch(epStatusProvider(item.subject.id)).valueOrNull;
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  var leftover = 0;
+  for (final ep in eps) {
+    if (ep.airdate.isEmpty) continue;
+    final parsed = DateTime.tryParse(ep.airdate);
+    if (parsed == null) continue;
+    final day = DateTime(parsed.year, parsed.month, parsed.day);
+    if (!day.isAfter(today) && !(status?.isWatched(ep.id) ?? false)) {
+      leftover++;
+    }
+  }
+  return leftover;
+}
+
+class _ProgressLoginGate extends ConsumerWidget {
+  const _ProgressLoginGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ds = context.ds;
+    final store = ref.watch(settingsStoreProvider);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Row(
+            children: [
+              InkWell(
+                onTap: () => openExternalUrl(kZhinanHost),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.chrome_reader_mode_outlined,
+                      size: 20,
+                      color: ds.textPrimary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text('指南', style: ds.label),
+                  ],
+                ),
+              ),
+              BgmHeaderAction(
+                tooltip: '切换主题',
+                icon: Icon(
+                  Theme.of(context).brightness == Brightness.dark
+                      ? Icons.dark_mode
+                      : Icons.wb_sunny_outlined,
+                  size: 18,
+                ),
+                onPressed: store.toggleThemeMode,
+              ),
+              const Spacer(),
+              BgmHeaderAction(
+                tooltip: '搜索',
+                icon: const Icon(Icons.search, size: 22),
+                onPressed: () => context.push('/search'),
+              ),
+              BgmHeaderAction(
+                tooltip: '设置',
+                icon: const Icon(Icons.settings, size: 18),
+                onPressed: () => context.push('/settings'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 96),
+              child: SizedBox(
+                width: 160,
+                child: BgmButton(
+                  '登录后管理进度',
+                  onPressed: () => context.push('/login'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProgressTips extends ConsumerWidget {
+  const _ProgressTips();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ProgressData? active;
+    for (final t in kProgressTabs) {
+      final data = ref.watch(progressProvider(t.$2)).valueOrNull;
+      if (data != null && data.prefetching && data.prefetchTotal > 0) {
+        active = data;
+        break;
+      }
+    }
+    if (active == null) return const SizedBox.shrink();
+    final ds = context.ds;
+    final total = active.prefetchTotal;
+    final current = active.prefetchCurrent.clamp(0, total);
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Material(
+          elevation: 2,
+          borderRadius: BorderRadius.circular(8),
+          color: ds.surfaceCard,
+          child: SizedBox(
+            width: 200,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: '请求中', style: ds.body),
+                        TextSpan(
+                          text: ' $current / $total',
+                          style: ds.tiny,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: total == 0 ? 0 : current / total,
+                      minHeight: 3,
+                      color: ds.accent,
+                      backgroundColor: ds.border,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProgressGridPanel extends ConsumerWidget {
+  final CollectionItem? item;
+  final String type;
+  final bool pinned;
+  final VoidCallback? onPin;
+  final VoidCallback? onExpandAll;
+  final VoidCallback? onCollapseAll;
+
+  const _ProgressGridPanel({
+    required this.item,
+    required this.type,
+    required this.pinned,
+    required this.onPin,
+    this.onExpandAll,
+    this.onCollapseAll,
+  });
+
+  static const _prevText = {
+    'all': '条目',
+    'anime': '番组',
+    'book': '书籍',
+    'real': '电视剧',
+    'game': '游戏',
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = item;
+    if (selected == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Mesume(size: 80),
+            const SizedBox(height: 8),
+            Text(
+              '请先点击下方${_prevText[type] ?? '条目'}',
+              style: context.ds.caption,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+    final subject = selected.subject;
+    final isBook = subject.type == 'book';
+    final isGame = subject.type == 'game';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Cover(
+                url: subject.images.common,
+                width: 64,
+                height: 90,
+                radius: 4,
+                type: subject.type,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      subject.displayName,
+                      style: context.ds.bodyStrong,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        if (isBook)
+                          Text(
+                            'Chap. ${selected.epStatus}${subject.eps > 0 ? ' / ${subject.eps}' : ''}   Vol. ${selected.volStatus}',
+                            style: context.ds.caption,
+                          )
+                        else if (isGame)
+                          Text(
+                            selected.updatedAt.isEmpty
+                                ? '在玩'
+                                : '${friendlyTime(selected.updatedAt)} 在玩',
+                            style: context.ds.caption,
+                          )
+                        else
+                          Text(
+                            homeCountText(
+                              current: selected.epStatus,
+                              total: subject.eps,
+                              style: SettingsStore.instance.homeCountView,
+                            ),
+                            style: context.ds.caption.copyWith(
+                              color: context.ds.accent,
+                            ),
+                          ),
+                        const Spacer(),
+                        if (SettingsStore.instance.homeOrigin != 'hide' &&
+                            (subject.type == 'anime' || subject.type == 'real'))
+                          _OriginButton(
+                            item: selected,
+                            onPin: onPin ?? () {},
+                            pinned: pinned,
+                            showOrigins:
+                                SettingsStore.instance.homeOrigin == 'all',
+                            onExpandAll: onExpandAll,
+                            onCollapseAll: onCollapseAll,
+                          ),
+                        if (isBook) ...[
+                          _IconAction(
+                            tooltip: 'Chap +1',
+                            icon: Icons.check_circle_outline,
+                            onTap: () => unawaited(
+                              _bumpGrid(
+                                context,
+                                ref,
+                                selected,
+                                selected.epStatus + 1,
+                              ),
+                            ),
+                          ),
+                          _IconAction(
+                            tooltip: 'Vol +1',
+                            icon: Icons.menu_book_outlined,
+                            onTap: () => unawaited(
+                              _bumpGrid(
+                                context,
+                                ref,
+                                selected,
+                                selected.epStatus,
+                                vols: selected.volStatus + 1,
+                              ),
+                            ),
+                          ),
+                        ] else if (!isGame)
+                          _NextEpAction(
+                            item: selected,
+                            type: type,
+                            onBump: () => unawaited(
+                              _bumpGrid(
+                                context,
+                                ref,
+                                selected,
+                                selected.epStatus + 1,
+                              ),
+                            ),
+                          ),
+                        _IconAction(
+                          tooltip: '收藏管理',
+                          icon: Icons.star_outline,
+                          onTap: () =>
+                              showBgmSheet<void>(
+                                context: context,
+                                builder: (_) =>
+                                    CollectionSheet(subjectId: subject.id),
+                              ).then((_) {
+                                ref.invalidate(progressProvider(type));
+                              }),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (!isBook && !isGame)
+            _ProgressEpGrid(subjectId: subject.id, type: type, compact: true),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _bumpGrid(
+    BuildContext context,
+    WidgetRef ref,
+    CollectionItem item,
+    int eps, {
+    int? vols,
+  }) async {
+    final ok = await ref
+        .read(progressProvider(type).notifier)
+        .setWatched(item, eps, watchedVols: vols);
+    if (context.mounted && !ok) {
+      showBgmToast(context, '更新进度失败');
+    }
+  }
+}
+
+class _ProgressGridCard extends ConsumerWidget {
+  final CollectionItem item;
+  final bool selected;
+  final bool pinned;
+  final VoidCallback onPin;
+  final VoidCallback onSelect;
+
+  const _ProgressGridCard({
+    required this.item,
+    required this.selected,
+    required this.pinned,
+    required this.onPin,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final subject = item.subject;
+    final isGame = subject.type == 'game';
+    final store = SettingsStore.instance;
+    final square = store.homeGridCoverLayout == 'square';
+    final bar = _onAirBar(ref, item);
+    return InkWell(
+      onTap: onSelect,
+      onLongPress: () => context.push('/subject/${subject.id}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Opacity(
+              opacity: selected ? 0.64 : 1,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Cover(
+                      url: subject.images.common,
+                      width: double.infinity,
+                      height: double.infinity,
+                      radius: square ? 4 : 6,
+                      type: subject.type,
+                    ),
+                  ),
+                  if (pinned)
+                    const Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Icon(
+                        Icons.push_pin,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  if (!isGame)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: _OnAirProgress(
+                        watched: item.epStatus,
+                        aired: bar.aired,
+                        total: bar.total,
+                        compact: true,
+                        height: 3,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (store.homeGridTitle) ...[
+            const SizedBox(height: 4),
+            Text(
+              subject.displayName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: context.ds.caption,
+            ),
+          ],
+          if (!isGame)
+            _OnAirLabel(
+              weekday: subject.airWeekday,
+              subjectId: subject.id,
+              current: bar.aired,
+              total: bar.total,
+            ),
+          Text(
+            isGame
+                ? SubjectType.statusText(item.type, item.subject.type)
+                : homeCountText(
+                    current: item.epStatus,
+                    total: bar.total,
+                    style: SettingsStore.instance.homeCountView,
+                  ),
+            style: context.ds.tiny,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 原版 OnairProgress: 灰=已放送, 粉=已看
+class _OnAirProgress extends StatelessWidget {
+  final int watched;
+  final int aired;
+  final int total;
+  final bool compact;
+  final double? height;
+
+  const _OnAirProgress({
+    required this.watched,
+    this.aired = 0,
+    required this.total,
+    this.compact = false,
+    this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = context.ds;
+    final barHeight = height ?? (compact ? 5.0 : 6.0);
+    final ratios = onairProgressRatios(
+      watched: watched,
+      aired: aired,
+      total: total,
+    );
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return ClipRRect(
+      borderRadius: AppRadius.sAll,
+      child: SizedBox(
+        height: barHeight,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(
+              color: dark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : ds.border.withValues(alpha: 0.35),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: ratios.aired,
+                child: ColoredBox(
+                  color: dark
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : const Color(0x33808080),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: ratios.watched,
+                child: ColoredBox(color: ds.accent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _addUnairedReminders(
+  BuildContext context,
+  WidgetRef ref,
+  CollectionItem item,
+) async {
+  final eps =
+      ref.read(epListProvider(item.subject.id)).valueOrNull?.eps ??
+      const <Ep>[];
+  final status = ref.read(epStatusProvider(item.subject.id)).valueOrNull;
+  final unaired = [
+    for (final ep in eps)
+      if (canAddEpCalendar(
+        type: ep.type,
+        airdate: ep.airdate,
+        watched: status?.isWatched(ep.id) ?? false,
+      ))
+        (id: ep.id, sort: ep.sort, name: ep.displayName, airdate: ep.airdate),
+  ];
+  if (unaired.isEmpty) {
+    if (context.mounted) showBgmToast(context, '已没有未放送的章节');
+    return;
+  }
+  final title = item.subject.displayName;
+  final ok = await showBgmConfirm(
+    context,
+    title: '一键添加放送提醒',
+    message: '「$title」\n是否一键添加 ${unaired.length} 个章节的提醒?',
+    confirmLabel: '添加',
+  );
+  if (ok != true || !context.mounted) return;
+  final custom = SettingsStore.instance.customOnAirOf(item.subject.id);
+  final clock = custom != null && custom.contains('|')
+      ? custom.split('|').last
+      : '2000';
+  await shareSubjectIcs(
+    subjectId: item.subject.id,
+    title: title,
+    clock: clock,
+    eps: unaired,
   );
 }

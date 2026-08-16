@@ -10,7 +10,10 @@ import '../../shared/widgets/loading.dart';
 
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import 'subject_notes.dart';
+
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 包含该条目的目录
 /// 路由: /subject/:id/catalogs
@@ -22,36 +25,24 @@ class CatalogsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final catalogs = ref.watch(catalogsProvider(id));
+    final name = ref
+        .watch(subjectDetailProvider(id))
+        .valueOrNull
+        ?.subject
+        .displayName;
     return Scaffold(
       appBar: BgmAppBar(
-        title: '目录',
+        title: extraNamedTitle(name, '条目目录', named: (n) => '包含$n的目录'),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlSubjectCatalogs(id)),
-          ),
+          BgmHeaderMore.browser(() => openExternalUrl(htmlSubjectCatalogs(id))),
         ],
       ),
 
       body: catalogs.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(catalogsProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (e, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(catalogsProvider(id))),
         data: (items) => items.isEmpty
             ? const Empty(text: '暂无目录收录')
             : ListView.builder(
@@ -70,36 +61,20 @@ class _CatalogRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return BgmTextRow(
       leading: Avatar(url: item.userAvatar, size: 40),
-      title: Text(
-        item.title,
-        style: const TextStyle(fontSize: 14),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Text(
-          [
-            if (item.userName.isNotEmpty) item.userName,
-            if (item.collected > 0) '${item.collected} 收藏',
-            if (item.updatedAt.isNotEmpty) '更新于 ${item.updatedAt}',
-          ].join(' · '),
-          style: context.ds.meta,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
+      title: item.title,
+      subtitle: [
+        if (item.userName.isNotEmpty) item.userName,
+        if (item.collected > 0) '${item.collected} 收藏',
+        if (item.updatedAt.isNotEmpty) '更新于 ${item.updatedAt}',
+      ].join(' · '),
       onTap: () => openCatalog(context, item),
       trailing: Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
     );
   }
 
   void openCatalog(BuildContext context, CatalogItem item) {
-    // 目录详情页在其他模块实现前, 使用内置浏览器打开
-    context.push(
-      '/web/${Uri.encodeComponent('https://bgm.tv/index/${item.id}')}',
-    );
+    context.push('/catalog/${item.id}');
   }
 }

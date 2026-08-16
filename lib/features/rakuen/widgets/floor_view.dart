@@ -15,6 +15,9 @@ import '../../../core/utils/display.dart';
 import '../../../core/utils/format.dart';
 import '../../../design_system/design_system.dart';
 import '../../../shared/widgets/score.dart';
+import '../../../shared/widgets/bgm_button.dart';
+import '../../../shared/widgets/likes_grid.dart';
+
 import 'fixed_textarea.dart';
 
 /// 帖子楼层视图 (主楼层 + 子回复)
@@ -86,7 +89,6 @@ class FloorView extends ConsumerWidget {
         ? floor.subReplies
         : floor.subReplies.take(limit).toList();
     final hiddenSubs = floor.subReplies.length - visibleSubs.length;
-
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -295,7 +297,7 @@ class FloorView extends ConsumerWidget {
                   ],
                 ),
               ),
-            const Divider(height: 12),
+            const BgmHairline(),
           ],
         ),
       ),
@@ -308,68 +310,48 @@ class FloorView extends ConsumerWidget {
     final canLike = topicId.isNotEmpty && floor.id.isNotEmpty;
     final canDisconnect = floor.userId.isNotEmpty;
 
-    final action = await showModalBottomSheet<String>(
+    final action = await showBgmSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              dense: true,
-              title: Text(
-                '$floorLabel. ${floor.userName.isEmpty ? '匿名' : floor.userName}',
-                style: context.ds.bodyStrong,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+            BgmActionRow(
+              title:
+                  '$floorLabel. ${floor.userName.isEmpty ? '匿名' : floor.userName}',
             ),
-            const Divider(height: 1),
+            const BgmHairline(),
             if (onReply != null)
-              ListTile(
-                leading: const Icon(Icons.reply_outlined),
-                title: const Text('回复'),
+              BgmActionRow(
+                title: '回复',
                 onTap: () => Navigator.of(ctx).pop('reply'),
               ),
             if (canLike)
-              ListTile(
-                leading: const Icon(Icons.thumb_up_outlined),
-                title: const Text('贴贴'),
+              BgmActionRow(
+                title: '贴贴',
                 onTap: () => Navigator.of(ctx).pop('like'),
               ),
-            ListTile(
-              leading: const Icon(Icons.content_copy_outlined),
-              title: const Text('复制文本'),
+            BgmActionRow(
+              title: '复制文本',
               onTap: () => Navigator.of(ctx).pop('copy'),
             ),
             if (canLike)
-              ListTile(
-                leading: const Icon(Icons.link),
-                title: const Text('复制链接'),
+              BgmActionRow(
+                title: '复制链接',
                 onTap: () => Navigator.of(ctx).pop('copyLink'),
               ),
-            ListTile(
-              leading: Icon(
-                isBlocked
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
-              ),
-              title: Text(isBlocked ? '解除屏蔽' : '屏蔽用户'),
+            BgmActionRow(
+              title: isBlocked ? '解除屏蔽' : '屏蔽用户',
               onTap: () => Navigator.of(ctx).pop('block'),
             ),
             if (canDisconnect)
-              ListTile(
-                leading: const Icon(Icons.person_off_outlined),
-                title: const Text('绝交'),
+              BgmActionRow(
+                title: '绝交',
                 onTap: () => Navigator.of(ctx).pop('disconnect'),
               ),
             if (floor.userId.isNotEmpty)
-              ListTile(
-                leading: Icon(
-                  settings.isTracked(floor.userId)
-                      ? Icons.star
-                      : Icons.star_border,
-                ),
-                title: Text(settings.isTracked(floor.userId) ? '取消追踪' : '追踪回复'),
+              BgmActionRow(
+                title: settings.isTracked(floor.userId) ? '取消追踪' : '追踪回复',
                 onTap: () => Navigator.of(ctx).pop('track'),
               ),
           ],
@@ -388,30 +370,26 @@ class FloorView extends ConsumerWidget {
           ),
         );
       case 'like':
-        await _likeFloor(ref);
+        await showLikesGrid(
+          context: context,
+          ref: ref,
+          likeType: likeType,
+          mainId: int.tryParse(topicId.split('/').last) ?? 0,
+          relatedId: int.tryParse(floor.id) ?? 0,
+        );
       case 'copy':
         await Clipboard.setData(
           ClipboardData(text: stripHtml(floor.messageHtml)),
         );
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('已复制'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+          showBgmToast(context, '已复制', duration: const Duration(seconds: 1));
         }
       case 'copyLink':
         await Clipboard.setData(
           ClipboardData(text: htmlTopicPage(topicId, postId: floor.id)),
         );
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('已复制链接'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+          showBgmToast(context, '已复制链接', duration: const Duration(seconds: 1));
         }
       case 'block':
         await ref
@@ -423,28 +401,6 @@ class FloorView extends ConsumerWidget {
         await ref
             .read(rakuenSettingsProvider.notifier)
             .toggleTrackUser(floor.userId);
-    }
-  }
-
-  /// 贴贴: POST /like?type=&main_id={数字id}&id={floorId}
-  Future<void> _likeFloor(WidgetRef ref) async {
-    final gh = await _formhash(ref);
-    if (gh.isEmpty) return;
-    final mainId = int.tryParse(topicId.split('/').last) ?? 0;
-    try {
-      await ref
-          .read(apiClientProvider)
-          .post(
-            apiLike(
-              likeType,
-              mainId,
-              id: int.tryParse(floor.id) ?? 0,
-              gh: gh,
-            ),
-            host: kHost,
-          );
-    } catch (e) {
-      // 贴贴失败静默 (原项目乐观更新)
     }
   }
 
@@ -613,9 +569,12 @@ class _FoldableHtmlState extends State<_FoldableHtml> {
           ),
         Align(
           alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: _toggle,
-            child: Text(_expanded ? '收起' : '展开'),
+          child: GestureDetector(
+            onTap: _toggle,
+            child: Text(
+              _expanded ? '收起' : '展开',
+              style: context.ds.caption.copyWith(color: context.ds.accent),
+            ),
           ),
         ),
       ],

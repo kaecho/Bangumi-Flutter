@@ -8,8 +8,12 @@ import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
+import '../../shared/models/ep.dart';
+
 import 'subject_models.dart';
 import 'subject_providers.dart';
+import '../../shared/widgets/bgm_button.dart';
+import 'subject_notes.dart';
 
 /// 章节吐槽箱
 /// 路由: /subject/:id/ep/:epId/comments
@@ -22,36 +26,39 @@ class EpCommentsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final comments = ref.watch(epCommentsProvider(epId));
+    final eps = ref.watch(epListProvider(id)).valueOrNull;
+    Ep? ep;
+    if (eps != null) {
+      for (final item in [
+        ...eps.eps,
+        ...eps.type1,
+        ...eps.type2,
+        ...eps.type3,
+        ...eps.type4,
+        ...eps.type6,
+      ]) {
+        if (item.id == epId) {
+          ep = item;
+          break;
+        }
+      }
+    }
     return Scaffold(
       appBar: BgmAppBar(
-        title: '章节吐槽',
+        title: epCommentsTitle(
+          sort: ep?.sort,
+          name: ep == null ? null : (ep.name.isNotEmpty ? ep.name : ep.nameCn),
+        ),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlEpPage(epId)),
-          ),
+          BgmHeaderMore.browser(() => openExternalUrl(htmlEpPage(epId))),
         ],
       ),
 
       body: comments.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(epCommentsProvider(epId)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (e, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(epCommentsProvider(epId))),
         data: (value) => value.items.isEmpty
             ? const Empty(text: '暂无吐槽', icon: Icons.chat_bubble_outline)
             : ListView.builder(

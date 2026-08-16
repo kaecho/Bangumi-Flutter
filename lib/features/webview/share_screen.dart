@@ -13,6 +13,8 @@ import '../../shared/models/collection.dart';
 import '../../shared/models/subject.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 分享卡片数据: 条目 + 展示评分 (个人评分优先, 否则条目评分)
 class ShareCardData {
@@ -22,7 +24,10 @@ class ShareCardData {
   const ShareCardData({required this.subject, required this.score});
 }
 
-final shareCardProvider = FutureProvider.family<ShareCardData, int>((ref, subjectId) async {
+final shareCardProvider = FutureProvider.family<ShareCardData, int>((
+  ref,
+  subjectId,
+) async {
   final client = ref.read(apiClientProvider);
   Subject? subject;
   var score = 0.0;
@@ -72,7 +77,8 @@ class _ShareScreenState extends ConsumerState<ShareScreen> {
       // 等待一帧确保 RepaintBoundary 已绘制
       await WidgetsBinding.instance.endOfFrame;
 
-      final boundary = _cardKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final boundary =
+          _cardKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
       final image = await boundary.toImage(pixelRatio: 2.5);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null || !mounted) return;
@@ -89,9 +95,7 @@ class _ShareScreenState extends ConsumerState<ShareScreen> {
       );
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('分享失败, 请重试')),
-        );
+        showBgmToast(context, '分享失败, 请重试');
       }
     } finally {
       if (mounted) setState(() => _sharing = false);
@@ -102,18 +106,14 @@ class _ShareScreenState extends ConsumerState<ShareScreen> {
   Widget build(BuildContext context) {
     final data = ref.watch(shareCardProvider(widget.subjectId));
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('拼图分享'),
+      appBar: BgmAppBar(
+        title: '拼图分享',
         actions: [
           data.maybeWhen(
-            data: (value) => IconButton(
+            data: (value) => BgmHeaderAction(
               tooltip: '分享',
               icon: _sharing
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const BgmSpinner()
                   : const Icon(Icons.share_outlined),
               onPressed: _sharing ? null : () => _share(value),
             ),
@@ -124,20 +124,9 @@ class _ShareScreenState extends ConsumerState<ShareScreen> {
       body: Center(
         child: data.when(
           loading: () => const Loading(text: '生成分享卡片中...'),
-          error: (e, _) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('获取条目信息失败'),
-              const SizedBox(height: 8),
-              Text(apiErrorMessage(e), style: const TextStyle(fontSize: 12)),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(shareCardProvider(widget.subjectId)),
-                child: const Text('重试'),
-              ),
-            ],
+          error: (e, _) => BgmRetry(
+            onRetry: () => ref.invalidate(shareCardProvider(widget.subjectId)),
+            message: apiErrorMessage(e),
           ),
           data: (value) => RepaintBoundary(
             key: _cardKey,

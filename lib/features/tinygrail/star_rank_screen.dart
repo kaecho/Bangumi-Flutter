@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 import 'tinygrail_widgets.dart';
@@ -16,9 +19,9 @@ class TinygrailStarRankScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(starRankProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('圣星榜单')),
+      appBar: BgmAppBar(title: '圣星榜单'),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Loading(),
         error: (_, _) => const Center(child: Text('加载失败')),
         data: (list) => RefreshIndicator(
           onRefresh: () async => ref.invalidate(starRankProvider),
@@ -26,7 +29,7 @@ class TinygrailStarRankScreen extends ConsumerWidget {
               ? const Empty(text: '暂无数据')
               : ListView.separated(
                   itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const BgmHairline(),
                   itemBuilder: (context, index) {
                     final chara = list[index];
                     return CharaTile(
@@ -36,7 +39,10 @@ class TinygrailStarRankScreen extends ConsumerWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('#${index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Text(
+                            '#${index + 1}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
                           Text(
                             '星之力 ${chara.starForces}',
                             style: context.ds.meta,

@@ -1,6 +1,7 @@
 # Repository Guidelines
 
-Flutter 3.44 / Material 3 rewrite of the Bangumi (bgm.tv) client, ported 1:1 from `czy0729/Bangumi` (v8.38.x). Package `bangumi` (`1.0.4+5`). UI copy is **zh-CN**. Six bottom tabs: 发现 / 时间线 / 首页(进度) / 超展开 / 我的 / 小圣杯.
+Flutter 3.44 rewrite of the Bangumi (bgm.tv) client, ported 1:1 from `czy0729/Bangumi` (v8.38.x). Package `bangumi` (`1.0.4+5`). UI copy is **zh-CN**. Six bottom tabs: 发现 / 时间胶囊 / 收藏 / 超展开 / 时光机 / 小圣杯.
+
 
 
 No codegen in `lib/` (no `@freezed` / `@JsonSerializable` / `.g.dart`). `pubspec.yaml` still lists leftover unused `freezed*` / `json_*` / `build_runner` — do not start using them.
@@ -45,11 +46,12 @@ lib/core/api/api_endpoints.dart ── ONLY place for hosts/URLs (~806 lines)
 - Settings: `SettingsStore` ChangeNotifier singleton (`settingsStoreProvider`).
 - Auth: `AuthController` Notifier.
 
-**Navigation** — go_router only for pages. Never `Navigator.push` a new screen (image viewer in `preview_screen.dart` is the existing exception). `context.push` for detail, `context.go` for tabs. Tabs are standalone `GoRoute`s (no `ShellRoute`) rendered by `TabShell` (`IndexedStack` + `NavigationBar`). WebView: `'/web/${Uri.encodeComponent(url)}'`.
+**Navigation** — go_router only for pages. Never `Navigator.push` a new screen (image viewer in `preview_screen.dart` is the existing exception). `context.push` for detail, `context.go` for tabs. Tabs are standalone `GoRoute`s (no `ShellRoute`) rendered by `TabShell` (`IndexedStack` + `BgmTabBar`). WebView: `'/web/${Uri.encodeComponent(url)}'`.
 
-Default tab from `SettingsStore.initialPage` (`Discovery` / `Timeline` / `Rakuen` / `User` / `Home` → `/progress`). Home + 我的 always shown; 发现/时间线/超展开 gated by `homeRenderTabs`; 小圣杯 also needs `tinygrailEnabled`. `progressRoutes` is empty — the tab lives only in `TabShell`.
+Default tab from `SettingsStore.initialPage` (`Discovery` / `Timeline` / `Rakuen` / `User` / `Home` → `/progress`). Home + 时光机 always shown; 发现/时间胶囊/超展开 gated by `homeRenderTabs`; 小圣杯 also needs `tinygrailEnabled`. `progressRoutes` is empty — the tab lives only in `TabShell`.
 
-**Theming** — never hand-roll colors/font sizes. `context.ds.*` (`AppThemeData` ThemeExtension): colors `accent` / `star` / `rise` / `fall` / `success` / `error` / `textPrimary|Secondary|Hint` / `surfaceBase|Card` / `border`; type `display` / `title` / `section` / `bodyStrong` / `body` / `label` / `caption` / `meta` / `tiny`. Spacing/radius: `AppGap.*` / `AppRadius.*`. Legacy `AppThemeX` (`context.accent`, `context.bgColor`…) delegates to the same tokens. Default seed `AppPalette.defaultAccent` (`#F09199`).
+**Theming** — never hand-roll colors/font sizes. `context.ds.*` (`AppThemeData` ThemeExtension): colors `accent` / `star` / `rise` / `fall` / `success` / `error` / `textPrimary|Secondary|Hint` / `surfaceBase|Card` / `border`; type `display` / `title` / `section` / `bodyStrong` / `body` / `label` / `caption` / `meta` / `tiny`. Spacing/radius: `AppGap.*` / `AppRadius.*`. Legacy `AppThemeX` (`context.accent`, `context.bgColor`…) delegates to the same tokens. Default seed `AppPalette.defaultAccent` (`#FE8A95`, 原版 colorMain). Chrome: `LogoHeader` + `BgmTabBar` (选中才出字), 不要用 Material 3 `NavigationBar` 做底栏。
+
 
 ## Key Directories
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 代理帮助段落
 class ProxySection {
@@ -15,16 +16,25 @@ const List<ProxySection> kProxySections = [
     items: [
       ('直连', '所有请求直连默认服务器，不做任何处理，跟客户端以往一致。'),
       ('镜像 / 反代', '通过自建或社区提供的服务访问 Bangumi。需要填写地址，推荐到超展开社区寻找可用服务。'),
-      ('自建 Worker 转发', '关闭「直接转发」: 由节点自行处理转发（如 Nginx 直接覆写域名）。'
-          '开启「直接转发」: 由 Worker 帮你处理 cookie、重定向等转发细节。推荐保持关闭，直接使用社区提供的服务即可。'),
-      ('ECH 模式 (Android)', '自动接管 Bangumi 域名请求，无需配置。通过加密 SNI 和 DNS 保护你的隐私，防止连接被识别和干扰。'
-          '实验性功能，不一定有效。此模式开启后接管网址的 WebView 依然会受限。'),
+      (
+        '自建 Worker 转发',
+        '关闭「直接转发」: 由节点自行处理转发（如 Nginx 直接覆写域名）。'
+            '开启「直接转发」: 由 Worker 帮你处理 cookie、重定向等转发细节。推荐保持关闭，直接使用社区提供的服务即可。',
+      ),
+      (
+        'ECH 模式 (Android)',
+        '自动接管 Bangumi 域名请求，无需配置。通过加密 SNI 和 DNS 保护你的隐私，防止连接被识别和干扰。'
+            '实验性功能，不一定有效。此模式开启后接管网址的 WebView 依然会受限。',
+      ),
     ],
   ),
   ProxySection(
     title: '什么是镜像 / 反代？',
     items: [
-      ('', '反向代理（Reverse Proxy）是一种服务器技术，它位于用户和目标服务器之间，代替用户向目标服务器发起请求，再将结果返回给用户。'),
+      (
+        '',
+        '反向代理（Reverse Proxy）是一种服务器技术，它位于用户和目标服务器之间，代替用户向目标服务器发起请求，再将结果返回给用户。',
+      ),
       ('', '简单来说: 你的请求先到中转服务器，再由中转服务器转发到目标地址，从而优化网络连接并保护你的隐私。'),
       ('', '⚠️ 使用第三方服务意味着你的请求会经过第三方服务器，敏感操作请谨慎。'),
     ],
@@ -41,19 +51,34 @@ const List<ProxySection> kProxySections = [
     title: '自建 Worker 需知',
     items: [
       ('', '在请求层层转发后，例如 cookie、授权后的 code、重定向地址等会丢失。'),
-      ('', '如果是正常访问普通页面可能不需要，但是登录等复杂操作就必须要自行在 Worker 里捕获并转为例如 x-redirect-url、location、set-cookie 之类的头，透传返回给客户端提取使用。'),
-      ('', '如需自建，请到 GitHub 项目目录复制作者提供的 Worker 文件部署到 Cloudflare Worker / Deno Deploy。'),
+      (
+        '',
+        '如果是正常访问普通页面可能不需要，但是登录等复杂操作就必须要自行在 Worker 里捕获并转为例如 x-redirect-url、location、set-cookie 之类的头，透传返回给客户端提取使用。',
+      ),
+      (
+        '',
+        '如需自建，请到 GitHub 项目目录复制作者提供的 Worker 文件部署到 Cloudflare Worker / Deno Deploy。',
+      ),
     ],
   ),
   ProxySection(
     title: 'SNI / ECH / DoH 是什么？',
     items: [
-      ('SNI', 'SNI（Server Name Indication）是 TLS 握手时客户端告诉服务器「我要访问哪个域名」的机制。'
-          '网络运营商或防火墙可以通过读取 SNI 来识别并拦截特定域名的连接，即使流量已加密。'),
-      ('ECH', 'ECH（Encrypted Client Hello）是对 SNI 的加密扩展，将域名信息在 TLS 握手阶段就加密传输，'
-          '保护你的隐私，使中间人无法获知你访问的真实域名。'),
-      ('DoH', 'DoH（DNS over HTTPS）是通过 HTTPS 协议进行 DNS 查询的技术。传统 DNS 查询是明文的，'
-          '容易被劫持或污染。DoH 加密了 DNS 查询内容，保护你的隐私，防止被中间人篡改。'),
+      (
+        'SNI',
+        'SNI（Server Name Indication）是 TLS 握手时客户端告诉服务器「我要访问哪个域名」的机制。'
+            '网络运营商或防火墙可以通过读取 SNI 来识别并拦截特定域名的连接，即使流量已加密。',
+      ),
+      (
+        'ECH',
+        'ECH（Encrypted Client Hello）是对 SNI 的加密扩展，将域名信息在 TLS 握手阶段就加密传输，'
+            '保护你的隐私，使中间人无法获知你访问的真实域名。',
+      ),
+      (
+        'DoH',
+        'DoH（DNS over HTTPS）是通过 HTTPS 协议进行 DNS 查询的技术。传统 DNS 查询是明文的，'
+            '容易被劫持或污染。DoH 加密了 DNS 查询内容，保护你的隐私，防止被中间人篡改。',
+      ),
     ],
   ),
 ];
@@ -66,7 +91,7 @@ class ProxyHelpScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('网络连接说明')),
+      appBar: BgmAppBar(title: '网络连接说明'),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -120,7 +145,10 @@ class _SubTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 4),
-      child: Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }

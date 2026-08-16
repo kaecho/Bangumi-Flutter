@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../core/api/api_client.dart';
+import '../../core/auth/auth_controller.dart';
 
 import '../../core/api/api_endpoints.dart';
 import '../../core/utils/display.dart';
@@ -13,6 +18,7 @@ import '../../shared/widgets/score.dart';
 import 'subject_models.dart';
 import 'subject_providers.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
 
 /// 角色 / 人物详情
 /// 路由: /mono/character/:id, /mono/person/:id
@@ -25,66 +31,69 @@ class MonoScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(monoDetailProvider((type: type, id: id)));
+    final collect = ref.watch(monoCollectProvider((type: type, id: id)));
+    final collected = collect.valueOrNull?.eraseCollectUrl.isNotEmpty == true;
     return Scaffold(
       appBar: BgmAppBar(
         title: type == 'person' ? '人物' : '角色',
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(
-              type == 'person' ? htmlPersonPage(id) : htmlCharacterPage(id),
+          if (collect.valueOrNull != null &&
+              ((collect.valueOrNull!.collectUrl.isNotEmpty) ||
+                  (collect.valueOrNull!.eraseCollectUrl.isNotEmpty)))
+            BgmHeaderAction(
+              tooltip: collected ? '取消收藏' : '收藏人物',
+              icon: Icon(
+                collected ? Icons.favorite : Icons.favorite_border,
+                size: 20,
+                color: collected ? context.ds.accent : context.ds.textPrimary,
+              ),
+              onPressed: () => unawaited(
+                _toggleMonoCollect(
+                  context,
+                  ref,
+                  type: type,
+                  id: id,
+                  collect: collect.valueOrNull!,
+                ),
+              ),
             ),
-          ),
-          PopupMenuButton<String>(
-            tooltip: '更多',
+          BgmHeaderMore(
+            items: [
+              ('browser', '浏览器查看〔$id〕'),
+              ('copy', '复制链接'),
+              ('share', '复制分享'),
+            ],
             onSelected: (v) {
               final url = type == 'person'
                   ? htmlPersonPage(id)
                   : htmlCharacterPage(id);
               final name = detail.valueOrNull?.displayName ?? '';
+              if (v == 'browser') {
+                openExternalUrl(url);
+                return;
+              }
               if (v == 'copy') {
                 Clipboard.setData(ClipboardData(text: url));
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('已复制链接')));
+                showBgmToast(context, '已复制链接');
                 return;
               }
               if (v == 'share') {
                 Clipboard.setData(
                   ClipboardData(text: '【链接】$name | Bangumi番组计划\n$url'),
                 );
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('已复制分享文案')));
+                showBgmToast(context, '已复制分享文案');
               }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'copy', child: Text('复制链接')),
-              PopupMenuItem(value: 'share', child: Text('复制分享文案')),
-            ],
           ),
         ],
       ),
 
       body: detail.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () =>
-                    ref.invalidate(monoDetailProvider((type: type, id: id))),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
+        error: (e, _) => BgmRetry(
+          onRetry: () =>
+              ref.invalidate(monoDetailProvider((type: type, id: id))),
         ),
         data: (value) => ListView(
           padding: const EdgeInsets.only(bottom: 32),
@@ -92,12 +101,44 @@ class MonoScreen extends ConsumerWidget {
             _MonoHeader(type: type, detail: value),
             if (value.summary.isNotEmpty) _MonoSummary(summary: value.summary),
             if (value.infobox.isNotEmpty) _MonoInfobox(detail: value),
+            if (type == 'person')
+              _MonoRecentVoices(id: id, displayName: value.displayName),
             _MonoWorks(type: type, id: id, displayName: value.displayName),
             if (type == 'character') _MonoComments(id: id),
           ],
         ),
       ),
     );
+  }
+}
+
+Future<void> _toggleMonoCollect(
+  BuildContext context,
+  WidgetRef ref, {
+  required String type,
+  required int id,
+  required ({String collectUrl, String eraseCollectUrl}) collect,
+}) async {
+  if (!ref.read(canActAsLoggedInProvider)) {
+    showBgmToast(context, '请先登录');
+    return;
+  }
+  final href = collect.eraseCollectUrl.isNotEmpty
+      ? collect.eraseCollectUrl
+      : collect.collectUrl;
+  if (href.isEmpty) return;
+  final url = href.startsWith('http') ? href : '$kHost$href';
+  try {
+    await ref.read(apiClientProvider).post(url, host: kHost);
+    ref.invalidate(monoCollectProvider((type: type, id: id)));
+    if (context.mounted) {
+      showBgmToast(
+        context,
+        collect.eraseCollectUrl.isNotEmpty ? '已取消收藏' : '已收藏',
+      );
+    }
+  } catch (e) {
+    if (context.mounted) showBgmToast(context, apiErrorMessage(e));
   }
 }
 
@@ -164,17 +205,12 @@ class _MonoHeader extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          minimumSize: const Size(0, 32),
-                        ),
+                      child: BgmButton(
+                        '全部作品',
+                        type: BgmButtonType.plain,
+                        expand: false,
                         onPressed: () =>
                             context.push('/subject/${detail.id}/works'),
-                        child: const Text(
-                          '全部作品',
-                          style: TextStyle(fontSize: 12),
-                        ),
                       ),
                     ),
                   ),
@@ -296,6 +332,77 @@ class _MonoInfobox extends StatelessWidget {
   }
 }
 
+class _MonoRecentVoices extends ConsumerWidget {
+  final int id;
+  final String displayName;
+
+  const _MonoRecentVoices({required this.id, required this.displayName});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final voices = ref.watch(personRecentVoicesProvider(id)).valueOrNull;
+    if (voices == null || voices.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(child: SectionHeader(title: '最近演出角色')),
+              BgmTextAction(
+                '更多角色',
+                onPressed: () => context.push(
+                  '/mono/person/$id/voices?name=${Uri.encodeQueryComponent(displayName)}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (final item in voices.take(5))
+            InkWell(
+              onTap: () => context.push('/mono/character/${item.id}'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Cover(url: item.cover, width: 44, height: 44, radius: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.displayName,
+                            style: const TextStyle(fontSize: 13),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (item.subjects.isNotEmpty)
+                            Text(
+                              item.subjects.first.displayName,
+                              style: context.ds.tiny,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: context.ds.textHint,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MonoWorks extends ConsumerWidget {
   final String type;
   final int id;
@@ -372,18 +479,12 @@ class _MonoWorks extends ConsumerWidget {
               ),
             ),
           if (works.length > 8)
-            TextButton(
+            BgmTextAction(
+              '查看全部 ${works.length} 部作品',
               onPressed: () => context.push(
                 type == 'person'
                     ? '/subject/$id/works'
                     : '/mono/character/$id/subjects',
-              ),
-              child: Text(
-                '查看全部 ${works.length} 部作品',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: theme.colorScheme.primary,
-                ),
               ),
             ),
         ],

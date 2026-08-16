@@ -36,10 +36,7 @@ class ApiClient {
             connectTimeout: const Duration(seconds: 15),
             receiveTimeout: const Duration(seconds: 20),
             sendTimeout: const Duration(seconds: 15),
-            headers: {
-              'User-Agent': kApiUserAgent,
-            },
-
+            headers: {'User-Agent': kApiUserAgent},
           ),
         )
         ..interceptors.add(
@@ -196,6 +193,154 @@ class ApiClient {
     return resp.data;
   }
 
+  /// 站点表单 POST (urlencoded), 跟随重定向, 返回 HTML + Set-Cookie
+  Future<({String body, List<String> setCookies})> postSiteForm(
+    String url,
+    Map<String, String> fields, {
+    String? cookie,
+  }) async {
+    final uri = Uri.parse(url);
+    final resp = await _track(
+      'POST',
+      uri,
+      () => _dio.postUri<String>(
+        uri,
+        data: fields,
+        options: Options(
+          responseType: ResponseType.plain,
+          contentType: Headers.formUrlEncodedContentType,
+          followRedirects: true,
+          extra: const {'skipCookies': true},
+          validateStatus: (s) => s != null && s < 400,
+          headers: {
+            'User-Agent': kSiteUserAgent,
+            'Referer': htmlLogin(),
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            if (cookie != null && cookie.isNotEmpty) 'Cookie': cookie,
+          },
+        ),
+      ),
+    );
+    return (body: resp.data ?? '', setCookies: cookieValues(resp.headers));
+  }
+
+  /// 已登录站点表单 POST (urlencoded, 带 Cookie, 对齐 xhr HTML_USER_SETTING)
+  Future<String> postSiteFields(String url, Map<String, String> fields) async {
+    final uri = Uri.parse(url);
+    final resp = await _track(
+      'POST',
+      uri,
+      () => _dio.postUri<String>(
+        uri,
+        data: fields,
+        options: Options(
+          responseType: ResponseType.plain,
+          contentType: Headers.formUrlEncodedContentType,
+          followRedirects: true,
+          validateStatus: (s) => s != null && s < 400,
+          headers: {
+            'User-Agent': kSiteUserAgent,
+            'Referer': url,
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+          },
+        ),
+      ),
+    );
+    return resp.data ?? '';
+  }
+
+  /// 站点 GET, 不跟重定向 (OAuth authorize 抽 code)
+  Future<({String body, String? location, List<String> setCookies})> getSiteRaw(
+    String url, {
+    String? cookie,
+    bool followRedirects = true,
+  }) async {
+    final uri = Uri.parse(url);
+    final resp = await _track(
+      'GET',
+      uri,
+      () => _dio.getUri<String>(
+        uri,
+        options: Options(
+          responseType: ResponseType.plain,
+          followRedirects: followRedirects,
+          validateStatus: (s) => s != null && s < 400 || s == 302 || s == 301,
+          extra: const {'skipCookies': true},
+          headers: {
+            'User-Agent': kSiteUserAgent,
+            'Referer': kHost,
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            if (cookie != null && cookie.isNotEmpty) 'Cookie': cookie,
+          },
+        ),
+      ),
+    );
+    return (
+      body: resp.data ?? '',
+      location: resp.headers.value('location'),
+      setCookies: cookieValues(resp.headers),
+    );
+  }
+
+  /// 站点 POST, 不跟重定向 (OAuth authorize)
+  Future<({String body, String? location, List<String> setCookies})>
+  postSiteRaw(String url, Map<String, String> fields, {String? cookie}) async {
+    final uri = Uri.parse(url);
+    final resp = await _track(
+      'POST',
+      uri,
+      () => _dio.postUri<String>(
+        uri,
+        data: fields,
+        options: Options(
+          responseType: ResponseType.plain,
+          contentType: Headers.formUrlEncodedContentType,
+          followRedirects: false,
+          validateStatus: (s) => s != null && s < 400 || s == 302 || s == 301,
+          extra: const {'skipCookies': true},
+          headers: {
+            'User-Agent': kSiteUserAgent,
+            'Referer': kHost,
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            if (cookie != null && cookie.isNotEmpty) 'Cookie': cookie,
+          },
+        ),
+      ),
+    );
+    return (
+      body: resp.data ?? '',
+      location: resp.headers.value('location'),
+      setCookies: cookieValues(resp.headers),
+    );
+  }
+
+  /// 验证码 GIF 字节
+  Future<({List<int> bytes, List<String> setCookies})> getBytes(
+    String url, {
+    String? cookie,
+  }) async {
+    final uri = Uri.parse(url);
+    final resp = await _track(
+      'GET',
+      uri,
+      () => _dio.getUri<List<int>>(
+        uri,
+        options: Options(
+          responseType: ResponseType.bytes,
+          extra: const {'skipCookies': true},
+          headers: {
+            'User-Agent': kSiteUserAgent,
+            'Referer': htmlLogin(),
+            if (cookie != null && cookie.isNotEmpty) 'Cookie': cookie,
+          },
+        ),
+      ),
+    );
+    return (
+      bytes: resp.data ?? const <int>[],
+      setCookies: cookieValues(resp.headers),
+    );
+  }
 
   /// 发起 PUT 请求
   Future<dynamic> put(
@@ -366,10 +511,80 @@ String parseLoggedInUsername(String html) {
   return m?.group(1) ?? '';
 }
 
-
 /// 原项目 userStore.websiteError: 主站 502
 bool isWebsiteError(String host, int? status) =>
     host.contains('bgm.tv') && status == 502;
 
 /// 原项目 userStore.outdate: 授权 401
 bool isAuthExpiredStatus(int? status) => status == 401;
+
+/// 抽出响应 Set-Cookie
+List<String> cookieValues(Headers headers) {
+  final raw = headers.map['set-cookie'] ?? headers.map['Set-Cookie'];
+  if (raw == null) return const [];
+  return [
+    for (final v in raw)
+      if (v.isNotEmpty) v,
+  ];
+}
+
+/// 合并 Set-Cookie 到现有 header, 只保留原版关心的 chii_* 键
+String mergeSiteCookies(String current, Iterable<String> setCookies) {
+  const keep = {
+    'chii_auth',
+    'chii_cookietime',
+    'chii_sec',
+    'chii_sec_id',
+    'chii_sid',
+    'chii_theme',
+    'chii_sid_raw',
+  };
+  final map = <String, String>{};
+  for (final part in current.split(';')) {
+    final kv = part.trim();
+    final i = kv.indexOf('=');
+    if (i <= 0) continue;
+    final key = kv.substring(0, i);
+    if (!keep.contains(key) && !key.startsWith('chii_')) continue;
+    map[key] = kv.substring(i + 1);
+  }
+
+  for (final raw in setCookies) {
+    final first = raw.split(';').first.trim();
+    final i = first.indexOf('=');
+    if (i <= 0) continue;
+    final key = first.substring(0, i);
+    final value = first.substring(i + 1);
+    if (!keep.contains(key) && !key.startsWith('chii_')) continue;
+    if (value == 'delete') {
+      map.remove(key);
+    } else {
+      map[key] = value;
+    }
+  }
+  return map.entries.map((e) => '${e.key}=${e.value}').join('; ');
+}
+
+/// 从 Location / URL 抽 OAuth code
+String? oauthCodeFromUrl(String? url) {
+  if (url == null || url.isEmpty) return null;
+  return Uri.tryParse(url)?.queryParameters['code'];
+}
+
+/// 登录失败文案
+String? loginFailMessage(String html) {
+  if (html.contains('分钟内您将不能登录本站')) {
+    return '累计 5 次错误尝试, 15 分钟内您将不能登录本站';
+  }
+  if (html.contains('验证码') && html.contains('错误')) {
+    return '验证码错误';
+  }
+  return null;
+}
+
+bool htmlHasLogout(String html) => html.contains('class="logout"');
+
+String? logoutHref(String html) {
+  final m = RegExp(r'href="([^"]*/logout/[^"]*)"').firstMatch(html);
+  return m?.group(1);
+}

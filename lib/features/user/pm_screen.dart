@@ -8,11 +8,59 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/auth/site_cookies.dart';
+import '../../core/utils/display.dart';
+
 import '../../core/utils/format.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'user_models.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
+
+/// 原版 pm headerTitle: 新建「短信」; 详情「全部/线程名 (条数)」
+String pmHeaderTitle({
+  required bool compose,
+  String threadTitle = '',
+  int msgCount = 0,
+}) {
+  var title = compose ? '短信' : (threadTitle.isEmpty ? '全部' : threadTitle);
+  if (msgCount > 0) title += ' ($msgCount)';
+  return title;
+}
+
+/// 原版 headerTitleTextStyle: getVisualLength >= 10 → 15
+double pmHeaderTitleSize(String title) =>
+    getVisualLength(title) >= 10 ? 15 : 16;
+
+/// 原版 RelatedPM: 线程标题数 > 2 才显示数字
+bool pmShowThreadCount(int threadCount) => threadCount > 2;
+
+/// 原版 ScrollNavButtons: 线程 ≥2 或消息 ≥8 才出上下键
+bool pmShowScrollNav({required int threadCount, required int messageCount}) =>
+    threadCount >= 2 || messageCount >= 8;
+
+/// 原版 onPrevThread: 当前滚动上方最近的线程标签, 没有则到顶
+int? pmPrevThreadIndex({
+  required List<int> labelIndexes,
+  required int currentIndex,
+}) {
+  for (final i in labelIndexes.reversed) {
+    if (i < currentIndex) return i;
+  }
+  return null;
+}
+
+/// 原版 onNextThread: 当前滚动下方最近的线程标签, 没有则到底
+int? pmNextThreadIndex({
+  required List<int> labelIndexes,
+  required int currentIndex,
+}) {
+  for (final i in labelIndexes) {
+    if (i > currentIndex) return i;
+  }
+  return null;
+}
 
 /// 收件箱 (bgm.tv/pm/inbox.chii, 主站 HTML)
 final pmInboxProvider = FutureProvider<List<PmItem>>((ref) async {
@@ -57,7 +105,13 @@ class PmScreen extends ConsumerWidget {
     final isLogin = ref.watch(isLoggedInProvider);
     final hasSiteCookies = ref.watch(siteCookiesProvider).hasCookies;
     return Scaffold(
-      appBar: AppBar(title: const Text('短信')),
+      appBar: BgmAppBar(
+        title: '短信',
+        actions: [
+          BgmHeaderMore.browser(() => openExternalUrl(apiPmInboxHtml())),
+        ],
+      ),
+
       body: isLogin || hasSiteCookies ? const PmInbox() : const _PmLoginGate(),
     );
   }
@@ -76,14 +130,15 @@ class _PmLoginGate extends StatelessWidget {
           const SizedBox(height: 12),
           const Text('短信需要登录后才能查看'),
           const SizedBox(height: 16),
-          FilledButton(
+          BgmButton(
+            'OAuth 登录',
+            expand: false,
             onPressed: () => context.push('/login'),
-            child: const Text('OAuth 登录'),
           ),
           const SizedBox(height: 8),
-          TextButton(
+          BgmTextAction(
+            '或使用站点 Cookie 登录',
             onPressed: () => context.push('/settings/cookies'),
-            child: const Text('或使用站点 Cookie 登录'),
           ),
         ],
       ),
@@ -99,67 +154,23 @@ class PmInbox extends ConsumerWidget {
     final async = ref.watch(pmInboxProvider);
     return async.when(
       loading: () => const Loading(),
-      error: (_, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('加载失败'),
-            TextButton(
-              onPressed: () => ref.invalidate(pmInboxProvider),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
+      error: (_, _) => BgmRetry(onRetry: () => ref.invalidate(pmInboxProvider)),
       data: (items) {
         if (items.isEmpty) {
           return const Center(child: Text('暂无短信 (需网页端登录后可见)'));
         }
         return ListView.separated(
           itemCount: items.length,
-          separatorBuilder: (_, _) => const Divider(indent: 72),
+          separatorBuilder: (_, _) => const BgmHairline(),
           itemBuilder: (context, index) {
             final item = items[index];
-            return ListTile(
+            return BgmTextRow(
               leading: Avatar(url: item.avatar, size: 44, name: item.name),
-              title: Row(
-                children: [
-                  if (item.isNew)
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(right: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  Expanded(
-                    child: Text(
-                      item.name.isNotEmpty ? item.name : item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (item.time.isNotEmpty)
-                    Text(
-                      item.time,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                    ),
-                ],
-              ),
-              subtitle: Text(
-                item.content,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
+              title: item.name.isNotEmpty ? item.name : item.title,
+              subtitle: item.content,
+              trailing: item.time.isEmpty
+                  ? null
+                  : Text(item.time, style: context.ds.meta),
               onTap: () =>
                   context.push('/pm/chat/${item.userId}?conv=${item.id}'),
             );
@@ -196,7 +207,6 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
     super.dispose();
   }
 
-
   Future<void> _send(PmForm form, {bool compose = false}) async {
     final text = _input.text.trim();
     if (text.isEmpty || _sending) return;
@@ -227,18 +237,14 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
       );
       if (!mounted) return;
       _input.clear();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已发送')));
+      showBgmToast(context, '已发送');
       final convId = int.tryParse(widget.convId ?? '');
       if (convId != null) {
         ref.invalidate(pmChatProvider((convId: convId, thread: _thread)));
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('发送失败: $e')));
+      showBgmToast(context, '发送失败: $e');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -250,53 +256,132 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
     return (convId: convId, thread: _thread);
   }
 
+  void _scrollToIndex(int index) {
+    if (!_scroll.hasClients) return;
+    final itemHeight = 72.0;
+    _scroll.animateTo(
+      (index * itemHeight).clamp(0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _scrollToBottom() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(
+      _scroll.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _onPrevThread(List<PmMessage> list) {
+    if (_thread.isNotEmpty) {
+      scrollBgmToTop(_scroll);
+      return;
+    }
+    final labels = [
+      for (var i = 0; i < list.length; i++)
+        if (list[i].type == 'label') i,
+    ];
+    final current = _scroll.hasClients ? (_scroll.offset / 72).floor() : 0;
+
+    final target = pmPrevThreadIndex(
+      labelIndexes: labels,
+      currentIndex: current,
+    );
+    if (target == null) {
+      scrollBgmToTop(_scroll);
+      return;
+    }
+    _scrollToIndex(target);
+  }
+
+  void _onNextThread(List<PmMessage> list) {
+    if (_thread.isNotEmpty) {
+      _scrollToBottom();
+      return;
+    }
+    final labels = [
+      for (var i = 0; i < list.length; i++)
+        if (list[i].type == 'label') i,
+    ];
+    final current = _scroll.hasClients ? (_scroll.offset / 72).ceil() : 0;
+    final target = pmNextThreadIndex(
+      labelIndexes: labels,
+      currentIndex: current,
+    );
+    if (target == null) {
+      _scrollToBottom();
+      return;
+    }
+    _scrollToIndex(target);
+  }
+
   @override
   Widget build(BuildContext context) {
     final query = _chatQuery;
     final chat = query == null ? null : ref.watch(pmChatProvider(query));
     final form = chat?.valueOrNull?.form;
+    final list = chat?.valueOrNull?.list ?? const <PmMessage>[];
+    final title = pmHeaderTitle(
+      compose: query == null,
+      threadTitle:
+          form?.threads
+              .where((t) => t.$1 == _thread)
+              .map((t) => t.$2)
+              .firstOrNull ??
+          '',
+      msgCount: list.where((e) => e.type != 'label').length,
+    );
+    final threadCount = form?.threads.length ?? 0;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          form != null && form.peerUserName.isNotEmpty
-              ? form.peerUserName
-              : widget.userId,
-        ),
+      appBar: BgmAppBar(
+        title: title,
+        titleWidget: query == null
+            ? null
+            : Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.ds.section.copyWith(
+                  fontSize: pmHeaderTitleSize(title),
+                  letterSpacing: getVisualLength(title) >= 10 ? -0.5 : 0,
+                  height: 1.2,
+                ),
+              ),
         actions: [
           if (query != null) ...[
-            IconButton(
-              tooltip: '回全部',
-              icon: const Icon(Icons.list_alt_outlined),
-              onPressed: () => context.go('/pm'),
-            ),
-            IconButton(
-              tooltip: '顶部',
-              icon: const Icon(Icons.vertical_align_top),
-              onPressed: () {
-                if (!_scroll.hasClients) return;
-                _scroll.animateTo(
-                  0,
-                  duration: const Duration(milliseconds: 240),
-                  curve: Curves.easeOut,
-                );
-              },
-            ),
-            IconButton(
-              tooltip: '底部',
-              icon: const Icon(Icons.vertical_align_bottom),
-              onPressed: () {
-                if (!_scroll.hasClients) return;
-
-                _scroll.animateTo(
-                  _scroll.position.maxScrollExtent,
-                  duration: const Duration(milliseconds: 240),
-                  curve: Curves.easeOut,
-                );
-              },
-            ),
-            PopupMenuButton<String>(
-              tooltip: '相关短信',
-              icon: const Icon(Icons.more_horiz),
+            if (_thread.isNotEmpty)
+              BgmHeaderAction(
+                tooltip: '回全部',
+                icon: const Icon(Icons.subdirectory_arrow_right, size: 18),
+                onPressed: () => setState(() => _thread = ''),
+              ),
+            if (pmShowScrollNav(
+              threadCount: threadCount,
+              messageCount: list.where((e) => e.type != 'label').length,
+            )) ...[
+              BgmHeaderAction(
+                tooltip: '上一线程',
+                icon: const Icon(Icons.keyboard_arrow_up, size: 24),
+                onPressed: () => _onPrevThread(list),
+                onLongPress: () => scrollBgmToTop(_scroll),
+              ),
+              BgmHeaderAction(
+                tooltip: '下一线程',
+                icon: const Icon(Icons.keyboard_arrow_down, size: 24),
+                onPressed: () => _onNextThread(list),
+                onLongPress: _scrollToBottom,
+              ),
+            ],
+            BgmHeaderMore(
+              items: [
+                if (form != null) ('new', '新主题'),
+                for (final t in form?.threads ?? const <(String, String)>[])
+                  ('thread:${t.$1}', t.$2),
+                ('browser', '浏览器查看'),
+              ],
               onSelected: (v) {
                 if (v == 'new') {
                   final peer = form?.peerUserId.isNotEmpty == true
@@ -305,18 +390,30 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
                   context.push('/pm/chat/$peer');
                   return;
                 }
+                if (v == 'browser') {
+                  final convId = int.tryParse(widget.convId ?? '');
+                  if (convId == null) return;
+                  openExternalUrl(
+                    apiPmConversationHtml(
+                      convId,
+                      thread: _thread.isEmpty ? null : _thread,
+                    ),
+                  );
+                  return;
+                }
                 if (v.startsWith('thread:')) {
                   setState(() => _thread = v.substring(7));
                 }
               },
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'new', child: Text('新短信')),
-
-                if (form != null)
-                  for (final t in form.threads)
-                    PopupMenuItem(value: 'thread:${t.$1}', child: Text(t.$2)),
-              ],
             ),
+            if (pmShowThreadCount(threadCount))
+              Padding(
+                padding: const EdgeInsets.only(right: 8, top: 18),
+                child: Text(
+                  '$threadCount',
+                  style: context.ds.tiny.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
           ],
         ],
       ),
@@ -333,14 +430,7 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: TextField(
-              controller: _title,
-              decoration: const InputDecoration(
-                hintText: '标题 (可选, 默认「短信」)',
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-            ),
+            child: BgmField(controller: _title, hintText: '标题 (可选, 默认「短信」)'),
           ),
           const Expanded(child: Center(child: Text('给 TA 发一条新短信'))),
           _composer(onSend: () => unawaited(_send(form, compose: true))),
@@ -348,7 +438,6 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
       ),
     );
   }
-
 
   Widget _conversationBody(({int convId, String thread}) query) {
     return Column(
@@ -460,21 +549,19 @@ class _PmChatScreenState extends ConsumerState<PmChatScreen> {
         child: Row(
           children: [
             Expanded(
-              child: TextField(
+              child: BgmField(
                 controller: _input,
                 maxLines: 4,
                 minLines: 1,
-                decoration: const InputDecoration(
-                  hintText: '输入消息…',
-                  isDense: true,
-                  border: OutlineInputBorder(),
-                ),
+                hintText: '输入消息…',
               ),
             ),
             const SizedBox(width: 8),
-            FilledButton(
-              onPressed: _sending ? null : onSend,
-              child: const Text('发送'),
+            BgmButton(
+              '发送',
+              expand: false,
+              loading: _sending,
+              onPressed: onSend,
             ),
           ],
         ),

@@ -102,10 +102,14 @@ class AppThemeData extends ThemeExtension<AppThemeData> {
 
   factory AppThemeData.fromScheme(ColorScheme scheme, {bool deepDark = false}) {
     final dark = scheme.brightness == Brightness.dark;
-    final textPrimary = scheme.onSurface;
-    final textSecondary = scheme.onSurfaceVariant;
-    final textHint = scheme.outline;
     final useDeep = dark && deepDark;
+    final textPrimary = dark
+        ? AppPalette.textPrimaryDark
+        : AppPalette.textPrimaryLight;
+    final textSecondary = dark
+        ? AppPalette.textSecondaryDark
+        : AppPalette.textSecondaryLight;
+    final textHint = dark ? AppPalette.textHintDark : AppPalette.textHintLight;
 
     TextStyle s(
       double size,
@@ -121,7 +125,7 @@ class AppThemeData extends ThemeExtension<AppThemeData> {
 
     return AppThemeData(
       accent: scheme.primary,
-      accentSoft: scheme.primary.withValues(alpha: dark ? 0.16 : 0.08),
+      accentSoft: dark ? AppPalette.accentLightDark : AppPalette.accentLight,
       star: AppPalette.star,
       rise: AppPalette.rise,
       fall: AppPalette.fall,
@@ -145,7 +149,6 @@ class AppThemeData extends ThemeExtension<AppThemeData> {
           : dark
           ? AppPalette.borderDark
           : AppPalette.borderLight,
-
       display: s(20, FontWeight.w700, textPrimary),
       title: s(17, FontWeight.w600, textPrimary),
       section: s(15, FontWeight.w600, textPrimary),

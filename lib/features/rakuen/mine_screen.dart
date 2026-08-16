@@ -10,13 +10,23 @@ import '../../core/utils/display.dart';
 import '../../core/utils/format.dart';
 
 import '../../shared/models/timeline.dart';
+import '../../shared/models/group.dart';
+import '../discovery/group_screen.dart';
+import '../discovery/widgets/paged.dart';
+
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import 'html_parse.dart';
 import 'rakuen_providers.dart';
 import 'widgets/login_gate.dart';
 import 'widgets/topic_row.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
+
 import '../../design_system/design_system.dart';
+
+/// 原版 Extra SegmentedControl: 我的 / 全部
+const kMineGroupTypes = <(String, String)>[('mine', '我的'), ('all', '全部')];
 
 /// 我的 (我的主题/日志/动态)
 /// 路由: /rakuen/mine
@@ -30,11 +40,15 @@ class MineScreen extends ConsumerStatefulWidget {
 class _MineScreenState extends ConsumerState<MineScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  String _groupType = 'mine';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -49,34 +63,40 @@ class _MineScreenState extends ConsumerState<MineScreen>
     final user = ref.watch(currentUserProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('小组'),
+      appBar: BgmAppBar(
+        title: '小组',
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlGroupMine()),
-          ),
+          if (_tabController.index == 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: BgmSegmented<String>(
+                values: kMineGroupTypes,
+                selected: _groupType,
+                onSelect: (v) => setState(() => _groupType = v),
+              ),
+            ),
+          BgmHeaderMore.browser(() => openExternalUrl(htmlGroupMine())),
         ],
 
         bottom: isLogin
-            ? TabBar(
+            ? BgmControlledTabStrip(
                 controller: _tabController,
                 tabs: const [
-                  Tab(text: '我的小组'),
-                  Tab(text: '我的主题'),
-                  Tab(text: '我的日志'),
-                  Tab(text: '我的动态'),
+                  Text('我的小组'),
+                  Text('我的主题'),
+                  Text('我的日志'),
+                  Text('我的动态'),
                 ],
               )
             : null,
       ),
+
       body: !isLogin
           ? const RakuenLoginGate(message: '登录后查看我的小组、主题、日志和动态')
           : TabBarView(
               controller: _tabController,
               children: [
-                const _MineGroups(),
+                _MineGroups(type: _groupType),
                 _MineTopics(uid: '${user?.id ?? 0}'),
                 _MineBlogs(uid: '${user?.id ?? 0}'),
                 _MineTimeline(uid: '${user?.id ?? 0}'),
@@ -105,6 +125,17 @@ class MyGroup {
     required this.name,
     this.num = '',
   });
+}
+
+List<MyGroup> filterMineGroups(List<MyGroup> groups, String filter) {
+  final q = filter.trim().toLowerCase();
+  if (q.isEmpty) return groups;
+  return [
+    for (final item in groups)
+      if (item.name.toLowerCase().contains(q) ||
+          item.id.toLowerCase().contains(q))
+        item,
+  ];
 }
 
 /// 解析 /group/mine: ul.browserMedium > li.user (id/cover/name/成员数)
@@ -140,15 +171,61 @@ List<MyGroup> parseMyGroups(String html) {
 }
 
 class _MineGroups extends ConsumerWidget {
-  const _MineGroups();
+  final String type;
+
+  const _MineGroups({required this.type});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (type == 'all') {
+      return PagedGridView<Group, int>(
+        provider: groupListProvider,
+        arg: 0,
+        crossAxisCount: 2,
+        childAspectRatio: 1.7,
+        emptyText: '暂无小组',
+        itemBuilder: (context, group, index) {
+          final title = group.title.isEmpty ? group.name : group.title;
+          return InkWell(
+            onTap: () => context.push('/rakuen/group/${group.name}'),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                children: [
+                  Cover(url: group.icon, width: 44, height: 44, radius: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (group.members > 0)
+                          Text('${group.members} 位成员', style: context.ds.tiny),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
     final async = ref.watch(mineGroupsProvider);
     return async.when(
       loading: () => const Loading(),
       error: (_, _) =>
-          _ErrorRetry(onRetry: () => ref.invalidate(mineGroupsProvider)),
+          BgmRetry(onRetry: () => ref.invalidate(mineGroupsProvider)),
       data: (groups) {
         if (groups.isEmpty) return const Center(child: Text('还没有加入小组'));
         return GridView.builder(
@@ -204,12 +281,12 @@ class _MineTopics extends ConsumerWidget {
     return async.when(
       loading: () => const Loading(height: double.infinity),
       error: (e, _) =>
-          _ErrorRetry(onRetry: () => ref.invalidate(mineTopicsProvider(uid))),
+          BgmRetry(onRetry: () => ref.invalidate(mineTopicsProvider(uid))),
       data: (topics) {
         if (topics.isEmpty) return const Center(child: Text('还没有发布主题'));
         return ListView.separated(
           itemCount: topics.length,
-          separatorBuilder: (_, _) => const Divider(indent: 56),
+          separatorBuilder: (_, _) => const BgmHairline(indent: 56),
           itemBuilder: (context, index) {
             final topic = topics[index];
             return RakuenTopicRow(
@@ -242,12 +319,12 @@ class _MineBlogs extends ConsumerWidget {
     return async.when(
       loading: () => const Loading(height: double.infinity),
       error: (e, _) =>
-          _ErrorRetry(onRetry: () => ref.invalidate(mineBlogsProvider(uid))),
+          BgmRetry(onRetry: () => ref.invalidate(mineBlogsProvider(uid))),
       data: (blogs) {
         if (blogs.isEmpty) return const Center(child: Text('还没有发布日志'));
         return ListView.separated(
           itemCount: blogs.length,
-          separatorBuilder: (_, _) => const Divider(indent: 16),
+          separatorBuilder: (_, _) => const BgmHairline(indent: 16),
           itemBuilder: (context, index) {
             final blog = blogs[index];
             return InkWell(
@@ -314,12 +391,12 @@ class _MineTimeline extends ConsumerWidget {
     return async.when(
       loading: () => const Loading(height: double.infinity),
       error: (e, _) =>
-          _ErrorRetry(onRetry: () => ref.invalidate(mineTimelineProvider(uid))),
+          BgmRetry(onRetry: () => ref.invalidate(mineTimelineProvider(uid))),
       data: (items) {
         if (items.isEmpty) return const Center(child: Text('暂无动态'));
         return ListView.separated(
           itemCount: items.length,
-          separatorBuilder: (_, _) => const Divider(indent: 56),
+          separatorBuilder: (_, _) => const BgmHairline(indent: 56),
           itemBuilder: (context, index) => _TimelineRow(item: items[index]),
         );
       },
@@ -381,23 +458,4 @@ class _TimelineRow extends StatelessWidget {
     'index' => '目录',
     _ => type,
   };
-}
-
-class _ErrorRetry extends StatelessWidget {
-  final VoidCallback onRetry;
-
-  const _ErrorRetry({required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('加载失败'),
-          TextButton(onPressed: onRetry, child: const Text('重试')),
-        ],
-      ),
-    );
-  }
 }

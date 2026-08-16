@@ -10,6 +10,9 @@ import '../../shared/widgets/loading.dart';
 
 import '../rakuen/html_parse.dart';
 import 'subject_providers.dart';
+import 'subject_notes.dart';
+
+import '../../shared/widgets/bgm_button.dart';
 
 /// 条目讨论版
 /// 路由: /subject/:id/board
@@ -21,42 +24,31 @@ class SubjectBoardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final board = ref.watch(subjectBoardProvider(id));
+    final name = ref
+        .watch(subjectDetailProvider(id))
+        .valueOrNull
+        ?.subject
+        .displayName;
     return Scaffold(
       appBar: BgmAppBar(
-        title: '讨论版',
+        title: extraNamedTitle(name, '讨论版', named: (n) => '$n的讨论版'),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl(htmlSubjectBoard(id)),
-          ),
+          BgmHeaderMore.browser(() => openExternalUrl(htmlSubjectBoard(id))),
         ],
       ),
 
+
       body: board.when(
         loading: () => const Loading(text: '加载中...'),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40),
-              const SizedBox(height: 8),
-              const Text('加载失败'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(subjectBoardProvider(id)),
-                child: const Text('重试'),
-              ),
-            ],
-          ),
-        ),
+        error: (e, _) =>
+            BgmRetry(onRetry: () => ref.invalidate(subjectBoardProvider(id))),
         data: (items) => items.isEmpty
             ? const Empty(text: '暂无讨论')
             : ListView.separated(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: items.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const BgmHairline(),
                 itemBuilder: (_, i) => _BoardRow(item: items[i]),
               ),
       ),
@@ -71,23 +63,13 @@ class _BoardRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      title: Text(
-        item.title,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: context.ds.bodyStrong,
-      ),
-      subtitle: Text(
-        [
-          if (item.userName.isNotEmpty) item.userName,
-          if (item.replies.isNotEmpty) '${item.replyCount} 回复',
-          if (item.time.isNotEmpty) item.time,
-        ].join(' · '),
-        style: context.ds.caption,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+    return BgmTextRow(
+      title: item.title,
+      replies: item.replyCount,
+      subtitle: [
+        if (item.userName.isNotEmpty) item.userName,
+        if (item.time.isNotEmpty) item.time,
+      ].join(' · '),
       trailing: Icon(Icons.chevron_right, size: 18, color: context.ds.textHint),
       onTap: item.topicId.isEmpty
           ? null

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/format.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/app_bar.dart';
+import '../../shared/widgets/bgm_button.dart';
 import 'tinygrail_api.dart';
 import 'tinygrail_models.dart';
 
@@ -16,7 +18,7 @@ class TinygrailIcoDealScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(icoDealProvider(monoId));
     return Scaffold(
-      appBar: AppBar(title: const Text('新股交易')),
+      appBar: const BgmAppBar(title: 'ICO'),
       body: async.when(
         loading: () => const Loading(height: double.infinity),
         error: (_, _) => const Center(child: Text('加载失败')),
@@ -26,51 +28,52 @@ class TinygrailIcoDealScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(12),
             children: [
-              Card(
-                child: ListTile(
-                  leading: CircleAvatar(child: Text(chara.name.isEmpty ? '?' : chara.name.characters.first)),
-                  title: Text(chara.name),
-                  subtitle: Text(
+              BgmTextRow(
+                title: chara.name,
+                subtitle:
                     '发行价 ¥${tgPrice(chara.price)} · 发行量 ${tgAmount(chara.total)} · 参与者 ${chara.users}',
-                  ),
+              ),
+              const SizedBox(height: 8),
+              BgmCard(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '注资 ICO',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    _JoinButton(
+                      icoId: chara.icoId == 0 ? chara.id : chara.icoId,
+                      monoId: monoId,
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('注资 ICO', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      _JoinButton(icoId: chara.icoId == 0 ? chara.id : chara.icoId, monoId: monoId),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('初始股份', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      if (initial.isEmpty)
-                        const Text('暂无参与者', style: TextStyle(fontSize: 12))
-                      else
-                        for (final item in initial)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Text(
-                              '${item.nickName.isEmpty ? item.name : item.nickName} · ${tgAmount(item.amount)} 股 · ${friendlyTime(item.begin)}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
+              BgmCard(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '初始股份',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    if (initial.isEmpty)
+                      const Text('暂无参与者', style: TextStyle(fontSize: 12))
+                    else
+                      for (final item in initial)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Text(
+                            '${item.nickName.isEmpty ? item.name : item.nickName} · ${tgAmount(item.amount)} 股 · ${friendlyTime(item.begin)}',
+                            style: const TextStyle(fontSize: 12),
                           ),
-                    ],
-                  ),
+                        ),
+                  ],
                 ),
               ),
             ],
@@ -102,15 +105,15 @@ class _JoinButtonState extends ConsumerState<_JoinButton> {
     if (amount == null || amount <= 0) return;
     setState(() => _loading = true);
     try {
-      final ok = await ref.read(tinygrailApiProvider).doJoin(widget.icoId, amount);
+      final ok = await ref
+          .read(tinygrailApiProvider)
+          .doJoin(widget.icoId, amount);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok ? '注资成功' : '注资失败')),
-      );
+      showBgmToast(context, ok ? '注资成功' : '注资失败');
       ref.invalidate(icoDealProvider(widget.monoId));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('注资失败: $e')));
+      showBgmToast(context, '注资失败: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -118,14 +121,10 @@ class _JoinButtonState extends ConsumerState<_JoinButton> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton(
-        onPressed: _loading ? null : _join,
-        child: _loading
-            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-            : const Text('参与注资 (≥5000)'),
-      ),
+    return BgmButton(
+      '参与注资 (≥5000)',
+      loading: _loading,
+      onPressed: _loading ? null : _join,
     );
   }
 }
@@ -148,33 +147,47 @@ class _JoinDialogState extends State<_JoinDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('注资'),
-      content: TextField(
-        controller: _controller,
-        keyboardType: TextInputType.number,
-        decoration: const InputDecoration(labelText: '金额 (≥5000)'),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, int.tryParse(_controller.text) ?? 0),
-          child: const Text('确认'),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      child: BgmDialog(
+        title: '注资',
+        content: BgmField(
+          controller: _controller,
+          keyboardType: TextInputType.number,
+          labelText: '金额 (≥5000)',
         ),
-      ],
+        actions: [
+          BgmButton(
+            '取消',
+            type: BgmButtonType.plain,
+            expand: false,
+            onPressed: () => Navigator.pop(context),
+          ),
+          BgmButton(
+            '确认',
+            expand: false,
+            onPressed: () =>
+                Navigator.pop(context, int.tryParse(_controller.text) ?? 0),
+          ),
+        ],
+      ),
     );
   }
 }
 
 final icoDealProvider =
-    FutureProvider.family<({TinygrailChara chara, List<TinygrailInitial> initial}), int>(
-        (ref, monoId) async {
-  final api = ref.read(tinygrailApiProvider);
-  final chara = await api.fetchChara(monoId);
-  final icoId = chara.icoId == 0 ? chara.id : chara.icoId;
-  List<TinygrailInitial> initial = const [];
-  try {
-    initial = await api.fetchInitial(icoId, 1);
-  } catch (_) {}
-  return (chara: chara, initial: initial);
-});
+    FutureProvider.family<
+      ({TinygrailChara chara, List<TinygrailInitial> initial}),
+      int
+    >((ref, monoId) async {
+      final api = ref.read(tinygrailApiProvider);
+      final chara = await api.fetchChara(monoId);
+      final icoId = chara.icoId == 0 ? chara.id : chara.icoId;
+      List<TinygrailInitial> initial = const [];
+      try {
+        initial = await api.fetchInitial(icoId, 1);
+      } catch (_) {}
+      return (chara: chara, initial: initial);
+    });

@@ -10,11 +10,15 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../design_system/design_system.dart';
 import '../../core/utils/display.dart';
+import '../../core/storage/settings_store.dart';
+
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../subject/collection_sheet.dart';
 import 'widgets/discovery_html.dart';
 import 'widgets/paged.dart';
+import '../../shared/widgets/bgm_button.dart';
+import 'search_advance.dart';
 
 /// 搜索类型 (与原项目 SEARCH_CAT 一致, 共 9 项)
 const kSearchCats = <({String value, String label})>[
@@ -164,7 +168,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   String _legacy = ''; // 默认模糊 (原项目 STATE.legacy 默认 模糊)
   String _value = ''; // 已确认的搜索值
   bool _searching = false; // 提交查询中
+  bool _t2s = true;
   List<String> _history = const [];
+  Timer? _advanceTimer;
+  List<SearchAdvanceHit> _advanceHits = const [];
+  List<SearchAdvanceMonoHit> _advanceMono = const [];
+
   SearchQuery? _query;
 
   bool get _isUser => _cat == 'user';
@@ -187,9 +196,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       if (matched.isNotEmpty) _cat = matched.first.value;
     }
     _loadHistory();
+    unawaited(loadCnCharTables());
+
     _focusNode.addListener(() {
       if (mounted) setState(() {});
     });
+    _controller.addListener(_scheduleAdvance);
+
     if (widget.initialQuery.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _doSearch();
@@ -204,6 +217,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   void dispose() {
+    _advanceTimer?.cancel();
+    _controller.removeListener(_scheduleAdvance);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -230,6 +245,34 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       _query = null;
     });
     if (_value.isNotEmpty) _doSearch();
+  }
+
+  void _onInputChanged(String text) {
+    if (ref.read(settingsStoreProvider).s2t && _t2s) {
+      final simplified = t2s(text);
+      if (simplified != text) {
+        _controller.value = TextEditingValue(
+          text: simplified,
+          selection: TextSelection.collapsed(offset: simplified.length),
+        );
+      }
+    }
+    _scheduleAdvance();
+  }
+
+  void _toggleT2s() {
+    final next = !_t2s;
+    setState(() => _t2s = next);
+    if (next) {
+      final converted = t2s(_controller.text);
+      if (converted != _controller.text) {
+        _controller.value = TextEditingValue(
+          text: converted,
+          selection: TextSelection.collapsed(offset: converted.length),
+        );
+      }
+    }
+    showBgmToast(context, '${next ? '开启' : '关闭'}输入内容自动转为简体');
   }
 
   void _selectHistory(String value) {
@@ -321,7 +364,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showBgmToast(context, msg);
   }
 
   @override
@@ -331,71 +374,109 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         title: '搜索',
         showBackButton: true,
         actions: [
-          PopupMenuButton<String>(
-            tooltip: '更多',
-            onSelected: (value) {
-              if (value == 'browser') {
-                final text = _value.isNotEmpty
-                    ? _value
-                    : _controller.text.trim();
-                final path = text.isEmpty
-                    ? '/subject_search'
-                    : htmlSearch(text, _cat, legacy: _legacy);
-                openExternalUrl('$kHost$path');
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
-            ],
-          ),
+          if (ref.watch(settingsStoreProvider).s2t)
+            BgmHeaderAction(
+              tooltip: _t2s ? '输入自动转为简体' : '保持原文',
+              icon: Text(_t2s ? '简' : '繁', style: context.ds.bodyStrong),
+              onPressed: _toggleT2s,
+            ),
+          BgmHeaderMore.browser(() {
+            final text = _value.isNotEmpty ? _value : _controller.text.trim();
+            final path = text.isEmpty
+                ? '/subject_search'
+                : htmlSearch(text, _cat, legacy: _legacy);
+            openExternalUrl('$kHost$path');
+          }),
         ],
       ),
 
       body: Column(
         children: [
-          // Flex search bar = [Category popover, SearchBar, Legacy popover, BtnSubmit]
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
             child: Row(
               children: [
-                _CategoryButton(label: _label, onSelect: _onSelectCat),
-                const SizedBox(width: 8),
+                _SearchSideButton(
+                  label: _label,
+                  tooltip: '搜索类型',
+                  ghost: true,
+                  left: true,
+                  options: [for (final c in kSearchCats) c.label],
+                  onSelect: _onSelectCat,
+                ),
                 Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _onSubmit(),
-                    decoration: InputDecoration(
-                      hintText: _isUser ? '输入完整的用户 ID' : '输入关键字',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
+                  child: SizedBox(
+                    height: 40,
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => _onSubmit(),
+                      onChanged: _onInputChanged,
+
+                      style: context.ds.body.copyWith(fontSize: 12),
+                      cursorColor: context.ds.accent,
+                      decoration: InputDecoration(
+                        hintText: _isUser ? '输入完整的用户 ID' : '输入关键字',
+                        hintStyle: context.ds.caption,
+                        isDense: true,
+                        filled: true,
+                        fillColor: context.ds.surfaceCard,
+                        contentPadding: const EdgeInsets.fromLTRB(
+                          12,
+                          10,
+                          4,
+                          10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.horizontal(
+                            right: _showLegacy
+                                ? Radius.zero
+                                : const Radius.circular(40),
+                          ),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.horizontal(
+                            right: _showLegacy
+                                ? Radius.zero
+                                : const Radius.circular(40),
+                          ),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.horizontal(
+                            right: _showLegacy
+                                ? Radius.zero
+                                : const Radius.circular(40),
+                          ),
+                          borderSide: BorderSide.none,
+                        ),
                       ),
-                      filled: true,
-                      fillColor: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHighest
-                          .withValues(alpha: 0.5),
                     ),
                   ),
                 ),
-                if (_showLegacy) ...[
-                  const SizedBox(width: 8),
-                  _LegacyButton(
+                if (_showLegacy)
+                  _SearchSideButton(
                     label: kSearchLegacy
                         .firstWhere((l) => l.value == _legacy)
                         .label,
+                    tooltip: '搜索细度',
+                    ghost: false,
+                    left: false,
+                    options: [for (final l in kSearchLegacy) l.label],
                     onSelect: _onSelectLegacy,
                   ),
-                ],
                 const SizedBox(width: 8),
-                TextButton(
-                  onPressed: _searching ? null : _onSubmit,
-                  child: Text(_isUser || _isCatalog ? '前往' : '查询'),
+                SizedBox(
+                  width: 64,
+                  height: 40,
+                  child: BgmButton(
+                    _isUser || _isCatalog ? '前往' : '查询',
+                    type: BgmButtonType.plain,
+                    expand: true,
+                    onPressed: _searching ? null : _onSubmit,
+                  ),
                 ),
               ],
             ),
@@ -423,16 +504,57 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  /// Advance: 仅人物 / 条目 ID 直达 (静态联想数据集未移植)
+  void _scheduleAdvance() {
+    _advanceTimer?.cancel();
+    _advanceTimer = Timer(const Duration(milliseconds: 160), _refreshAdvance);
+  }
+
+  Future<void> _refreshAdvance() async {
+    if (!mounted || !_showAdvance) {
+      if (_advanceHits.isNotEmpty || _advanceMono.isNotEmpty) {
+        setState(() {
+          _advanceHits = const [];
+          _advanceMono = const [];
+        });
+      }
+      return;
+    }
+    final value = _controller.text.trim();
+    if (_isMono) {
+      final hits = await searchAdvanceMono(value);
+      if (!mounted) return;
+      setState(() {
+        _advanceHits = const [];
+        _advanceMono = hits;
+      });
+      return;
+    }
+    final hits = await searchAdvanceSubjects(_cat, value);
+    if (!mounted) return;
+    setState(() {
+      _advanceHits = hits;
+      _advanceMono = const [];
+    });
+  }
+
+  void _fillAdvance(String text) {
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _onSubmit();
+  }
+
+  /// Advance: 打包标题联想 + 人物/条目 ID 直达
   Widget _buildAdvance() {
     final value = _controller.text.trim();
-    final isId = RegExp(r'^\d+$').hasMatch(value);
-    if (value.isEmpty || !isId) return const SizedBox.shrink();
-    if (_isMono) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-        child: Column(
-          children: [
+    final isId = isSearchAdvanceId(value);
+    if (value.isEmpty && !isId) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: Column(
+        children: [
+          if (isId && _isMono) ...[
             _AdvanceChip(
               text: '虚拟人物 #$value',
               onTap: () => context.push('/mono/character/$value'),
@@ -443,14 +565,28 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               onTap: () => context.push('/mono/person/$value'),
             ),
           ],
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      child: _AdvanceChip(
-        text: '#$value',
-        onTap: () => context.push('/subject/$value'),
+          if (isId && !_isMono)
+            _AdvanceChip(
+              text: '#$value',
+              onTap: () => context.push('/subject/$value'),
+            ),
+          if (_isMono)
+            for (final item in _advanceMono)
+              _AdvanceMonoRow(
+                item: item,
+                keyword: value,
+                onOpen: () => context.push(item.path),
+                onSearch: () => _fillAdvance(item.name),
+              )
+          else
+            for (final item in _advanceHits)
+              _AdvanceSubjectRow(
+                item: item,
+                keyword: value,
+                onOpen: () => context.push('/subject/${item.id}'),
+                onSearch: () => _fillAdvance(item.title),
+              ),
+        ],
       ),
     );
   }
@@ -479,7 +615,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ),
                   ),
                 ),
-                IconButton(
+                BgmHeaderAction(
                   icon: const Icon(Icons.close, size: 18),
                   onPressed: () => _deleteHistory(item),
                 ),
@@ -509,74 +645,59 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 }
 
-/// 分类下拉按钮 (Category popover)
-class _CategoryButton extends StatelessWidget {
+/// 搜索栏左右胶囊 (原版 Category / Legacy, 无下拉箭头)
+class _SearchSideButton extends StatelessWidget {
   final String label;
+  final String tooltip;
+  final bool ghost;
+  final bool left;
+  final List<String> options;
   final ValueChanged<String> onSelect;
 
-  const _CategoryButton({required this.label, required this.onSelect});
+  const _SearchSideButton({
+    required this.label,
+    required this.tooltip,
+    required this.ghost,
+    required this.left,
+    required this.options,
+    required this.onSelect,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final ds = context.ds;
+    final radius = left
+        ? const BorderRadius.horizontal(left: Radius.circular(40))
+        : const BorderRadius.horizontal(right: Radius.circular(40));
     return PopupMenuButton<String>(
-      tooltip: '搜索类型',
+      tooltip: tooltip,
       onSelected: onSelect,
       itemBuilder: (_) => [
-        for (final c in kSearchCats)
-          PopupMenuItem(value: c.label, child: Text(c.label)),
+        for (final o in options) PopupMenuItem(value: o, child: Text(o)),
       ],
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        width: 64,
+        height: 40,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
+          color: ghost ? ds.accentSoft : ds.surfaceCard,
+          borderRadius: radius,
+          border: ghost
+              ? Border.all(color: ds.accent.withValues(alpha: 0.35))
+              : Border(
+                  top: BorderSide(color: ds.border, width: 0.5),
+                  right: BorderSide(color: ds.border, width: 0.5),
+                  bottom: BorderSide(color: ds.border, width: 0.5),
+                ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-            const Icon(Icons.arrow_drop_down, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 细分类型 (legacy) 下拉按钮
-class _LegacyButton extends StatelessWidget {
-  final String label;
-  final ValueChanged<String> onSelect;
-
-  const _LegacyButton({required this.label, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      tooltip: '搜索细度',
-      onSelected: onSelect,
-      itemBuilder: (_) => [
-        for (final l in kSearchLegacy)
-          PopupMenuItem(value: l.label, child: Text(l.label)),
-      ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-            const Icon(Icons.arrow_drop_down, size: 18),
-          ],
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: ds.caption.copyWith(
+            color: ghost ? ds.accent : ds.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -605,6 +726,108 @@ class _AdvanceChip extends StatelessWidget {
           text,
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
         ),
+      ),
+    );
+  }
+}
+
+class _AdvanceSubjectRow extends StatelessWidget {
+  final SearchAdvanceHit item;
+  final String keyword;
+  final VoidCallback onOpen;
+  final VoidCallback onSearch;
+
+  const _AdvanceSubjectRow({
+    required this.item,
+    required this.keyword,
+    required this.onOpen,
+    required this.onSearch,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: onOpen,
+              child: Text(
+                item.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: context.ds.bodyStrong,
+              ),
+            ),
+          ),
+          BgmHeaderAction(
+            tooltip: '查询',
+            icon: const Icon(Icons.search, size: 20),
+            onPressed: onSearch,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdvanceMonoRow extends StatelessWidget {
+  final SearchAdvanceMonoHit item;
+  final String keyword;
+  final VoidCallback onOpen;
+  final VoidCallback onSearch;
+
+  const _AdvanceMonoRow({
+    required this.item,
+    required this.keyword,
+    required this.onOpen,
+    required this.onSearch,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          if (item.cover.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Cover(url: item.cover, width: 32, height: 32, radius: 4),
+            ),
+          Expanded(
+            child: GestureDetector(
+              onTap: onOpen,
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      item.name.length > 16
+                          ? '${item.name.substring(0, 16)}...'
+                          : item.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.ds.bodyStrong,
+                    ),
+                  ),
+                  if (item.replies > 0)
+                    Text(
+                      ' +${item.replies}',
+                      style: context.ds.caption.copyWith(
+                        color: context.ds.accent,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          BgmHeaderAction(
+            tooltip: '查询',
+            icon: const Icon(Icons.search, size: 20),
+            onPressed: onSearch,
+          ),
+        ],
       ),
     );
   }
@@ -691,9 +914,8 @@ class _SubjectRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      IconButton(
+                      BgmHeaderAction(
                         tooltip: '收藏',
-                        visualDensity: VisualDensity.compact,
                         icon: Icon(
                           Icons.bookmark_add_outlined,
                           size: 18,

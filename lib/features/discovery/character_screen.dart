@@ -11,70 +11,27 @@ import '../../core/utils/display.dart';
 import '../../shared/widgets/app_bar.dart';
 import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../user/mono_screen.dart';
 import 'widgets/discovery_html.dart';
 
-/// 我的人物 (收藏的角色)
-///
-/// 主站 /user/{uid}/mono/character 页面为空壳 (JS 渲染), 改用官方
-/// v0 API: GET /v0/users/{username}/collections/-/characters。
-class CharacterItem {
-  final int id;
-  final String name;
-  final int type; // 1=角色 2=机体 3=组织
-  final String image;
-  final String createdAt;
-
-  const CharacterItem({
-    this.id = 0,
-    this.name = '',
-    this.type = 1,
-    this.image = '',
-    this.createdAt = '',
-  });
-
-  factory CharacterItem.fromJson(Map<String, dynamic> json) {
-    final images = json['images'] as Map<String, dynamic>? ?? const {};
-    return CharacterItem(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      name: json['name'] as String? ?? '',
-      type: (json['type'] as num?)?.toInt() ?? 1,
-      image: images['grid'] as String? ?? images['medium'] as String? ?? '',
-      createdAt: json['created_at'] as String? ?? '',
-    );
-  }
+/// 原版 HeaderV2: 有 userName → TA的人物, 否则 我的人物
+String characterTitle(String? userName) {
+  final name = userName?.trim() ?? '';
+  return name.isEmpty ? '我的人物' : 'TA的人物';
 }
 
-final myCharactersProvider = FutureProvider<List<CharacterItem>>((ref) async {
-  final user = ref.watch(currentUserProvider);
-  if (user == null) return const [];
-  final username = user.username.isEmpty ? '${user.id}' : user.username;
-  final client = ref.read(apiClientProvider);
-  final data = await client.get(apiV0UserCharacters(username));
-  final map = data as Map<String, dynamic>;
-  return (map['data'] as List?)
-          ?.whereType<Map<String, dynamic>>()
-          .map(CharacterItem.fromJson)
-          .toList() ??
-      const [];
-});
+/// 原版 tabs: 自己 (含从空间打开) 才有人物近况
+bool characterShowRecents(String? userName, {String? meId}) {
+  final name = userName?.trim() ?? '';
+  if (name.isEmpty) return true;
+  final me = meId?.trim() ?? '';
+  return me.isNotEmpty && name == me;
+}
 
-final myPersonsProvider = FutureProvider<List<CharacterItem>>((ref) async {
-  final user = ref.watch(currentUserProvider);
-  if (user == null) return const [];
-  final username = user.username.isEmpty ? '${user.id}' : user.username;
-  final client = ref.read(apiClientProvider);
-  try {
-    final data = await client.get(apiV0UserPersons(username));
-    final map = data as Map<String, dynamic>;
-    return (map['data'] as List?)
-            ?.whereType<Map<String, dynamic>>()
-            .map(CharacterItem.fromJson)
-            .toList() ??
-        const [];
-  } catch (_) {
-    return const [];
-  }
-});
+/// 我的人物 / TA的人物
+///
+/// 收藏列表走主站 HTML /user/{uid}/mono/{kind} 分页; 自己才有人物近况。
 
 class MonoRecentsData {
   final List<MonoRecentItem> items;
@@ -127,9 +84,58 @@ class MonoRecentsNotifier extends AsyncNotifier<MonoRecentsData> {
   }
 }
 
-/// 我的人物 (原项目 tabs: 人物近况 / 虚拟角色 / 现实人物)
+/// 原版 isFutureDate: info 里的日期晚于今天
+bool isRecentFutureDate(String info, [DateTime? now]) {
+  final current = now ?? DateTime.now();
+  final today = DateTime(current.year, current.month, current.day);
+  final cn = RegExp(r'(\d{4})年(\d{1,2})月(\d{1,2})日').firstMatch(info);
+  final iso = cn ?? RegExp(r'(\d{4})-(\d{1,2})-(\d{1,2})').firstMatch(info);
+  if (iso == null) return false;
+  final date = DateTime(
+    int.parse(iso.group(1)!),
+    int.parse(iso.group(2)!),
+    int.parse(iso.group(3)!),
+  );
+  return date.isAfter(today);
+}
+
+/// 原版 getDividerIndex: 最后一个未来日期之后插入分割线
+int recentDividerIndex(List<MonoRecentItem> items, [DateTime? now]) {
+  var lastFuture = -1;
+  for (var i = 0; i < items.length; i++) {
+    if (isRecentFutureDate(items[i].info, now)) lastFuture = i;
+  }
+  return lastFuture + 1;
+}
+
+/// 原版近况封面高 + 上下间距, 用于跳到分割线
+const kRecentItemHeight = 86.0 + 16.0;
+
+double recentDividerOffset(int dividerIndex) {
+  if (dividerIndex <= 0) return 0;
+  return (dividerIndex - 1) * kRecentItemHeight;
+}
+
+/// 原版 date('y-m-d')
+String recentDividerLabel([DateTime? now]) {
+  final d = now ?? DateTime.now();
+  final y = (d.year % 100).toString().padLeft(2, '0');
+  final m = d.month.toString().padLeft(2, '0');
+  final day = d.day.toString().padLeft(2, '0');
+  return '$y-$m-$day';
+}
+
+/// 原版人物浏览器: 近况走 /mono/update, 其余走 /user/{id}/mono
+String characterBrowserUrl({required bool recents, required String userId}) {
+  if (recents || userId.isEmpty) return htmlUserMonoRecents();
+  return htmlUserMonoPage(userId);
+}
+
+/// 用户人物 (原项目 tabs: 自己 人物近况/虚拟角色/现实人物, TA 仅后两项)
 class CharacterScreen extends ConsumerStatefulWidget {
-  const CharacterScreen({super.key});
+  final String userName;
+
+  const CharacterScreen({super.key, this.userName = ''});
 
   @override
   ConsumerState<CharacterScreen> createState() => _CharacterScreenState();
@@ -137,93 +143,113 @@ class CharacterScreen extends ConsumerStatefulWidget {
 
 class _CharacterScreenState extends ConsumerState<CharacterScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 3, vsync: this);
+  late final TabController _tab;
+  final _recentsScroll = ScrollController();
+
+  bool _self = true;
+
+  String _meId(WidgetRef ref) {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return '';
+    return user.username.isEmpty ? '${user.id}' : user.username;
+  }
+
+  String _username(WidgetRef ref) {
+    final name = widget.userName.trim();
+    if (name.isNotEmpty) return name;
+    return _meId(ref);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _self = characterShowRecents(widget.userName, meId: _meId(ref));
+    _tab = TabController(length: _self ? 3 : 2, vsync: this)
+      ..addListener(() {
+        if (mounted) setState(() {});
+      });
+  }
 
   @override
   void dispose() {
     _tab.dispose();
+    _recentsScroll.dispose();
     super.dispose();
+  }
+
+  void _jumpRecentsDivider() {
+    final items = ref.read(monoRecentsProvider).valueOrNull?.items ?? const [];
+    final divider = recentDividerIndex(items);
+    if (divider <= 0 || !_recentsScroll.hasClients) return;
+    _recentsScroll.animateTo(
+      recentDividerOffset(divider),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final loggedIn = ref.watch(isLoggedInProvider);
-    final characters = ref.watch(myCharactersProvider);
-    final persons = ref.watch(myPersonsProvider);
+    final username = _username(ref);
+    final needLogin = _self && !loggedIn;
 
     return Scaffold(
       appBar: BgmAppBar(
-        title: '我的人物',
+        title: characterTitle(widget.userName),
         showBackButton: true,
         actions: [
-          IconButton(
-            tooltip: '浏览器查看',
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => openExternalUrl('$kHost/mono/update'),
-          ),
+          if (_self && _tab.index == 0)
+            BgmHeaderAction(
+              tooltip: '跳到今天',
+              icon: const Icon(Icons.radio_button_checked, size: 16),
+              onPressed: _jumpRecentsDivider,
+            ),
+          BgmHeaderMore.browser(() {
+            openExternalUrl(
+              characterBrowserUrl(
+                recents: _self && _tab.index == 0,
+                userId: username,
+              ),
+            );
+          }),
         ],
       ),
 
-      body: !loggedIn
+      body: needLogin
           ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text('登录后查看收藏的角色'),
                   const SizedBox(height: 12),
-                  FilledButton.tonal(
+                  BgmButton(
+                    '去登录',
+                    expand: false,
                     onPressed: () => context.push('/login'),
-                    child: const Text('去登录'),
                   ),
                 ],
               ),
             )
           : Column(
               children: [
-                TabBar(
+                BgmControlledTabStrip(
                   controller: _tab,
-                  tabs: const [
-                    Tab(text: '人物近况'),
-                    Tab(text: '虚拟角色'),
-                    Tab(text: '现实人物'),
+                  tabs: [
+                    if (_self) const Text('人物近况'),
+                    const Text('虚拟角色'),
+                    const Text('现实人物'),
                   ],
                 ),
+
                 Expanded(
                   child: TabBarView(
                     controller: _tab,
                     children: [
-                      const _RecentsList(),
-                      characters.when(
-                        loading: () => const Center(child: Loading()),
-                        error: (_, _) => Center(
-                          child: FilledButton.tonal(
-                            onPressed: () =>
-                                ref.invalidate(myCharactersProvider),
-                            child: const Text('重试'),
-                          ),
-                        ),
-                        data: (list) => _CharacterGrid(
-                          items: list,
-                          emptyText: '还没有收藏的角色',
-                          onRefresh: () async =>
-                              ref.invalidate(myCharactersProvider),
-                        ),
-                      ),
-                      persons.when(
-                        loading: () => const Center(child: Loading()),
-                        error: (_, _) => Center(
-                          child: FilledButton.tonal(
-                            onPressed: () => ref.invalidate(myPersonsProvider),
-                            child: const Text('重试'),
-                          ),
-                        ),
-                        data: (list) => _CharacterGrid(
-                          items: list,
-                          emptyText: '还没有收藏的人物',
-                          onRefresh: () async =>
-                              ref.invalidate(myPersonsProvider),
-                        ),
-                      ),
+                      if (_self) _RecentsList(scroll: _recentsScroll),
+
+                      UserMonoList(userId: username, kind: 'character'),
+                      UserMonoList(userId: username, kind: 'person'),
                     ],
                   ),
                 ),
@@ -233,82 +259,17 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen>
   }
 }
 
-class _CharacterGrid extends StatelessWidget {
-  final List<CharacterItem> items;
-  final String emptyText;
-  final Future<void> Function() onRefresh;
-
-  const _CharacterGrid({
-    required this.items,
-    required this.emptyText,
-    required this.onRefresh,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: onRefresh,
-        child: ListView(
-          children: [
-            const SizedBox(height: 120),
-            Center(child: Text(emptyText)),
-          ],
-        ),
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: GridView.builder(
-        padding: const EdgeInsets.all(10),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 0.72,
-        ),
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return InkWell(
-            onTap: () => context.push(
-              '/mono/${item.type == 1 ? 'character' : 'person'}/${item.id}',
-            ),
-            child: Column(
-              children: [
-                Expanded(
-                  child: Cover(
-                    url: item.image,
-                    width: double.infinity,
-                    height: double.infinity,
-                    radius: 6,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
 class _RecentsList extends ConsumerStatefulWidget {
-  const _RecentsList();
+  final ScrollController scroll;
+
+  const _RecentsList({required this.scroll});
 
   @override
   ConsumerState<_RecentsList> createState() => _RecentsListState();
 }
 
 class _RecentsListState extends ConsumerState<_RecentsList> {
-  final _scroll = ScrollController();
+  ScrollController get _scroll => widget.scroll;
 
   @override
   void initState() {
@@ -320,29 +281,14 @@ class _RecentsListState extends ConsumerState<_RecentsList> {
     });
   }
 
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(monoRecentsProvider);
     return async.when(
       loading: () => const Center(child: Loading()),
-      error: (_, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('加载失败'),
-            FilledButton.tonal(
-              onPressed: () => ref.invalidate(monoRecentsProvider),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
+      error: (_, _) =>
+          BgmRetry(onRetry: () => ref.invalidate(monoRecentsProvider)),
       data: (data) {
         if (data.items.isEmpty) {
           return RefreshIndicator(
@@ -355,28 +301,23 @@ class _RecentsListState extends ConsumerState<_RecentsList> {
             ),
           );
         }
+        final divider = recentDividerIndex(data.items);
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(monoRecentsProvider),
           child: ListView.separated(
             controller: _scroll,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             itemCount: data.items.length + (data.hasMore ? 1 : 0),
-            separatorBuilder: (_, _) => const Divider(height: 16),
+            separatorBuilder: (_, _) => const BgmHairline(height: 16),
             itemBuilder: (context, index) {
               if (index >= data.items.length) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
+                  child: Center(child: BgmSpinner(size: 20)),
                 );
               }
               final item = data.items[index];
-              return InkWell(
+              final row = InkWell(
                 onTap: item.id == 0
                     ? null
                     : () => context.push('/subject/${item.id}'),
@@ -471,6 +412,35 @@ class _RecentsListState extends ConsumerState<_RecentsList> {
                     ),
                   ],
                 ),
+              );
+              if (index != divider) return row;
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: [
+                        const Expanded(child: BgmHairline()),
+                        Icon(
+                          Icons.access_time,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          recentDividerLabel(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const Expanded(child: BgmHairline()),
+                      ],
+                    ),
+                  ),
+                  row,
+                ],
               );
             },
           ),

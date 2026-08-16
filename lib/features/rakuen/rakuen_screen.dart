@@ -15,10 +15,11 @@ import '../../shared/widgets/cover.dart';
 import '../../shared/widgets/loading.dart';
 import '../../shared/widgets/score.dart';
 import '../../shared/widgets/tab_title.dart';
+import '../../shared/widgets/bgm_button.dart';
 
-import 'rakuen_models.dart';
 import 'rakuen_providers.dart';
 import 'rakuen_settings.dart';
+import '../../shared/widgets/mesume.dart';
 
 /// 超展开板块 (移植自原项目 MODEL_RAKUEN_SCOPE)
 const kRakuenScopes = [
@@ -38,6 +39,13 @@ const kRakuenTypes = [
   ('热门', 'hot'),
   ('章节', 'ep'),
   ('人物', 'mono'),
+];
+
+/// 原版超展开 IconMore: 小组搜索 / 超展开设置 / 添加新讨论
+const kRakuenMoreItems = <(String, String)>[
+  ('search', '小组搜索'),
+  ('setting', '超展开设置'),
+  ('new', '添加新讨论'),
 ];
 
 /// 小组二级 (MODEL_RAKUEN_TYPE_GROUP)
@@ -154,34 +162,34 @@ class RakuenScreen extends ConsumerStatefulWidget {
   ConsumerState<RakuenScreen> createState() => _RakuenScreenState();
 }
 
-class _RakuenScreenState extends ConsumerState<RakuenScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _typeTab = TabController(
-    length: kRakuenTypes.length,
-    vsync: this,
-  );
-  int _scopeIndex = 0;
+class _RakuenScreenState extends ConsumerState<RakuenScreen> {
+  int _typeIndex = 0;
   int _subIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _typeTab.addListener(() {
-      if (_typeTab.indexIsChanging) return;
-      setState(() => _subIndex = 0);
-    });
-  }
-
-  @override
-  void dispose() {
-    _typeTab.dispose();
-    super.dispose();
+  Future<void> _prefetchUnread(BuildContext context, String key) async {
+    final data = ref.read(rakuenProvider(key)).valueOrNull;
+    final ids = <String>[
+      for (final t in data?.topics ?? const <RakuenTopicItem>[]) t.topicId,
+    ];
+    if (ids.isEmpty) {
+      showBgmToast(context, '当前没有帖子');
+      return;
+    }
+    final confirm = await showBgmConfirm(
+      context,
+      title: '预读取未读帖子',
+      message: '当前未读最多预读前 $kRakuenPrefetchCount 个, 建议在 Wi-Fi 下进行',
+    );
+    if (confirm != true || !context.mounted) return;
+    showBgmToast(context, '预读中...');
+    final n = await prefetchUnreadTopics(ref, ids);
+    if (!context.mounted) return;
+    showBgmToast(context, n == 0 ? '当前没有未读帖子' : '已预读 $n 个帖子');
   }
 
   @override
   Widget build(BuildContext context) {
-    final scope = kRakuenScopes[_scopeIndex];
-    final type = kRakuenTypes[_typeTab.index];
+    final type = kRakuenTypes[_typeIndex];
     final subFilters = switch (type.$2) {
       'group' => kRakuenGroupFilters,
       'mono' => kRakuenMonoFilters,
@@ -189,152 +197,81 @@ class _RakuenScreenState extends ConsumerState<RakuenScreen>
     };
     if (_subIndex >= subFilters.length) _subIndex = 0;
     final typeKey = subFilters.isEmpty ? type.$2 : subFilters[_subIndex].$2;
-    final key = '$typeKey|${scope.$2}';
-    final extraFilter = subFilters.isNotEmpty;
+    // 原版默认 RAKUEN_SCOPE=全局聚合; 板块不单独占一排芯片
+    final key = '$typeKey|${kRakuenScopes.first.$2}';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const TabLogoTitle('超展开'),
-        leading: IconButton(
+      appBar: LogoHeader(
+        leading: BgmHeaderAction(
           icon: const Icon(Icons.filter_none, size: 18),
           tooltip: '我的小组',
           onPressed: () => context.push('/rakuen/mine'),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.inbox_outlined),
-            tooltip: '帖子聚合',
-            onPressed: () => context.push('/rakuen/history'),
-          ),
-          PopupMenuButton<String>(
-            tooltip: '更多',
-            onSelected: (v) async {
-              if (v == 'search') {
-                await context.push('/rakuen/search');
-                return;
-              }
-              if (v == 'setting') {
-                await context.push('/rakuen/setting');
-                return;
-              }
-              if (v == 'new') {
-                await context.push(
-                  '/web/${Uri.encodeComponent(htmlNewTopic())}',
-                );
-                return;
-              }
-              if (v == 'prefetch') {
-                final data = ref.read(rakuenProvider(key)).valueOrNull;
-                final ids = <String>[
-                  for (final t in data?.topics ?? const <RakuenTopicItem>[])
-                    t.topicId,
-                ];
-                if (ids.isEmpty) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('当前没有帖子')));
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            BgmHeaderAction(
+              icon: const Icon(Icons.inbox_outlined, size: 20),
+              tooltip: '帖子聚合',
+              onPressed: () => context.push('/rakuen/history'),
+            ),
+            BgmHeaderAction(
+              icon: const Icon(Icons.download_outlined, size: 18),
+              tooltip: '预读取未读帖子',
+              onPressed: () => _prefetchUnread(context, key),
+            ),
+            BgmHeaderMore(
+              items: kRakuenMoreItems,
+              onSelected: (v) async {
+                if (v == 'search') {
+                  await context.push('/rakuen/search');
                   return;
                 }
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('预读取未读帖子'),
-                    content: Text(
-                      '当前未读最多预读前 $kRakuenPrefetchCount 个, 建议在 Wi-Fi 下进行',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('取消'),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('确定'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirm != true || !context.mounted) return;
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('预读中...')));
-                final n = await prefetchUnreadTopics(ref, ids);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(n == 0 ? '当前没有未读帖子' : '已预读 $n 个帖子')),
-                );
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'search', child: Text('小组搜索')),
-              PopupMenuItem(value: 'setting', child: Text('超展开设置')),
-              PopupMenuItem(value: 'prefetch', child: Text('预读取未读帖子')),
-              PopupMenuItem(value: 'new', child: Text('添加新讨论')),
-            ],
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: Size.fromHeight(extraFilter ? 124 : 88),
-          child: Column(
-            children: [
-              TabBar(
-                controller: _typeTab,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                tabs: [for (final t in kRakuenTypes) Tab(text: t.$1)],
-              ),
-              SizedBox(
-                height: 36,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: kRakuenScopes.length,
-                  itemBuilder: (context, index) {
-                    final s = kRakuenScopes[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: ChoiceChip(
-                        label: Text(s.$1, style: const TextStyle(fontSize: 12)),
-                        selected: index == _scopeIndex,
-                        onSelected: (_) => setState(() {
-                          _scopeIndex = index;
-                          _subIndex = 0;
-                        }),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              if (extraFilter)
-                SizedBox(
-                  height: 36,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemCount: subFilters.length,
-                    itemBuilder: (context, index) {
-                      final t = subFilters[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: ChoiceChip(
-                          label: Text(
-                            t.$1,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          selected: index == _subIndex,
-                          onSelected: (_) => setState(() => _subIndex = index),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-            ],
-          ),
+                if (v == 'setting') {
+                  await context.push('/rakuen/setting');
+                  return;
+                }
+                if (v == 'new') {
+                  await context.push(
+                    '/web/${Uri.encodeComponent(htmlNewTopic())}',
+                  );
+                }
+              },
+            ),
+          ],
         ),
       ),
-      body: typeKey.startsWith('hot') && !ref.watch(isLoggedInProvider)
-          ? const _RakuenLoginGate()
-          : _RakuenTopicList(listKey: key),
+      body: Column(
+        children: [
+          BgmTabStrip(
+            scrollable: true,
+            index: _typeIndex,
+            onSelect: (i) => setState(() {
+              _typeIndex = i;
+              _subIndex = 0;
+            }),
+            tabs: [
+              for (var i = 0; i < kRakuenTypes.length; i++)
+                _RakuenTabLabel(
+                  title: kRakuenTypes[i].$1,
+                  focused: i == _typeIndex,
+                  filters: switch (kRakuenTypes[i].$2) {
+                    'group' => kRakuenGroupFilters,
+                    'mono' => kRakuenMonoFilters,
+                    _ => const <(String, String)>[],
+                  },
+                  subIndex: _subIndex,
+                  onSelectSub: (j) => setState(() => _subIndex = j),
+                ),
+            ],
+          ),
+          Expanded(
+            child: typeKey.startsWith('hot') && !ref.watch(isLoggedInProvider)
+                ? const _RakuenLoginGate()
+                : _RakuenTopicList(listKey: key),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -373,33 +310,36 @@ class _RakuenTopicListState extends ConsumerState<_RakuenTopicList> {
     final async = ref.watch(rakuenProvider(widget.listKey));
     return async.when(
       loading: () => const Loading(),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('加载失败'),
-            TextButton(
-              onPressed: () => ref.invalidate(rakuenProvider(widget.listKey)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      error: (e, _) => BgmRetry(
+        onRetry: () => ref.invalidate(rakuenProvider(widget.listKey)),
       ),
+
       data: (data) {
         final store = ref.watch(settingsStoreProvider);
+        final rakuen = ref.watch(rakuenSettingsProvider);
         final topics = [
           for (final topic in data.topics)
-            if (_keepRakuenTopic(store, topic)) topic,
+            if (_keepRakuenTopic(store, topic) &&
+                _keepRakuenTopicSettings(rakuen, topic))
+              topic,
         ];
         if (topics.isEmpty) {
-          return const Center(child: Text('暂无帖子'));
+          return RefreshIndicator(
+            onRefresh: () async =>
+                ref.invalidate(rakuenProvider(widget.listKey)),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [SizedBox(height: 80), _RakuenEmpty()],
+            ),
+          );
         }
+
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(rakuenProvider(widget.listKey)),
           child: ListView.separated(
             controller: _scrollController,
             itemCount: topics.length,
-            separatorBuilder: (_, _) => const Divider(indent: 56),
+            separatorBuilder: (_, _) => const BgmHairline(indent: 56),
             itemBuilder: (context, index) {
               return _TopicRow(topic: topics[index]);
             },
@@ -454,10 +394,29 @@ class _TopicRow extends ConsumerWidget {
         groupId != null &&
         groupId < 440000;
 
+    final isGroup = topic.topicId.startsWith('group/');
+    final isSubject = topic.topicId.startsWith('subject/');
+    final isEp = topic.topicId.startsWith('ep/');
+    final isMono =
+        topic.topicId.startsWith('prsn/') || topic.topicId.startsWith('crt/');
+    final typeLabel = isGroup
+        ? '小组'
+        : (isSubject || isEp)
+        ? '条目'
+        : '人物';
+    final showUser = !isMono && !isEp;
+    final showGroup = !isMono && topic.group.isNotEmpty;
+    final timeText = topic.time;
+    final meta = [
+      if (timeText.isNotEmpty) timeText,
+      if (showGroup) topic.group,
+      if (showUser && topic.userName.isNotEmpty) topic.userName,
+    ].join(' / ');
+
     return InkWell(
       onTap: () => context.push('/rakuen/topic/${topic.topicId}'),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -476,165 +435,135 @@ class _TopicRow extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        if (favored)
-                          const WidgetSpan(
-                            alignment: PlaceholderAlignment.middle,
-                            child: Padding(
-                              padding: EdgeInsets.only(right: 4),
-                              child: Icon(
-                                Icons.star,
-                                size: 14,
-                                color: Colors.amber,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2, right: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          if (favored)
+                            const WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: Padding(
+                                padding: EdgeInsets.only(right: 4),
+                                child: Icon(
+                                  Icons.star,
+                                  size: 14,
+                                  color: Color(0xFFFFC107),
+                                ),
                               ),
                             ),
-                          ),
-                        TextSpan(text: topic.title),
-                        if (topic.replies > 0)
-                          TextSpan(
-                            text: ' +${topic.replies}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: seen
-                                  ? theme.hintColor
-                                  : theme.colorScheme.primary,
-                            ),
-                          ),
-                        if (replyAdd > 0)
-                          TextSpan(
-                            text: ' +$replyAdd',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                        if (isBlog)
-                          TextSpan(
-                            text: '  日志',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w400,
-                              color: theme.hintColor,
-                            ),
-                          ),
-                        if (isLegacyGroup)
-                          TextSpan(
-                            text: '  旧帖',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w400,
-                              color: theme.hintColor,
-                            ),
-                          ),
-                        if (isOld)
-                          TextSpan(
-                            text: ' 坟',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w400,
-                              color: theme.hintColor,
-                            ),
-                          ),
-                      ],
-                    ),
-                    style: TextStyle(
-                      fontSize: visualFontSize(topic.title, const [
-                        (20, 13),
-                        (0, 14),
-                      ]),
-                      fontWeight: seen ? FontWeight.w400 : FontWeight.w600,
-                      color: seen ? theme.hintColor : null,
-                    ),
-
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      if (topic.group.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.08,
-                            ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            topic.group,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                topic.userName,
-                                style: context.ds.meta,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                          TextSpan(text: topic.title),
+                          if (topic.replies > 0)
+                            TextSpan(
+                              text: ' +${topic.replies}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: seen
+                                    ? theme.hintColor
+                                    : theme.colorScheme.primary,
                               ),
                             ),
-                            UserAgeBadge(userId: topic.userId),
-                          ],
-                        ),
+                          if (replyAdd > 0)
+                            TextSpan(
+                              text: ' +$replyAdd',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          if (isBlog)
+                            TextSpan(
+                              text: '  日志',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                          if (isLegacyGroup)
+                            TextSpan(
+                              text: '  旧帖',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                          if (isOld)
+                            TextSpan(
+                              text: ' 坟',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                        ],
                       ),
-                      Text(topic.time, style: context.ds.tiny),
+                      style: TextStyle(
+                        fontSize: visualFontSize(topic.title, const [
+                          (20, 13),
+                          (0, 14),
+                        ]),
+                        fontWeight: seen ? FontWeight.w400 : FontWeight.w600,
+                        color: seen ? theme.hintColor : null,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              meta,
+                              style: context.ds.meta,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (showUser && topic.userId.isNotEmpty)
+                            UserAgeBadge(userId: topic.userId),
+                        ],
+                      ),
                     ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            if (topic.replies > 0)
-              Padding(
-                padding: const EdgeInsets.only(left: 8, top: 8),
-                child: Text(
-                  '${topic.replies}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: seen ? FontWeight.w400 : FontWeight.w700,
-                    color: seen ? theme.hintColor : theme.colorScheme.primary,
-                  ),
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: PopupMenuButton<String>(
+                tooltip: '更多',
+                padding: EdgeInsets.zero,
+                iconSize: 18,
+                icon: Icon(
+                  Icons.more_horiz,
+                  size: 18,
+                  color: context.ds.textSecondary,
                 ),
+                onSelected: (v) => _onMenu(context, ref, v),
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: 'enter', child: Text('进入$typeLabel')),
+                  if (topic.group.isNotEmpty)
+                    PopupMenuItem(
+                      value: 'blockType',
+                      child: Text('屏蔽$typeLabel'),
+                    ),
+                  if (isGroup || isSubject)
+                    const PopupMenuItem(value: 'disconnect', child: Text('绝交')),
+                  if (topic.userId.isNotEmpty)
+                    const PopupMenuItem(
+                      value: 'blockUser',
+                      child: Text('屏蔽用户'),
+                    ),
+                ],
               ),
-            PopupMenuButton<String>(
-              tooltip: '更多',
-              padding: EdgeInsets.zero,
-              icon: const Icon(Icons.more_vert, size: 18),
-              onSelected: (v) => _onMenu(context, ref, v),
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: 'favor',
-                  child: Text(favored ? '取消收藏' : '收藏主题'),
-                ),
-                if (topic.groupHref.isNotEmpty)
-                  const PopupMenuItem(value: 'group', child: Text('进入小组')),
-                if (topic.topicId.startsWith('subject/'))
-                  const PopupMenuItem(value: 'subject', child: Text('进入条目')),
-                if (topic.topicId.startsWith('prsn/') ||
-                    topic.topicId.startsWith('crt/'))
-                  const PopupMenuItem(value: 'mono', child: Text('进入人物')),
-                if (topic.groupHref.isNotEmpty)
-                  const PopupMenuItem(value: 'blockGroup', child: Text('屏蔽小组')),
-                if (topic.userId.isNotEmpty)
-                  const PopupMenuItem(value: 'blockUser', child: Text('屏蔽用户')),
-                if (topic.userId.isNotEmpty)
-                  const PopupMenuItem(value: 'disconnect', child: Text('绝交')),
-              ],
             ),
           ],
         ),
@@ -644,42 +573,32 @@ class _TopicRow extends ConsumerWidget {
 
   void _onMenu(BuildContext context, WidgetRef ref, String value) {
     switch (value) {
-      case 'favor':
-        unawaited(
-          ref
-              .read(topicFavorProvider.notifier)
-              .toggle(
-                HistoryItem(
-                  topicId: topic.topicId,
-                  title: topic.title,
-                  group: topic.group,
-                  userName: topic.userName,
-                  replies: topic.replies,
-                  time: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-                ),
-              ),
-        );
-      case 'group':
-        final name = topic.groupHref.replaceAll('/group/', '');
-        if (name.isNotEmpty) context.push('/rakuen/group/$name');
-      case 'subject':
-        final id = topic.topicId.split('/').last;
-        if (id.isNotEmpty) context.push('/subject/$id');
-      case 'mono':
-        final parts = topic.topicId.split('/');
-        if (parts.length == 2) {
-          final kind = parts.first == 'crt' ? 'character' : 'person';
-          context.push('/mono/$kind/${parts.last}');
+      case 'enter':
+        if (topic.topicId.startsWith('group/')) {
+          final name = topic.groupHref.replaceAll('/group/', '');
+          if (name.isNotEmpty) context.push('/rakuen/group/$name');
+        } else if (topic.topicId.startsWith('subject/') ||
+            topic.topicId.startsWith('ep/')) {
+          final href = topic.groupHref.isNotEmpty
+              ? topic.groupHref
+              : '/${topic.topicId}';
+          final id = href.replaceAll(RegExp(r'.*/subject/'), '');
+          if (id.isNotEmpty) context.push('/subject/$id');
+        } else {
+          final parts = topic.topicId.split('/');
+          if (parts.length == 2) {
+            final kind = parts.first == 'crt' ? 'character' : 'person';
+            context.push('/mono/$kind/${parts.last}');
+          }
         }
-      case 'blockGroup':
-        final name = topic.groupHref.replaceAll('/group/', '');
-        if (name.isNotEmpty) {
+      case 'blockType':
+        if (topic.group.isNotEmpty) {
           unawaited(
-            ref.read(rakuenSettingsProvider.notifier).addBlockGroup(name),
+            ref
+                .read(rakuenSettingsProvider.notifier)
+                .addBlockGroup(topic.group),
           );
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('已屏蔽小组 $name')));
+          showBgmToast(context, '已屏蔽 ${topic.group}');
         }
       case 'blockUser':
         if (topic.userId.isNotEmpty) {
@@ -688,14 +607,37 @@ class _TopicRow extends ConsumerWidget {
                 .read(rakuenSettingsProvider.notifier)
                 .addBlockUser(topic.userId),
           );
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('已屏蔽该用户')));
+          showBgmToast(context, '已屏蔽 ${topic.userName}');
         }
       case 'disconnect':
         if (topic.userId.isNotEmpty) {
-          context.push('/user/${topic.userId}');
+          unawaited(_disconnect(context, ref));
         }
+    }
+  }
+
+  Future<void> _disconnect(BuildContext context, WidgetRef ref) async {
+    final ok = await showBgmConfirm(
+      context,
+      title: '绝交',
+      message: '与 ${topic.userName} 绝交（不再看到用户的所有话题、评论、日志、私信、提醒）?',
+      confirmLabel: '绝交',
+    );
+    if (ok != true) return;
+    try {
+      final client = ref.read(apiClientProvider);
+      final html = await client.fetchHtml(htmlNotify());
+      final gh = parseFormhash(html);
+      if (gh.isEmpty) return;
+      await client.get(apiDisconnect(topic.userId, gh));
+
+      if (context.mounted) {
+        showBgmToast(context, '已添加绝交');
+      }
+    } catch (_) {
+      if (context.mounted) {
+        showBgmToast(context, '添加失败, 可能授权信息过期');
+      }
     }
   }
 }
@@ -708,6 +650,88 @@ bool _keepRakuenTopic(SettingsStore store, RakuenTopicItem topic) {
   return true;
 }
 
+bool _keepRakuenTopicSettings(
+  RakuenSettingsState settings,
+  RakuenTopicItem topic,
+) {
+  if (settings.blockDefaultUser && isDefaultAvatar(topic.avatar)) return false;
+  if (settings.isUserBlocked(topic.userId, topic.userName)) return false;
+  if (settings.isGroupBlocked(topic.group)) return false;
+  if (settings.matchesKeyword(topic.title)) return false;
+  return true;
+}
+
+class _RakuenTabLabel extends StatelessWidget {
+  final String title;
+  final bool focused;
+  final List<(String, String)> filters;
+  final int subIndex;
+  final ValueChanged<int> onSelectSub;
+
+  const _RakuenTabLabel({
+    required this.title,
+    required this.focused,
+    required this.filters,
+    required this.subIndex,
+    required this.onSelectSub,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = context.ds.label.copyWith(
+      fontWeight: focused ? FontWeight.w700 : FontWeight.w500,
+    );
+    if (!focused || filters.isEmpty) {
+      return Text(title, style: style);
+    }
+    final current = filters[subIndex.clamp(0, filters.length - 1)].$1;
+    return PopupMenuButton<int>(
+      tooltip: title,
+      padding: EdgeInsets.zero,
+      onSelected: onSelectSub,
+      itemBuilder: (_) => [
+        for (var i = 0; i < filters.length; i++)
+          PopupMenuItem(value: i, child: Text(filters[i].$1)),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(title, style: style),
+          const SizedBox(width: 2),
+          Text(
+            current,
+            style: context.ds.tiny.copyWith(color: context.ds.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RakuenEmpty extends StatelessWidget {
+  const _RakuenEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    final speech = SettingsStore.instance.speech;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Mesume(size: 80),
+          const SizedBox(height: 12),
+          Text(
+            speech ? randomMesumeSpeech() : '暂无帖子',
+            style: context.ds.caption.copyWith(fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RakuenLoginGate extends StatelessWidget {
   const _RakuenLoginGate();
 
@@ -717,13 +741,18 @@ class _RakuenLoginGate extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.lock_outline, size: 48, color: context.ds.textHint),
+          const Mesume(size: 80),
           const SizedBox(height: 12),
-          const Text('热门需要登录后查看'),
-          const SizedBox(height: 12),
-          FilledButton(
+          Text(
+            '热门帖子需登录才能显示',
+            style: context.ds.caption.copyWith(fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          BgmButton(
+            '去登录',
+            expand: false,
             onPressed: () => context.push('/login'),
-            child: const Text('去登录'),
           ),
         ],
       ),

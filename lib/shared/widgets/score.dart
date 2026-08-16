@@ -51,6 +51,35 @@ class Score extends StatelessWidget {
   }
 }
 
+/// 原项目 ScoreTag: 粉色小芯片显示评分档位
+class ScoreTag extends StatelessWidget {
+  final num value;
+
+  const ScoreTag({super.key, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = collectionRatingLabel(value);
+    if (label.isEmpty) return const SizedBox.shrink();
+    final ds = context.ds;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: dark ? ds.surfaceCard : ds.accent,
+        borderRadius: AppRadius.sAll,
+      ),
+      child: Text(
+        label,
+        style: context.ds.caption.copyWith(
+          color: dark ? ds.accent : Colors.white,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
 /// 星级组件 (1-10 分制 → 半星展示)
 class Stars extends StatelessWidget {
   final double score;
@@ -189,6 +218,61 @@ class UserAgeBadge extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// 原版 SectionTitle 右侧: 副文案 + md-navigate-next
+class SectionMore extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const SectionMore({super.key, this.label = '更多', required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: context.ds.caption),
+            Icon(
+              Icons.navigate_next,
+              size: 18,
+              color: context.ds.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 列表底「加载更多」文字链, 对齐原版 Heatmap / Pagination 而非 M3 按钮
+class LoadMoreLink extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const LoadMoreLink({super.key, this.label = '加载更多', required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Text(
+            label,
+            style: context.ds.caption.copyWith(color: context.ds.accent),
+          ),
+        ),
+      ),
     );
   }
 }

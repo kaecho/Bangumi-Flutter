@@ -89,6 +89,13 @@ void main() {
         '/mono/person/40794',
       );
     });
+    test('人物角色进独立页', () {
+      expect(
+        bgmUrlToRoute('https://bgm.tv/person/40794/works/voice'),
+        '/mono/person/40794/voices',
+      );
+    });
+
     test('日志', () {
       expect(bgmUrlToRoute('https://bgm.tv/blog/1234'), '/rakuen/blog/1234');
     });

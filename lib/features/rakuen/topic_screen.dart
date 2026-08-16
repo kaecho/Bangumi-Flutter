@@ -26,10 +26,24 @@ import 'widgets/floor_view.dart';
 import '../subject/subject_providers.dart';
 import '../../design_system/design_system.dart';
 import '../../shared/models/ep.dart';
-
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 String _userPathId(User user) =>
     user.username.isEmpty ? '${user.id}' : user.username;
+
+/// 原版帖子 Menu: 帖子 · id / 网页版查看 / 复制链接 / 复制分享 / 举报
+List<(String, String)> topicMoreItems(String topicId) => [
+  ('id:$topicId', '帖子 · $topicId'),
+  ('spa', '网页版查看'),
+  ('copy', '复制链接'),
+  ('share', '复制分享'),
+  ('report', '举报'),
+];
+
+String _topicSpaUrl(String topicId) =>
+    'https://bangumi-app.5t5.top/iframe.html?id=screens-topic--topic'
+    '&viewMode=story&topicId=${Uri.encodeQueryComponent(topicId)}';
 
 /// 帖子详情 (超展开核心页面)
 /// 路由: /rakuen/topic/:type/:id  (type: group|subject|ep|prsn|crt)
@@ -45,7 +59,7 @@ class TopicScreen extends ConsumerStatefulWidget {
   ConsumerState<TopicScreen> createState() => _TopicScreenState();
 }
 
-enum _FloorFilter { all, author, me, friends, likes, track }
+enum _FloorFilter { all, follow, me, friends, likes }
 
 class _TopicScreenState extends ConsumerState<TopicScreen> {
   final _replyController = TextEditingController();
@@ -77,9 +91,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
     final data = ref.read(topicDetailProvider(_topicId)).valueOrNull;
     if (data != null && (data.close.isNotEmpty || data.tip.contains('半公开'))) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data.close.isNotEmpty ? data.close : data.tip)),
-        );
+        showBgmToast(context, data.close.isNotEmpty ? data.close : data.tip);
       }
       return;
     }
@@ -93,9 +105,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
       }
       if (gh.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('回帖需要站点 Cookie 登录')),
-          );
+          showBgmToast(context, '回帖需要站点 Cookie 登录');
         }
         return;
       }
@@ -111,43 +121,40 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
       final lastview = data?.lastview.isNotEmpty == true
           ? data!.lastview
           : '${DateTime.now().millisecondsSinceEpoch ~/ 1000}';
-      await ref.read(apiClientProvider).post(
-        htmlTopicReply(_topicId),
-        host: kHost,
-        form: true,
-        data: {
-          'content': text,
-          'formhash': gh,
-          'related_photo': 0,
-          'lastview': lastview,
-          'submit': 'submit',
-          if (parsed != null) ...{
-            'related': parsed.related,
-            'sub_reply_uid': parsed.subReplyUid,
-            'post_uid': parsed.postUid,
-          },
-        },
-      );
+      await ref
+          .read(apiClientProvider)
+          .post(
+            htmlTopicReply(_topicId),
+            host: kHost,
+            form: true,
+            data: {
+              'content': text,
+              'formhash': gh,
+              'related_photo': 0,
+              'lastview': lastview,
+              'submit': 'submit',
+              if (parsed != null) ...{
+                'related': parsed.related,
+                'sub_reply_uid': parsed.subReplyUid,
+                'post_uid': parsed.postUid,
+              },
+            },
+          );
       _replyController.clear();
       if (mounted) setState(() => _replyTarget = null);
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('回复成功')));
+        showBgmToast(context, '回复成功');
       }
       ref.invalidate(topicDetailProvider(_topicId));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('回复失败: ${apiErrorMessage(e)}')));
+        showBgmToast(context, '回复失败: ${apiErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
-
 
   void _jumpFloor(int direction) {
     if (!_scrollController.hasClients) return;
@@ -166,46 +173,6 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
     }
   }
 
-  Future<void> _promptJumpFloor(TopicPageData? data) async {
-    if (data == null || data.floors.isEmpty) return;
-    final controller = TextEditingController();
-    final raw = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('跳转到楼层'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: InputDecoration(hintText: '1-${data.floors.length + 1}'),
-          onSubmitted: (v) => Navigator.of(ctx).pop(v),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text('跳转'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (raw == null || raw.trim().isEmpty || !mounted) return;
-    final n = int.tryParse(raw.trim());
-    if (n == null) return;
-    if (!_scrollController.hasClients) return;
-    // 1 = 主楼, 其后按当前列表楼层估算位置
-    final ratio = ((n - 1) / (data.floors.length + 1)).clamp(0.0, 1.0);
-    final target = _scrollController.position.maxScrollExtent * ratio;
-    await _scrollController.animateTo(
-      target,
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOut,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -213,17 +180,13 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
     final settings = ref.watch(rakuenSettingsProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          async.valueOrNull?.title.isNotEmpty == true
-              ? async.valueOrNull!.title
-              : '帖子详情',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+      appBar: BgmAppBar(
+        title: async.valueOrNull?.title.isNotEmpty == true
+            ? async.valueOrNull!.title
+            : '帖子',
         actions: [
           if (async.valueOrNull != null)
-            IconButton(
+            BgmHeaderAction(
               tooltip:
                   ref
                       .watch(topicFavorProvider)
@@ -255,55 +218,35 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
                 );
               },
             ),
-          IconButton(
-            icon: const Icon(Icons.swap_vert, size: 20),
-            tooltip: '跳转到楼层',
-            onPressed: () => _promptJumpFloor(async.valueOrNull),
-          ),
-          IconButton(
-            icon: Icon(
-              _reverse ? Icons.vertical_align_bottom : Icons.vertical_align_top,
-              size: 20,
-            ),
-            tooltip: '最新回复',
-            onPressed: () => setState(() => _reverse = !_reverse),
-          ),
-          PopupMenuButton<String>(
-            tooltip: '更多',
+          BgmHeaderMore(
+            items: topicMoreItems(_topicId),
             onSelected: (v) {
               final url = htmlTopicPage(_topicId);
               final title = async.valueOrNull?.title ?? '帖子';
-              if (v == 'browser') {
+              if (v.startsWith('id:')) {
                 openExternalUrl(url);
+                return;
+              }
+              if (v == 'spa') {
+                openExternalUrl(_topicSpaUrl(_topicId));
                 return;
               }
               if (v == 'copy') {
                 Clipboard.setData(ClipboardData(text: url));
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('已复制链接')));
+                showBgmToast(context, '已复制链接');
                 return;
               }
               if (v == 'share') {
                 Clipboard.setData(
                   ClipboardData(text: '【链接】$title | Bangumi番组计划\n$url'),
                 );
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('已复制分享文案')));
+                showBgmToast(context, '已复制分享文案');
                 return;
               }
               if (v == 'report') {
                 openExternalUrl('$kHost/group/forum');
               }
             },
-
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'browser', child: Text('浏览器查看')),
-              PopupMenuItem(value: 'copy', child: Text('复制链接')),
-              PopupMenuItem(value: 'share', child: Text('复制分享')),
-              PopupMenuItem(value: 'report', child: Text('举报')),
-            ],
           ),
         ],
       ),
@@ -312,18 +255,8 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
           Positioned.fill(
             child: async.when(
               loading: () => const Loading(height: double.infinity),
-              error: (e, _) => Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('加载失败'),
-                    TextButton(
-                      onPressed: () =>
-                          ref.invalidate(topicDetailProvider(_topicId)),
-                      child: const Text('重试'),
-                    ),
-                  ],
-                ),
+              error: (e, _) => BgmRetry(
+                onRetry: () => ref.invalidate(topicDetailProvider(_topicId)),
               ),
               data: (data) => _TopicBody(
                 data: data,
@@ -335,6 +268,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
                 expandedHtml: _expandedHtml,
                 scrollController: _scrollController,
                 onFilter: (v) => setState(() => _filter = v),
+                onReverse: () => setState(() => _reverse = !_reverse),
                 onExpandFloor: (id) => setState(() {
                   if (!_expandedSubs.remove(id)) _expandedSubs.add(id);
                   _visibleLongFloorId = _expandedSubs.contains(id) ? id : null;
@@ -380,12 +314,12 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
+                      BgmHeaderAction(
                         tooltip: '上一楼',
                         onPressed: () => _jumpFloor(-1),
                         icon: const Icon(Icons.keyboard_arrow_up),
                       ),
-                      IconButton(
+                      BgmHeaderAction(
                         tooltip: '下一楼',
                         onPressed: () => _jumpFloor(1),
                         icon: const Icon(Icons.keyboard_arrow_down),
@@ -401,29 +335,69 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
             Positioned(
               right: 16,
               bottom: 16,
-              child: FloatingActionButton.extended(
-                heroTag: 'collapse-floor',
+              child: BgmButton(
+                '收起楼层',
+                expand: false,
                 onPressed: () => setState(() {
                   final id = _visibleLongFloorId;
                   if (id != null) _expandedSubs.remove(id);
                   _visibleLongFloorId = null;
                 }),
-                icon: const Icon(Icons.keyboard_arrow_up),
-                label: const Text('收起楼层'),
               ),
             ),
         ],
       ),
       bottomNavigationBar: () {
         final page = async.valueOrNull;
-        if (page != null &&
-            (page.close.isNotEmpty || page.tip.contains('半公开'))) {
+        if (page != null && page.tip.contains('半公开')) {
+          final href = page.groupHref;
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Text(
-                page.close.isNotEmpty ? page.close : page.tip,
-                style: context.ds.caption,
+              child: Wrap(
+                children: [
+                  const Text('半公开小组只有成员才能发言, '),
+                  GestureDetector(
+                    onTap: () {
+                      if (href.isEmpty) return;
+                      if (href.contains('/group/')) {
+                        final name = href
+                            .replaceAll('/group/', '')
+                            .split('/')
+                            .first;
+                        if (name.isNotEmpty) {
+                          context.push('/rakuen/group/$name');
+                          return;
+                        }
+                      }
+                      openExternalUrl(
+                        href.startsWith('http') ? href : '$kHost$href',
+                      );
+                    },
+                    child: Text(
+                      '点击加入',
+                      style: TextStyle(color: context.ds.accent),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        if (page != null && page.close.isNotEmpty) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(text: '主题已被关闭'),
+                    TextSpan(
+                      text: ': ${page.close}',
+                      style: context.ds.caption,
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -439,12 +413,12 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
           onClearTarget: () => setState(() => _replyTarget = null),
           leading: settings.scrollDirection == 'bottom'
               ? [
-                  IconButton(
+                  BgmHeaderAction(
                     tooltip: '上一楼',
                     onPressed: () => _jumpFloor(-1),
                     icon: const Icon(Icons.keyboard_arrow_up),
                   ),
-                  IconButton(
+                  BgmHeaderAction(
                     tooltip: '下一楼',
                     onPressed: () => _jumpFloor(1),
                     icon: const Icon(Icons.keyboard_arrow_down),
@@ -467,6 +441,7 @@ class _TopicBody extends ConsumerWidget {
   final Set<String> expandedHtml;
   final ScrollController scrollController;
   final ValueChanged<_FloorFilter> onFilter;
+  final VoidCallback onReverse;
   final ValueChanged<String> onExpandFloor;
   final ValueChanged<String> onHtmlToggle;
   final ValueChanged<ReplyTarget> onReply;
@@ -482,6 +457,7 @@ class _TopicBody extends ConsumerWidget {
     required this.expandedHtml,
     required this.scrollController,
     required this.onFilter,
+    required this.onReverse,
     required this.onExpandFloor,
     required this.onHtmlToggle,
     required this.onReply,
@@ -493,13 +469,24 @@ class _TopicBody extends ConsumerWidget {
     final theme = Theme.of(context);
     final me = ref.watch(currentUserProvider);
     final meId = me == null ? '' : (me.id == 0 ? me.username : '${me.id}');
-    final authorCount = data.userId.isEmpty
-        ? 0
-        : data.floors.where((f) => f.userId == data.userId).length;
+    final followCount = data.floors
+        .where(
+          (f) =>
+              settings.isTracked(f.userId) ||
+              f.subReplies.any((s) => settings.isTracked(s.userId)),
+        )
+        .length;
     final meCount = me == null
         ? 0
         : data.floors
-              .where((f) => f.userId == meId || f.userId == me.username)
+              .where(
+                (f) =>
+                    f.userId == meId ||
+                    f.userId == me.username ||
+                    f.subReplies.any(
+                      (s) => s.userId == meId || s.userId == me.username,
+                    ),
+              )
               .length;
 
     final friendIds = me == null
@@ -514,30 +501,50 @@ class _TopicBody extends ConsumerWidget {
           };
     final friendCount = friendIds.isEmpty
         ? 0
-        : data.floors.where((f) => friendIds.contains(f.userId)).length;
-    final likeCount = data.floors.where((f) => f.likes > 0).length;
-    final trackCount = data.floors
-        .where((f) => settings.isTracked(f.userId))
-        .length;
+        : data.floors
+              .where(
+                (f) =>
+                    friendIds.contains(f.userId) ||
+                    f.subReplies.any((s) => friendIds.contains(s.userId)),
+              )
+              .length;
+    final likeCount = settings.likes
+        ? data.floors.where((f) => f.likes > 0).length
+        : 0;
 
     var floors = List<core.RakuenFloor>.from(data.floors);
     switch (filter) {
-      case _FloorFilter.author:
-        if (data.userId.isNotEmpty) {
-          floors = floors.where((f) => f.userId == data.userId).toList();
-        }
+      case _FloorFilter.follow:
+        floors = floors
+            .where(
+              (f) =>
+                  settings.isTracked(f.userId) ||
+                  f.subReplies.any((s) => settings.isTracked(s.userId)),
+            )
+            .toList();
       case _FloorFilter.me:
         if (me != null) {
           floors = floors
-              .where((f) => f.userId == meId || f.userId == me.username)
+              .where(
+                (f) =>
+                    f.userId == meId ||
+                    f.userId == me.username ||
+                    f.subReplies.any(
+                      (s) => s.userId == meId || s.userId == me.username,
+                    ),
+              )
               .toList();
         }
       case _FloorFilter.friends:
-        floors = floors.where((f) => friendIds.contains(f.userId)).toList();
+        floors = floors
+            .where(
+              (f) =>
+                  friendIds.contains(f.userId) ||
+                  f.subReplies.any((s) => friendIds.contains(s.userId)),
+            )
+            .toList();
       case _FloorFilter.likes:
         floors = floors.where((f) => f.likes > 0).toList();
-      case _FloorFilter.track:
-        floors = floors.where((f) => settings.isTracked(f.userId)).toList();
       case _FloorFilter.all:
         break;
     }
@@ -684,63 +691,91 @@ class _TopicBody extends ConsumerWidget {
             ],
           ),
         ),
-        // 过滤栏 (对齐原项目 topic/component/segment: 全部 / 楼主 / 我)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Wrap(
-            spacing: 8,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+          child: Row(
             children: [
-              ChoiceChip(
-                label: Text('全部 ${data.floors.length}'),
-                selected: filter == _FloorFilter.all,
-                onSelected: (_) => onFilter(_FloorFilter.all),
-                visualDensity: VisualDensity.compact,
-              ),
-              ChoiceChip(
-                label: Text('楼主 $authorCount'),
-                selected: filter == _FloorFilter.author,
-                onSelected: (_) => onFilter(_FloorFilter.author),
-                visualDensity: VisualDensity.compact,
-              ),
-              ChoiceChip(
-                label: Text('我 $meCount'),
-                selected: filter == _FloorFilter.me,
-                onSelected: (_) => onFilter(_FloorFilter.me),
-                visualDensity: VisualDensity.compact,
-              ),
-              ChoiceChip(
-                label: Text('好友 $friendCount'),
-                selected: filter == _FloorFilter.friends,
-                onSelected: (_) => onFilter(_FloorFilter.friends),
-                visualDensity: VisualDensity.compact,
-              ),
-              ChoiceChip(
-                label: Text('贴贴 $likeCount'),
-                selected: filter == _FloorFilter.likes,
-                onSelected: (_) => onFilter(_FloorFilter.likes),
-                visualDensity: VisualDensity.compact,
-              ),
-              if (settings.commentTrack.isNotEmpty)
-                ChoiceChip(
-                  label: Text('追踪 $trackCount'),
-                  selected: filter == _FloorFilter.track,
-                  onSelected: (_) => onFilter(_FloorFilter.track),
-                  visualDensity: VisualDensity.compact,
+              Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(
+                      text: '吐槽 ',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (data.floors.isNotEmpty)
+                      TextSpan(
+                        text: '${data.floors.fold<int>(0, (n, f) => n + 1 + f.subReplies.length)}',
+                        style: context.ds.caption,
+                      ),
+                  ],
                 ),
+              ),
+              const Spacer(),
+              if (followCount > 0 || meCount > 0 || friendCount > 0 || likeCount > 0)
+                Flexible(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      BgmFilterChip(
+                        label: '全部',
+                        selected: filter == _FloorFilter.all,
+                        onTap: () => onFilter(_FloorFilter.all),
+                      ),
+                      if (followCount > 0)
+                        BgmFilterChip(
+                          label: '关注 $followCount',
+                          selected: filter == _FloorFilter.follow,
+                          onTap: () => onFilter(_FloorFilter.follow),
+                        ),
+                      if (meCount > 0)
+                        BgmFilterChip(
+                          label: '我 $meCount',
+                          selected: filter == _FloorFilter.me,
+                          onTap: () => onFilter(_FloorFilter.me),
+                        ),
+                      if (friendCount > 0)
+                        BgmFilterChip(
+                          label: '好友 $friendCount',
+                          selected: filter == _FloorFilter.friends,
+                          onTap: () => onFilter(_FloorFilter.friends),
+                        ),
+                      if (likeCount > 0)
+                        BgmFilterChip(
+                          label: '贴贴 $likeCount',
+                          selected: filter == _FloorFilter.likes,
+                          onTap: () => onFilter(_FloorFilter.likes),
+                        ),
+                    ],
+                  ),
+                ),
+              BgmHeaderAction(
+                tooltip: '吐槽倒序',
+                icon: Icon(
+                  reverse
+                      ? Icons.vertical_align_bottom
+                      : Icons.vertical_align_top,
+                  size: 18,
+                ),
+                onPressed: onReverse,
+              ),
             ],
           ),
         ),
-        const Divider(height: 1),
+        const BgmHairline(),
         if (floors.isEmpty)
           Padding(
             padding: const EdgeInsets.all(24),
             child: Center(
               child: Text(switch (filter) {
-                _FloorFilter.author => '楼主还没有回复',
+                _FloorFilter.follow => '还没有关注的回复',
                 _FloorFilter.me => '你还没有回复',
                 _FloorFilter.friends => '好友还没有回复',
                 _FloorFilter.likes => '还没有贴贴',
-                _FloorFilter.track => '还没有追踪的回复',
                 _FloorFilter.all => '还没有回复',
               }, style: TextStyle(color: theme.colorScheme.outline)),
             ),
@@ -760,14 +795,8 @@ class _TopicBody extends ConsumerWidget {
             onHtmlToggle: () => onHtmlToggle(floor.id),
           ),
 
-
         if (data.pageTotal > 1)
-          Center(
-            child: TextButton(
-              onPressed: onLoadMore,
-              child: const Text('加载更多楼层'),
-            ),
-          ),
+          Center(child: BgmTextAction('加载更多楼层', onPressed: onLoadMore)),
       ],
     );
   }
@@ -901,4 +930,3 @@ class _EpNavButton extends StatelessWidget {
     );
   }
 }
-

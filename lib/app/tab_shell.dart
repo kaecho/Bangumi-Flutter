@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/storage/settings_store.dart';
+import '../design_system/design_system.dart';
 import '../features/discovery/discovery_screen.dart';
 import '../features/progress/progress_screen.dart';
 import '../features/rakuen/rakuen_screen.dart';
@@ -10,15 +11,12 @@ import '../features/timeline/timeline_screen.dart';
 import '../features/tinygrail/tinygrail_screen.dart';
 import '../features/user/user_screen.dart';
 import '../shared/widgets/site_notice.dart';
+import '../shared/widgets/tab_bar.dart';
 
 /// 底部 Tab 容器
 ///
 /// 与原项目 [bottom-tab-navigator] 一致: 6 个潜 Tab
-/// (发现 / 时间线 / 首页 / 超展开 / 我的 / 小圣杯), 其中
-/// - 发现 / 时间线 / 超展开 受设置 homeRenderTabs 控制 (可隐藏)
-/// - 首页 / 我的 始终显示 (原项目 showCondition: () => true)
-/// - 小圣杯 受 setting.tinygrail + homeRenderTabs 双重控制
-/// - bottomTabLazy: true 时仅构建可见 Tab 的页面 (原项目 lazy)
+/// (发现 / 时间胶囊 / 收藏 / 超展开 / 时光机 / 小圣杯)
 class TabShell extends ConsumerStatefulWidget {
   final int initialIndex;
 
@@ -30,59 +28,58 @@ class TabShell extends ConsumerStatefulWidget {
 
 class _TabShellState extends ConsumerState<TabShell> {
   late int _index = widget.initialIndex;
+  final _built = <int>{};
 
-  /// 6 个潜 Tab (顺序与原项目 getTabConfig 一致)
-  static const _allTabs = <_TabDef>[
-    _TabDef(
+  /// 顺序与原项目 getTabConfig / routesConfig 一致
+  static const _allTabs = <BgmTabItem>[
+    BgmTabItem(
       key: 'Discovery',
       label: '发现',
-      icon: Icons.explore_outlined,
-      activeIcon: Icons.explore,
+      icon: BgmIcons.home,
+      iconSize: 19,
       path: '/discovery',
       child: DiscoveryScreen(),
       alwaysShow: false,
     ),
-    _TabDef(
+    BgmTabItem(
       key: 'Timeline',
-      label: '时间线',
-      icon: Icons.timeline_outlined,
-      activeIcon: Icons.timeline,
+      label: '时间胶囊',
+      icon: Icons.access_time,
+      iconSize: 21,
       path: '/timeline',
       child: TimelineScreen(),
       alwaysShow: false,
     ),
-    _TabDef(
+    BgmTabItem(
       key: 'Home',
-      label: '首页',
-      icon: Icons.home_outlined,
-      activeIcon: Icons.home,
+      label: '收藏',
+      icon: Icons.star_outline,
       path: '/progress',
       child: ProgressScreen(),
       alwaysShow: true,
     ),
-    _TabDef(
+    BgmTabItem(
       key: 'Rakuen',
       label: '超展开',
-      icon: Icons.forum_outlined,
-      activeIcon: Icons.forum,
+      icon: Icons.chat_bubble_outline,
+      iconSize: 19,
       path: '/rakuen',
       child: RakuenScreen(),
       alwaysShow: false,
     ),
-    _TabDef(
+    BgmTabItem(
       key: 'User',
-      label: '我的',
+      label: '时光机',
       icon: Icons.person_outline,
-      activeIcon: Icons.person,
       path: '/user',
       child: UserScreen(),
       alwaysShow: true,
     ),
-    _TabDef(
+    BgmTabItem(
       key: 'Tinygrail',
       label: '小圣杯',
-      icon: Icons.emoji_events_outlined,
-      activeIcon: Icons.emoji_events,
+      icon: BgmIcons.trophy,
+      iconSize: 19,
       path: '/tinygrail',
       child: TinygrailScreen(),
       alwaysShow: false,
@@ -101,58 +98,38 @@ class _TabShellState extends ConsumerState<TabShell> {
       return t.alwaysShow || homeRenderTabs.contains(t.key);
     }).toList();
 
-    // initialIndex 由路由传入; 越界 (Tab 被隐藏) 回落到 首页
+    // initialIndex 由路由传入; 越界 (Tab 被隐藏) 回落到 收藏
     if (_index >= tabs.length) {
       _index = tabs.indexWhere((t) => t.key == 'Home');
     }
     if (_index < 0) _index = 0;
+    _built.add(_index);
 
+    final lazy = setting.bottomTabLazy;
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: [for (var i = 0; i < tabs.length; i++) tabs[i].child],
+        children: [
+          for (var i = 0; i < tabs.length; i++)
+            !lazy || _built.contains(i)
+                ? tabs[i].child
+                : const SizedBox.shrink(),
+        ],
       ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const SiteNoticeBanner(),
-          NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (i) {
+          BgmTabBar(
+            tabs: tabs,
+            index: _index,
+            onSelect: (i) {
               setState(() => _index = i);
               context.go(tabs[i].path);
             },
-            destinations: [
-              for (final t in tabs)
-                NavigationDestination(
-                  icon: Icon(t.icon),
-                  selectedIcon: Icon(t.activeIcon),
-                  label: t.label,
-                ),
-            ],
           ),
         ],
       ),
     );
   }
-}
-
-class _TabDef {
-  final String key;
-  final String label;
-  final IconData icon;
-  final IconData activeIcon;
-  final String path;
-  final Widget child;
-  final bool alwaysShow;
-
-  const _TabDef({
-    required this.key,
-    required this.label,
-    required this.icon,
-    required this.activeIcon,
-    required this.path,
-    required this.child,
-    required this.alwaysShow,
-  });
 }

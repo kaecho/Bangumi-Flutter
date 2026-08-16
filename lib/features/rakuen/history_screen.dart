@@ -6,6 +6,8 @@ import '../../core/utils/format.dart';
 import 'rakuen_models.dart';
 import 'rakuen_providers.dart';
 import '../../design_system/design_system.dart';
+import '../../shared/widgets/bgm_button.dart';
+import '../../shared/widgets/app_bar.dart';
 
 /// 浏览历史 (port 特有功能: 本地浏览记录, 与原版 rakuen/history 语义不同)
 /// 路由: /history/browse
@@ -17,34 +19,21 @@ class HistoryScreen extends ConsumerWidget {
     final history = ref.watch(historyProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('浏览历史'),
+      appBar: BgmAppBar(
+        title: '浏览历史',
         actions: [
           if (history.isNotEmpty)
-            IconButton(
+            BgmHeaderAction(
               icon: const Icon(Icons.delete_sweep_outlined),
               tooltip: '清空',
-              onPressed: () {
-                showDialog<void>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('清空浏览历史?'),
-                    content: const Text('清空后不可恢复'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('取消'),
-                      ),
-                      FilledButton(
-                        onPressed: () {
-                          ref.read(historyProvider.notifier).clear();
-                          Navigator.of(context).pop();
-                        },
-                        child: const Text('清空'),
-                      ),
-                    ],
-                  ),
+              onPressed: () async {
+                final ok = await showBgmConfirm(
+                  context,
+                  title: '清空浏览历史?',
+                  message: '清空后不可恢复',
+                  confirmLabel: '清空',
                 );
+                if (ok) await ref.read(historyProvider.notifier).clear();
               },
             ),
         ],
@@ -53,7 +42,7 @@ class HistoryScreen extends ConsumerWidget {
           ? const Center(child: Text('暂无浏览历史'))
           : ListView.separated(
               itemCount: history.length,
-              separatorBuilder: (_, _) => const Divider(indent: 16),
+              separatorBuilder: (_, _) => const BgmHairline(indent: 16),
               itemBuilder: (context, index) =>
                   _HistoryRow(item: history[index]),
             ),

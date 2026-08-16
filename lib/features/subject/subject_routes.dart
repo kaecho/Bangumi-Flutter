@@ -8,7 +8,8 @@ import 'episodes_screen.dart';
 import 'info_screen.dart';
 import 'link_screen.dart';
 import 'mono_screen.dart';
-import 'mono_subjects_screen.dart';
+import 'person_voices_screen.dart';
+
 import 'overview_screen.dart';
 import 'persons_screen.dart';
 import 'preview_screen.dart';
@@ -137,10 +138,18 @@ final List<GoRoute> subjectRoutes = [
   // 条目吐槽箱
   GoRoute(
     path: '/subject/:id/comments',
-    builder: (_, state) => SubjectCommentsScreen(
-      id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
-    ),
+    builder: (_, state) {
+      final q = state.uri.queryParameters;
+      return SubjectCommentsScreen(
+        id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+        interestType: q['status'] ?? '',
+        score: q['score'] ?? '全部',
+        version: q['version'] == '1',
+        reverse: q['reverse'] == '1',
+      );
+    },
   ),
+
   // 角色 / 人物详情
   GoRoute(
     path: '/mono/character/:id',
@@ -156,19 +165,25 @@ final List<GoRoute> subjectRoutes = [
       id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
     ),
   ),
+  GoRoute(
+    path: '/mono/person/:id/voices',
+    builder: (_, state) => PersonVoicesScreen(
+      id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+      name: state.uri.queryParameters['name'],
+    ),
+  ),
+
   // 角色 / 人物全部作品
   GoRoute(
     path: '/mono/character/:id/subjects',
-    builder: (_, state) => MonoSubjectsScreen(
+    builder: (_, state) => WorksScreen(
       type: 'character',
       id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
     ),
   ),
   GoRoute(
     path: '/mono/person/:id/subjects',
-    builder: (_, state) => MonoSubjectsScreen(
-      type: 'person',
-      id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
-    ),
+    builder: (_, state) =>
+        WorksScreen(id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0),
   ),
 ];
