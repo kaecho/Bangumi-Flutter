@@ -607,7 +607,7 @@ void main() {
         ]),
         8,
       );
-      expect(parseUserActiveCreatedAt([]), 0);
+      expect(parseUserActiveCreatedAt(<Map<String, int>>[]), 0);
     });
 
     test('时间线标题带用户名', () {
