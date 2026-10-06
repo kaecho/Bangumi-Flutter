@@ -43,7 +43,7 @@ dependencies:
   cached_network_image: ^3.4.1
   shared_preferences: ^2.5.5
   hive_ce: ^2.19.3
-  hive_ce_flutter: ^2.3.4
+  hive_ce_flutter: ^2.4.0
   webview_flutter: ^4.14.1
   flutter_html: ^3.0.0
   fl_chart: ^1.2.0
